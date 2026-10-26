@@ -1,51 +1,19 @@
-import { NextResponse } from "next/server";
+import { handle, json, readJsonObject } from "@/server/http";
+import { requireAdmin } from "@/server/session";
+import { getSettingStatuses, SettingsUpdateSchema, updateSettings } from "@/server/settings";
 
-import { createTextProxyResponse, fetchBackend } from "@/server/backend-api";
-import { getServerSession } from "@/server/session";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const session = await getServerSession();
-  if (!session?.user?.id) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
+/** `{settings: RuntimeSetting[]}`; secrets only ever leave masked. */
+export const GET = handle(async (request: Request) => {
+  await requireAdmin(request);
+  return json({ settings: await getSettingStatuses() });
+});
 
-  const isAdmin = Boolean((session.user as { is_admin?: boolean }).is_admin);
-  if (!isAdmin) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-
-  return { session };
-}
-
-export async function GET() {
-  const adminCheck = await requireAdmin();
-  if (adminCheck.error) {
-    return adminCheck.error;
-  }
-
-  const upstream = await fetchBackend("/admin/runtime-settings", {
-    method: "GET",
-    userId: adminCheck.session.user.id,
-    cache: "no-store",
-  });
-
-  return createTextProxyResponse(upstream);
-}
-
-export async function PATCH(request: Request) {
-  const adminCheck = await requireAdmin();
-  if (adminCheck.error) {
-    return adminCheck.error;
-  }
-
-  const body = await request.text();
-  const upstream = await fetchBackend("/admin/runtime-settings", {
-    method: "PATCH",
-    userId: adminCheck.session.user.id,
-    extraHeaders: { "Content-Type": "application/json" },
-    body,
-    cache: "no-store",
-  });
-
-  return createTextProxyResponse(upstream);
-}
+/** `{updates, delete_keys, prefer_admin_values}` → `{settings}`. */
+export const PATCH = handle(async (request: Request) => {
+  const admin = await requireAdmin(request);
+  const update = SettingsUpdateSchema.parse(await readJsonObject(request));
+  return json({ settings: await updateSettings(update, admin.id) });
+});

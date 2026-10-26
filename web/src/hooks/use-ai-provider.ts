@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-/** `configured` means both the Claude and AssemblyAI keys are present; `transcription_configured` covers AssemblyAI alone. */
-export type AiProvider = { provider: string; model: string | null; configured: boolean; transcription_configured?: boolean };
+/** `GET /api/ai/provider`. `configured` = `llm_configured` (Claude key) && `transcription_configured` (AssemblyAI key). */
+export type AiProvider = {
+  provider: string;
+  model: string | null;
+  configured: boolean;
+  llm_configured: boolean;
+  transcription_configured: boolean;
+};
 
 const CLAUDE_NAMES: Record<string, string> = {
   "claude-opus-5": "Claude Opus 5",

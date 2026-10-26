@@ -12,6 +12,7 @@ import {
   newJobId,
   onJobFailure,
   reapExpiredJobs,
+  releaseJob,
   requestCancel,
   WORKER_STOPPED_ERROR,
   workerHealthy,
@@ -153,6 +154,23 @@ describe("claim, heartbeat and finish", () => {
     expect(await finishJob(stale, { status: "succeeded" })).toBe(false);
     expect(await heartbeatJob(fresh)).toEqual({ cancelRequested: false });
     expect(await finishJob(fresh, { status: "succeeded" })).toBe(true);
+  });
+});
+
+describe("release", () => {
+  it("requeues a running job without spending an attempt, unless a cancel was requested", async () => {
+    const { job } = await processJob("t1");
+    const lease = (await claimJob("w1"))!;
+    expect(await releaseJob(lease)).toBe(true);
+    const released = await collections().jobs.findOne({ _id: job._id });
+    expect(released).toMatchObject({ status: "queued", attempts: 0, activeKey: "task:t1" });
+    expect(released).not.toHaveProperty("lockedBy");
+    expect(await releaseJob(lease)).toBe(false);
+
+    const again = (await claimJob("w1"))!;
+    await requestCancel({ _id: job._id });
+    expect(await releaseJob(again)).toBe(false);
+    expect(await collections().jobs.findOne({ _id: job._id })).toMatchObject({ status: "running", attempts: 1 });
   });
 });
 

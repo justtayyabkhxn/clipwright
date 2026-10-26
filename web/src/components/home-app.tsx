@@ -11,7 +11,7 @@ import {
 import { CaptionSizeControl } from "@/components/caption-size-control";
 import { VideoSourceIcon } from "@/components/video-source-icon";
 import { FONT_SEARCH_THRESHOLD, formatUploadLimit, getYouTubeThumbnailUrl, maxVideoUploadBytes, uploadVideoFile, validateVideoSourceUrl } from "@/lib/video-upload";
-import { AppShell } from "@/components/app/app-shell";
+import { AppShell, WorkerOfflineNotice } from "@/components/app/app-shell";
 import { GenerationCard } from "@/components/app/generation-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,9 +113,16 @@ export default function HomeApp() {
       void fetch("/api/preferences")
         .then((response) => response.ok ? response.json() : null)
         .then((preferences) => {
-          if (!cancelled && !clipLengthEdited.current && isClipLength(preferences?.clipLength)) {
+          if (cancelled) return;
+          if (!clipLengthEdited.current && isClipLength(preferences?.clipLength)) {
             setClipLength(preferences.clipLength);
           }
+          // Saved caption defaults (Settings) preselect the customisation; a field never saved is null and
+          // keeps the template's value. A choice made while this loaded wins.
+          const { fontFamily: family, fontSize: size, fontColor: color } = preferences ?? {};
+          if (typeof family === "string" && family) setFontFamily((current) => current ?? family);
+          if (Number.isInteger(size)) setFontSize((current) => current ?? size);
+          if (typeof color === "string" && /^#[0-9A-Fa-f]{6}$/.test(color)) setFontColor((current) => current ?? color);
         })
         .catch(() => {})
         .finally(() => { if (!cancelled) setIsClipLengthLoading(false); });
@@ -336,6 +343,7 @@ export default function HomeApp() {
             {t("subtitle")}
           </p>
           <AiProviderNote />
+          <WorkerOfflineNotice className="mx-auto mt-4 max-w-xl text-sm" />
 
           <form
             onSubmit={handleSubmit}

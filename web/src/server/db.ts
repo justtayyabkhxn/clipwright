@@ -13,11 +13,25 @@ import type {
 // One client per process, kept across Next dev hot reloads.
 const cache = globalThis as unknown as {
   __clipwrightMongo?: MongoClient;
+  __clipwrightConnect?: Promise<void>;
   __clipwrightIndexes?: Promise<void>;
 };
 
 export function getClient(): MongoClient {
-  return (cache.__clipwrightMongo ??= new MongoClient(env.MONGODB_URI));
+  const client = (cache.__clipwrightMongo ??= new MongoClient(env.MONGODB_URI));
+  // A failed connect leaves a closed topology on the client that operations never replace
+  // ("Topology is closed" forever); only connect() builds a new one. So connect explicitly, and
+  // again on the first call after a failure. The operations that raced a failed attempt report it.
+  if (!cache.__clipwrightConnect) {
+    const attempt: Promise<void> = client.connect().then(
+      () => undefined,
+      () => {
+        if (cache.__clipwrightConnect === attempt) cache.__clipwrightConnect = undefined;
+      },
+    );
+    cache.__clipwrightConnect = attempt;
+  }
+  return client;
 }
 
 export function getDb(): Db {
@@ -71,6 +85,7 @@ async function createIndexes() {
 export async function closeDb() {
   const client = cache.__clipwrightMongo;
   cache.__clipwrightMongo = undefined;
+  cache.__clipwrightConnect = undefined;
   cache.__clipwrightIndexes = undefined;
   await client?.close();
 }

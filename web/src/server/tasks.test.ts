@@ -3,8 +3,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { Collection } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeDb, collections, ensureIndexes } from "./db";
 import { resetEnv } from "./env";
 import { claimJob, enqueueJob } from "./jobs";
@@ -13,7 +14,12 @@ import {
   appendClip,
   casStatus,
   clearClips,
+  createQueuedTask,
   createTask,
+  exportDownloadFilename,
+  exportPreset,
+  startTaskRun,
+  youtubeVideoId,
   deleteAllUserData,
   deleteTaskCompletely,
   getTaskForUser,
@@ -32,9 +38,7 @@ import {
   settingsFromCreateRequest,
   settingsFromUpdateRequest,
   sliceSourceRanges,
-  taskRunDied,
   updatedCleanupSettings,
-  WORKER_STOPPED_TASK_MESSAGE,
 } from "./tasks";
 import type { ClipDoc, TaskDoc } from "./types";
 
@@ -183,6 +187,84 @@ describe("normalisers", () => {
   });
 });
 
+describe("sources and exports", () => {
+  it("port get_youtube_video_id", () => {
+    const id = "dQw4w9WgXcQ";
+    for (const url of [
+      `https://www.youtube.com/watch?v=${id}`,
+      ` https://youtu.be/${id}?t=3 `,
+      `https://m.youtube.com/watch?feature=share&v=${id}`,
+      `https://www.youtube.com/shorts/${id}`,
+      `https://www.youtube.com/embed/${id}`,
+      `youtube.com/v/${id}`,
+      `https://YOUTUBE.com?v=${id}`,
+    ]) {
+      expect(youtubeVideoId(url)).toBe(id);
+    }
+    for (const url of [
+      "https://vimeo.com/123",
+      "https://www.youtube.com/watch?v=short",
+      "",
+      null,
+      "upload://x.mp4",
+      `http://169.254.169.254/latest/youtu.be/${id}`,
+      `https://youtube.com.evil.example/watch?v=${id}`,
+      `https://youtube.com@evil.example/watch?v=${id}`,
+      `ftp://youtube.com/watch?v=${id}`,
+    ]) {
+      expect(youtubeVideoId(url)).toBeNull();
+    }
+  });
+
+  it("validate presets and name export downloads", () => {
+    expect(exportPreset(" Reels ")).toBe("reels");
+    expect(() => exportPreset("vimeo")).toThrow("Invalid preset. Use one of: tiktok, reels, shorts");
+    expect(exportDownloadFilename("clip_1_0005-0035_abc.mp4", "tiktok")).toBe("clip_1_0005-0035_abc_tiktok.mp4");
+    expect(exportDownloadFilename('dir/"we\\ird".MP4', "shorts")).toBe("weird_shorts.mp4");
+    expect(exportDownloadFilename(" .mp4", "reels")).toBe("clip_reels.mp4");
+    expect(exportDownloadFilename(`${"x".repeat(300)}.mp4`, "tiktok")).toHaveLength(255);
+  });
+});
+
+describe("task runs", () => {
+  it("create a queued task that names its job", async () => {
+    const { task, job } = await createQueuedTask({ userId: "u1", source: { type: "youtube", url: "u", title: "" }, settings: settings() });
+    expect(task.run).toEqual({ jobId: job._id, type: "process_task" });
+    expect(job).toMatchObject({ type: "process_task", taskId: task._id, activeKey: `task:${task._id}`, status: "queued" });
+    expect(serializeTask(task).run_type).toBe("process_task");
+    expect(serializeTaskSummary({ ...task, status: "completed" }).run_type).toBeNull();
+  });
+
+  it("start a run only from the expected status and restore the task when the key is held", async () => {
+    const task = await createTask({ userId: "u1", source: { type: "youtube", url: "u", title: "T" }, settings: settings() });
+    await casStatus(task._id, ["queued"], { status: "cancelled", progressMessage: "Cancelled by user" });
+    const cancelled = (await collections().tasks.findOne({ _id: task._id }))!;
+    const start = () =>
+      startTaskRun({
+        task: cancelled,
+        type: "process_task",
+        expected: ["cancelled", "error"],
+        status: "queued",
+        set: { progressMessage: "Re-queued by user" },
+        busyMessage: "busy",
+      });
+
+    // A run that is still stopping holds the task's key.
+    const stopping = await enqueueJob({ type: "process_task", taskId: task._id, userId: "u1", activeKey: `task:${task._id}` });
+    await expect(start()).rejects.toMatchObject({ status: 409, detail: "busy" });
+    expect(await collections().tasks.findOne({ _id: task._id })).toMatchObject({ status: "cancelled", progressMessage: "Cancelled by user" });
+
+    await collections().jobs.deleteOne({ _id: stopping.job._id });
+    const job = (await start())!;
+    expect(await collections().tasks.findOne({ _id: task._id })).toMatchObject({
+      status: "queued",
+      progressMessage: "Re-queued by user",
+      run: { jobId: job._id, type: "process_task" },
+    });
+    expect(await start()).toBeNull();
+  });
+});
+
 describe("repository and serializers", () => {
   it("creates queued tasks with fallback titles and serializes them", async () => {
     const upload = await createTask({
@@ -200,6 +282,7 @@ describe("repository and serializers", () => {
       source_type: "video_url",
       source_url: "upload://0b0e7f3a-0000-4000-8000-000000000000.mp4",
       status: "queued",
+      run_type: null,
       progress: 0,
       progress_message: "",
       font_family: null,
@@ -257,7 +340,7 @@ describe("repository and serializers", () => {
     expect(summaries[1]).toMatchObject({ clips_count: 3, top_virality_score: 80, cover_clip_id: "b", source_type: "youtube" });
     expect(summaries[0]).toMatchObject({ clips_count: 0, top_virality_score: null, cover_clip_id: null, source_title: "New" });
     expect(Object.keys(summaries[0]).sort()).toEqual(
-      ["clips_count", "cover_clip_id", "created_at", "id", "source_id", "source_title", "source_type", "source_url", "status", "top_virality_score", "updated_at", "user_id"],
+      ["clips_count", "cover_clip_id", "created_at", "id", "run_type", "source_id", "source_title", "source_type", "source_url", "status", "top_virality_score", "updated_at", "user_id"],
     );
   });
 
@@ -315,6 +398,22 @@ describe("CAS helpers", () => {
     expect(await getStorage().list("editor/a/")).toEqual([]);
   });
 
+  it("report a committed swap as done when the old clips' cleanup fails", async () => {
+    const task = await processingTask("restyle2");
+    await pushClip(task._id, "restyle2", clip("a"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // The only deleteMany in a swap is the old clips' draft cleanup, after the task write committed.
+    const deleteMany = vi.spyOn(Collection.prototype, "deleteMany").mockRejectedValueOnce(new Error("connection reset"));
+    try {
+      expect(await replaceClips(task._id, "restyle2", [clip("a2")], { status: "completed" })).toBe(true);
+      expect(warn).toHaveBeenCalledWith("[tasks] Could not delete clip drafts", expect.any(Error));
+    } finally {
+      deleteMany.mockRestore();
+      warn.mockRestore();
+    }
+    expect((await collections().tasks.findOne({ _id: task._id }))!.clips.map((c) => c.id)).toEqual(["a2"]);
+  });
+
   it("remove a clip only from an idle task", async () => {
     const task = await processingTask("j1");
     await pushClip(task._id, "j1", clip("a"));
@@ -340,22 +439,6 @@ describe("CAS helpers", () => {
     expect(await appendClip(task._id, clip("combo"), [...inputs.slice(0, 1), { id: "b", filename: "changed.mp4" }])).toBe(false);
     expect(await appendClip(task._id, clip("combo"), inputs)).toBe(true);
     expect((await collections().tasks.findOne({ _id: task._id }))!.clips.map((c) => c.id)).toEqual(["a", "b", "combo"]);
-  });
-
-  it("fail a task whose run died", async () => {
-    const task = await processingTask("j1");
-    await taskRunDied({ type: "process_task", taskId: task._id } as never);
-    expect(await collections().tasks.findOne({ _id: task._id })).toMatchObject({
-      status: "error",
-      progress: 0,
-      progressMessage: WORKER_STOPPED_TASK_MESSAGE,
-    });
-    const restyled = await processingTask("r1");
-    await taskRunDied({ type: "restyle_task", taskId: restyled._id } as never);
-    expect(await collections().tasks.findOne({ _id: restyled._id })).toMatchObject({
-      status: "completed",
-      progressMessage: "Restyle failed. Your existing clips are unchanged.",
-    });
   });
 });
 

@@ -27,7 +27,7 @@ function json(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status }));
 }
 
-function mockFetch({ settings = configured, testResult = {}, provider = { provider: "anthropic", model: "claude-sonnet-5", configured: true, transcription_configured: true } }: {
+function mockFetch({ settings = configured, testResult = {}, provider = { provider: "anthropic", model: "claude-sonnet-5", configured: true, llm_configured: true, transcription_configured: true } }: {
   settings?: RuntimeSetting[]; testResult?: unknown; provider?: Record<string, unknown>;
 } = {}) {
   const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url) => {
@@ -105,22 +105,38 @@ it("saves and removes the AssemblyAI key without a connection test", async () =>
   expect(patchBodies(fetchMock)[1]).toEqual({ delete_keys: ["ASSEMBLY_AI_API_KEY"] });
 });
 
-it("names the missing key for an admin", async () => {
+it("names the missing key for an admin and shows each key's status next to its field", async () => {
   mockFetch({
     settings: [configured[0], row("ASSEMBLY_AI_API_KEY", { configured: false, has_admin_value: false, source: "unset" }), configured[2]],
-    provider: { provider: "anthropic", model: "claude-sonnet-5", configured: false, transcription_configured: false },
+    provider: { provider: "anthropic", model: "claude-sonnet-5", configured: false, llm_configured: true, transcription_configured: false },
   });
   render(<AiProviderSettings isAdmin />);
   expect(await screen.findByText("Missing: AssemblyAI API key")).toBeInTheDocument();
-  expect(screen.getByText("Not configured")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByLabelText("AssemblyAI API key")).toHaveAccessibleDescription("Not configured"));
+  expect(screen.getByLabelText("Anthropic API key")).toHaveAccessibleDescription("Ready");
+  // Header status plus the AssemblyAI field.
+  expect(screen.getAllByText("Not configured")).toHaveLength(2);
 });
 
 it("is read-only for non-admins and still says what is missing", async () => {
-  const fetchMock = mockFetch({ provider: { provider: "anthropic", model: "claude-opus-5", configured: false, transcription_configured: true } });
+  const fetchMock = mockFetch({ provider: { provider: "anthropic", model: "claude-opus-5", configured: false, llm_configured: false, transcription_configured: true } });
   render(<AiProviderSettings isAdmin={false} />);
   expect(await screen.findByText("Only an administrator can change these keys.")).toBeInTheDocument();
   expect(await screen.findByText("Missing: Anthropic API key")).toBeInTheDocument();
   expect(screen.queryByLabelText("Anthropic API key")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("AssemblyAI API key")).not.toBeInTheDocument();
   expect(fetchMock.mock.calls.some(([url]) => url === "/api/admin/runtime-settings")).toBe(false);
+});
+
+it("tells a non-admin every key that is missing", async () => {
+  mockFetch({ provider: { provider: "anthropic", model: "claude-opus-5", configured: false, llm_configured: false, transcription_configured: false } });
+  render(<AiProviderSettings isAdmin={false} />);
+  expect(await screen.findByText("Missing: Anthropic API key, AssemblyAI API key")).toBeInTheDocument();
+  expect(screen.getByText("Not configured")).toBeInTheDocument();
+});
+
+it("names only the transcription key when Claude is configured", async () => {
+  mockFetch({ provider: { provider: "anthropic", model: "claude-opus-5", configured: false, llm_configured: true, transcription_configured: false } });
+  render(<AiProviderSettings isAdmin={false} />);
+  expect(await screen.findByText("Missing: AssemblyAI API key")).toBeInTheDocument();
 });

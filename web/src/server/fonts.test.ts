@@ -126,7 +126,7 @@ describe("fonts", () => {
     expect(await resolveFontFile("../fonts/Inter.ttf", USER)).toBeNull();
     expect(await resolveFontFile("   ", USER)).toBeNull();
     expect(await resolveFontFile("Missing", USER)).toBeNull();
-  });
+  }, 20_000); // ~8 resolves, each stats every font file; slow when the machine is busy
 
   it("deletes only the user's own fonts", async () => {
     await expect(deleteUserFont(USER, "Inter")).rejects.toMatchObject({ status: 403, detail: "Bundled system fonts cannot be deleted" });

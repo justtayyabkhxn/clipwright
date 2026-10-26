@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { resetEnv } from "./env";
-import { ApiError, contentDisposition, handle, serveStorageFile } from "./http";
+import { ApiError, contentDisposition, handle, MAX_JSON_BODY_BYTES, readJsonObject, serveStorageFile } from "./http";
 import { getStorage, MaxBytesExceededError } from "./storage";
 
 let dataDir: string;
@@ -134,5 +134,41 @@ describe("handle", () => {
     );
     const response = await route(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ id: "t1" }) });
     expect(await response.json()).toEqual({ id: "t1", method: "POST" });
+  });
+});
+
+describe("readJsonObject", () => {
+  const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
+    new Request("http://x", { method: "POST", body, headers, ...(body instanceof ReadableStream && { duplex: "half" }) });
+
+  it("parses an object and rejects anything else with 400", async () => {
+    expect(await readJsonObject(post('﻿{"a":1}'))).toEqual({ a: 1 });
+    for (const [body, detail] of [
+      ["{", "Invalid JSON body"],
+      [null, "Invalid JSON body"],
+      ["[1]", "Request body must be an object"],
+      ["null", "Request body must be an object"],
+    ] as const) {
+      await expect(readJsonObject(post(body))).rejects.toMatchObject({ status: 400, detail });
+    }
+  });
+
+  it("answers 413 past the limit, declared or streamed", async () => {
+    const big = `{"a":"${"x".repeat(MAX_JSON_BODY_BYTES)}"}`;
+    await expect(readJsonObject(post(big))).rejects.toMatchObject({ status: 413, detail: "Request body is too large" });
+    const declared = post("{}", { "content-length": String(MAX_JSON_BODY_BYTES + 1) });
+    await expect(readJsonObject(declared)).rejects.toMatchObject({ status: 413 });
+    expect(declared.bodyUsed).toBe(false); // refused before reading
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new Uint8Array(1024 * 1024).fill(32));
+      },
+    });
+    await expect(readJsonObject(post(endless))).rejects.toMatchObject({ status: 413 });
+    expect(pulled).toBeLessThan(12);
+    const fits = `{"a":"${"x".repeat(MAX_JSON_BODY_BYTES - 16)}"}`;
+    expect((await readJsonObject(post(fits))).a).toHaveLength(MAX_JSON_BODY_BYTES - 16);
   });
 });

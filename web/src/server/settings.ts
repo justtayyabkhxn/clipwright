@@ -162,6 +162,11 @@ export const SettingsUpdateSchema = z.object({
 
 export type SettingsUpdate = z.infer<typeof SettingsUpdateSchema>;
 
+/** A plausible Anthropic model id (`claude-opus-5`, `claude-sonnet-4-5-20250929`), with no `anthropic:` prefix. */
+export function isClaudeModelId(value: string): boolean {
+  return value.length <= 100 && /^claude-[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(value);
+}
+
 export async function updateSettings(update: SettingsUpdate, userId: string): Promise<RuntimeSetting[]> {
   const allowed = new Set<string>(SETTING_KEYS);
   const invalid = [
@@ -171,6 +176,10 @@ export async function updateSettings(update: SettingsUpdate, userId: string): Pr
   ].filter((key) => !allowed.has(key));
   if (invalid.length) {
     throw new ApiError(400, `Unsupported setting key(s): ${[...new Set(invalid)].sort().join(", ")}`);
+  }
+  const model = update.updates.CLAUDE_MODEL?.trim();
+  if (model && !isClaudeModelId(model)) {
+    throw new ApiError(400, `CLAUDE_MODEL must be a plain Claude model id such as ${DEFAULT_CLAUDE_MODEL}`);
   }
 
   const { appSettings } = collections();

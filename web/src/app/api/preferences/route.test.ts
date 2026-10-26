@@ -1,163 +1,107 @@
+/** @vitest-environment node */
+import { MongoMemoryServer } from "mongodb-memory-server";
+import { ObjectId } from "mongodb";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { getAuth } from "@/server/auth";
+import { closeDb, collections, ensureIndexes } from "@/server/db";
+import { resetEnv } from "@/server/env";
 import { GET, PATCH } from "./route";
-import { getPrismaClient } from "@/server/prisma";
-import { getServerSession } from "@/server/session";
 
-vi.mock("@/server/session", () => ({
-  getServerSession: vi.fn(),
-}));
+let mongod: MongoMemoryServer;
+const baseEnv = { ...process.env };
+type User = { id: string; cookie: string };
+let user: User;
 
-vi.mock("@/server/prisma", () => ({
-  getPrismaClient: vi.fn(),
-}));
+beforeAll(async () => {
+  mongod = await MongoMemoryServer.create();
+  process.env = {
+    ...baseEnv,
+    MONGODB_URI: mongod.getUri(),
+    MONGODB_DB: "preference_routes",
+    MONGODB_TRANSACTIONS: "false",
+    BETTER_AUTH_SECRET: "a-very-long-test-secret-for-preferences-0001",
+    BETTER_AUTH_URL: "http://localhost:3000",
+  };
+  resetEnv();
+  await ensureIndexes();
+  const response = await getAuth().api.signUpEmail({
+    body: { email: "prefs@example.com", password: "correct horse battery", name: "prefs" },
+    asResponse: true,
+  });
+  const { user: created } = (await response.json()) as { user: { id: string } };
+  user = { id: created.id, cookie: response.headers.get("set-cookie")!.split(";")[0] };
+}, 60_000);
+
+afterAll(async () => {
+  await closeDb();
+  await mongod.stop();
+  process.env = baseEnv;
+});
+
+const get = (cookie: string | null = user.cookie) =>
+  GET(new Request("http://localhost:3000/api/preferences", { headers: cookie ? { cookie } : {} }));
+const patch = (body: unknown, cookie: string | null = user.cookie) =>
+  PATCH(
+    new Request("http://localhost:3000/api/preferences", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", ...(cookie && { cookie }) },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    }),
+  );
+const stored = async () => (await collections().users.findOne({ _id: new ObjectId(user.id) }))?.preferences;
 
 describe("/api/preferences", () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
+  it("needs a session", async () => {
+    expect((await get(null)).status).toBe(401);
+    expect((await patch({ clipLength: "long" }, null)).status).toBe(401);
   });
 
-  it("returns 401 when no session exists", async () => {
-    vi.mocked(getServerSession).mockResolvedValue(null);
-
-    const response = await GET();
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
-  });
-
-  it("returns user preferences for an authenticated user", async () => {
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { id: "user-1" },
-    } as never);
-    vi.mocked(getPrismaClient).mockReturnValue({
-      user: {
-        findUnique: vi.fn().mockResolvedValue({
-          default_font_family: "Inter",
-          default_font_size: 28,
-          default_font_color: "#123456",
-          notify_on_completion: false,
-        }),
-      },
-    } as never);
-
-    const response = await GET();
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      fontFamily: "Inter",
-      fontSize: 28,
-      fontColor: "#123456",
-      notifyOnCompletion: false,
+  it("returns null caption fields and the auto clip length until something is saved", async () => {
+    expect(await (await get()).json()).toEqual({
+      fontFamily: null,
+      fontSize: null,
+      fontColor: null,
       clipLength: "auto",
+      saved: false,
     });
+    // An empty patch writes nothing.
+    expect(await (await patch({})).json()).toMatchObject({ saved: false });
+    expect(await stored()).toBeUndefined();
   });
 
-  it("validates PATCH payloads", async () => {
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { id: "user-1" },
-    } as never);
-
-    const response = await PATCH(
-      new Request("http://localhost/api/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fontColor: "red" }),
-      }) as never,
-    );
-
+  it.each([
+    [{ clipLength: "custom" }, "Invalid clipLength"],
+    [{ clipLength: null }, "Invalid clipLength"],
+    [{ fontFamily: "  " }, "Invalid fontFamily"],
+    [{ fontFamily: false }, "Invalid fontFamily"],
+    [{ fontSize: 11 }, "Invalid fontSize (must be between 12 and 48)"],
+    [{ fontSize: 24.5 }, "Invalid fontSize (must be between 12 and 48)"],
+    [{ fontSize: "24" }, "Invalid fontSize (must be between 12 and 48)"],
+    [{ fontColor: "red" }, "Invalid fontColor (must be hex format like #FFFFFF)"],
+    [null, "Expected a preferences object"],
+    [[], "Expected a preferences object"],
+    ["{", "Expected a preferences object"],
+  ])("rejects %j", async (body, detail) => {
+    const response = await patch(body);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "Invalid fontColor (must be hex format like #FFFFFF)",
-    });
+    expect(await response.json()).toEqual({ detail });
+    expect(await stored()).toBeUndefined();
   });
 
-  it("validates notifyOnCompletion", async () => {
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { id: "user-1" },
-    } as never);
-
-    const response = await PATCH(
-      new Request("http://localhost/api/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifyOnCompletion: "yes" }),
-      }) as never,
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "Invalid notifyOnCompletion",
-    });
+  it("refuses an oversized body with 413", async () => {
+    const response = await patch(`{"fontFamily":"${"x".repeat(9 * 1024 * 1024)}"}`);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ detail: "Request body is too large" });
   });
 
-  it("updates stored preferences", async () => {
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { id: "user-1" },
-    } as never);
-    const update = vi.fn().mockResolvedValue({
-      default_font_family: "TikTokSans-Regular",
-      default_font_size: 24,
-      default_font_color: "#FFFFFF",
-      notify_on_completion: true,
-    });
-    vi.mocked(getPrismaClient).mockReturnValue({
-      user: { update },
-    } as never);
+  it("saves partial updates without touching other fields", async () => {
+    const first = await patch({ clipLength: "long", notifyOnCompletion: false });
+    // A clip length alone does not turn the unset caption fields into saved ones.
+    expect(await first.json()).toEqual({ fontFamily: null, fontSize: null, fontColor: null, clipLength: "long", saved: true });
+    expect(await stored()).toEqual({ clipLength: "long" });
 
-    const response = await PATCH(
-      new Request("http://localhost/api/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fontFamily: "TikTokSans-Regular",
-          fontSize: 24,
-          fontColor: "#FFFFFF",
-          notifyOnCompletion: true,
-        }),
-      }) as never,
-    );
-
-    expect(update).toHaveBeenCalled();
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      fontFamily: "TikTokSans-Regular",
-      fontSize: 24,
-      fontColor: "#FFFFFF",
-      notifyOnCompletion: true,
-      clipLength: "auto",
-    });
+    await patch({ fontFamily: "Inter", fontSize: 32, fontColor: "#12abef" });
+    expect(await stored()).toEqual({ clipLength: "long", fontFamily: "Inter", fontSize: 32, fontColor: "#12abef" });
+    expect(await (await get()).json()).toEqual({ fontFamily: "Inter", fontSize: 32, fontColor: "#12abef", clipLength: "long", saved: true });
   });
-  it.each([{ fontSize: 0 }, { fontSize: null }, { fontSize: 24.5 }, { fontFamily: false }, { fontColor: "" }, null, []])("rejects invalid falsy or non-object preferences: %j", async (body) => {
-    vi.mocked(getServerSession).mockResolvedValue({ user: { id: "user-1" } } as never);
-    const response = await PATCH(new Request("http://localhost/api/preferences", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    }) as never);
-    expect(response.status).toBe(400);
-    expect(getPrismaClient).not.toHaveBeenCalled();
-  });
-
-});
-
-it("saves clip length without overwriting unrelated preferences", async () => {
-  vi.mocked(getServerSession).mockResolvedValue({ user: { id: "user-1" } } as never);
-  const update = vi.fn().mockResolvedValue({ default_clip_length: "long" });
-  vi.mocked(getPrismaClient).mockReturnValue({ user: { update } } as never);
-  const response = await PATCH(new Request("http://localhost/api/preferences", {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clipLength: "long" }),
-  }) as never);
-  expect(response.status).toBe(200);
-  expect((await response.json()).clipLength).toBe("long");
-  expect(update.mock.calls[0][0].data).toEqual({ default_clip_length: "long" });
-});
-
-it.each([null, "", "custom", 120, true, {}])("rejects invalid clip length: %j", async (clipLength) => {
-  vi.mocked(getServerSession).mockResolvedValue({ user: { id: "user-1" } } as never);
-  const update = vi.fn();
-  vi.mocked(getPrismaClient).mockReturnValue({ user: { update } } as never);
-  const response = await PATCH(new Request("http://localhost/api/preferences", {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clipLength }),
-  }) as never);
-  expect(response.status).toBe(400);
-  expect(update).not.toHaveBeenCalled();
 });

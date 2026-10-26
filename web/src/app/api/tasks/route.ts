@@ -1,19 +1,12 @@
-import { NextResponse } from "next/server";
+import { handle, json } from "@/server/http";
+import { requireUser } from "@/server/session";
+import { listTasks, serializeTaskSummary } from "@/server/tasks";
 
-import { createProxyResponse, fetchBackend } from "@/server/backend-api";
-import { getServerSession } from "@/server/session";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const session = await getServerSession();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const upstream = await fetchBackend("/tasks/", {
-    method: "GET",
-    userId: session.user.id,
-    cache: "no-store",
-  });
-
-  return createProxyResponse(upstream);
-}
+export const GET = handle(async (request: Request) => {
+  const user = await requireUser(request);
+  const tasks = (await listTasks(user.id)).map(serializeTaskSummary);
+  return json({ tasks, total: tasks.length });
+});

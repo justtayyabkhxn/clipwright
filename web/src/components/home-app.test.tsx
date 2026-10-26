@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { WORKER_OFFLINE_NOTICE } from "@/components/app/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WORKER_OFFLINE_MESSAGE } from "@/lib/worker-notice";
 import HomeApp from "./home-app";
@@ -25,18 +26,24 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 
 let fetchMock: ReturnType<typeof vi.fn>;
+let preferences: Record<string, unknown>;
+let health: () => Response;
 
 beforeEach(() => {
   push.mockClear();
   warning.mockClear();
+  sessionStorage.clear();
   vi.stubEnv("NEXT_PUBLIC_MAX_VIDEO_UPLOAD_BYTES", "2000000000");
+  preferences = { fontFamily: null, fontSize: null, fontColor: null, clipLength: "auto", saved: false };
+  health = () => Response.json({ ok: true, db: true, worker: { online: true, heartbeatAt: "2026-10-26T12:00:00.000Z" } });
   fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/api/tasks/create")) return Response.json({ task_id: "task-1", job_id: "job-1", message: "queued", worker_online: false });
     if (url.includes("/api/tasks")) return Response.json({ tasks: [] });
     if (url.includes("/api/fonts")) return Response.json({ fonts: [] });
     if (url.includes("caption-templates")) return Response.json({ templates: [] });
-    if (url.includes("/api/preferences")) return Response.json({ clipLength: "auto" });
+    if (url.includes("/api/preferences")) return Response.json(preferences);
+    if (url.includes("/api/health")) return health();
     return Response.json({});
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -46,6 +53,18 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
+
+async function submitYouTube() {
+  const user = userEvent.setup({ delay: null });
+  await user.click(await screen.findByLabelText("YouTube URL"));
+  await user.paste("https://www.youtube.com/watch?v=abcdefghijk");
+  const generate = screen.getByRole("button", { name: "Generate clips" });
+  await waitFor(() => expect(generate).toBeEnabled());
+  await user.click(generate);
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/tasks/task-1"));
+  const [, init] = fetchMock.mock.calls.find(([url]) => String(url).includes("/api/tasks/create"))!;
+  return JSON.parse(String((init as RequestInit).body));
+}
 
 function videoFile(name: string, size: number) {
   const file = new File(["video"], name, { type: "video/mp4" });
@@ -85,16 +104,8 @@ it("only accepts YouTube links", async () => {
 
 it("creates the task, opens it and warns when the worker is offline", async () => {
   render(<HomeApp />, { wrapper: TooltipProvider });
-  const user = userEvent.setup({ delay: null });
-
-  await user.click(await screen.findByLabelText("YouTube URL"));
-  await user.paste("https://www.youtube.com/watch?v=abcdefghijk");
-  await user.click(screen.getByRole("button", { name: "Generate clips" }));
-
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/tasks/task-1"));
+  const body = await submitYouTube();
   expect(warning).toHaveBeenCalledWith(WORKER_OFFLINE_MESSAGE, expect.anything());
-  const [, init] = fetchMock.mock.calls.find(([url]) => String(url).includes("/api/tasks/create"))!;
-  const body = JSON.parse(String((init as RequestInit).body));
   expect(body).toMatchObject({
     source: { url: "https://www.youtube.com/watch?v=abcdefghijk", title: null },
     font_options: { font_family: null, font_size: null, font_color: null },
@@ -109,4 +120,55 @@ it("creates the task, opens it and warns when the worker is offline", async () =
   });
   expect(body).not.toHaveProperty("include_broll");
   expect(body).not.toHaveProperty("processing_mode");
+});
+
+it("starts from the caption defaults saved in Settings", async () => {
+  preferences = { fontFamily: "Inter-Bold", fontSize: 32, fontColor: "#FFD700", clipLength: "short", saved: true };
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  const body = await submitYouTube();
+  expect(body.font_options).toEqual({ font_family: "Inter-Bold", font_size: 32, font_color: "#FFD700" });
+  expect(body.clip_length).toBe("short");
+});
+
+it("keeps the template default for a saved field that is null", async () => {
+  preferences = { fontFamily: null, fontSize: 32, fontColor: null, clipLength: "auto", saved: true };
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  const body = await submitYouTube();
+  expect(body.font_options).toEqual({ font_family: null, font_size: 32, font_color: null });
+});
+
+it("keeps the template defaults for a user who only ever saved a clip length", async () => {
+  // What GET /api/preferences returns once PATCH {clipLength} created user.preferences.
+  preferences = { fontFamily: null, fontSize: null, fontColor: null, clipLength: "short", saved: true };
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  const body = await submitYouTube();
+  expect(body.font_options).toEqual({ font_family: null, font_size: null, font_color: null });
+  expect(body.clip_length).toBe("short");
+});
+
+it("applies caption defaults saved with the Settings page's initial values", async () => {
+  preferences = { fontFamily: "TikTokSans-Regular", fontSize: 24, fontColor: "#FFFFFF", clipLength: "auto", saved: true };
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  const body = await submitYouTube();
+  expect(body.font_options).toEqual({ font_family: "TikTokSans-Regular", font_size: 24, font_color: "#FFFFFF" });
+});
+
+it("says the worker is offline and lets the user dismiss it", async () => {
+  // The route's real offline answer: 503 while no worker heartbeat is fresh.
+  health = () => Response.json({ ok: false, db: true, worker: { online: false, heartbeatAt: null } }, { status: 503 });
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  const user = userEvent.setup({ delay: null });
+
+  expect(await screen.findByText(WORKER_OFFLINE_NOTICE)).toBeInTheDocument();
+  expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/health"))).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByText(WORKER_OFFLINE_NOTICE)).not.toBeInTheDocument();
+  expect(sessionStorage.getItem("clipwright.worker-notice.dismissed")).toBe("1");
+});
+
+it("shows no worker notice while the worker is online", async () => {
+  render(<HomeApp />, { wrapper: TooltipProvider });
+  await screen.findByLabelText("YouTube URL");
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/health"))).toBe(true));
+  expect(screen.queryByText(WORKER_OFFLINE_NOTICE)).not.toBeInTheDocument();
 });

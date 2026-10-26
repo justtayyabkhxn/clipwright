@@ -26,7 +26,7 @@ function mockFetches() {
     const url = String(input);
     if (url.includes("/api/preferences")) return Response.json(init?.method === "PATCH" ? { ...preferences, ...JSON.parse(String(init.body)) } : preferences);
     if (url.includes("/api/fonts")) return Response.json({ fonts: [] });
-    if (url.includes("/api/ai/provider")) return Response.json({ provider: "anthropic", model: "claude-opus-5", configured: true, transcription_configured: true });
+    if (url.includes("/api/ai/provider")) return Response.json({ provider: "anthropic", model: "claude-opus-5", configured: true, llm_configured: true, transcription_configured: true });
     return Response.json({});
   });
   vi.stubGlobal("fetch", fetchMock);

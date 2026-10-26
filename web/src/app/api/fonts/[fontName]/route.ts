@@ -1,82 +1,34 @@
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+import fs from "node:fs/promises";
+import { deleteUserFont, resolveFontFile } from "@/server/fonts";
+import { ApiError, handle, json } from "@/server/http";
+import { requireUser } from "@/server/session";
 
-import { auth } from "@/lib/auth";
-import { buildBackendAuthHeaders } from "@/lib/backend-auth";
-import { backendTraceHeaders } from "@/server/backend-api";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-interface Params {
-  params: Promise<{ fontName: string }>;
-}
+type Params = { params: Promise<{ fontName: string }> };
 
-export async function GET(_: Request, { params }: Params) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+/** The font file (user fonts first, then bundled), for `@font-face` and the editor's FontFace. */
+export const GET = handle(async (request: Request, { params }: Params) => {
   const { fontName } = await params;
-  const apiUrl =
-    process.env.BACKEND_INTERNAL_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8000";
-  const normalizedApiUrl = apiUrl.replace(/\/$/, "");
-  const encodedFontName = encodeURIComponent(fontName);
-  const backendAuthHeaders = { ...buildBackendAuthHeaders(session.user.id), ...(await backendTraceHeaders()) };
-
-  let upstream = await fetch(`${normalizedApiUrl}/fonts/${encodedFontName}`, {
+  const user = await requireUser(request);
+  const font = await resolveFontFile(fontName, user.id);
+  const data = font && (await fs.readFile(font.filePath).catch(() => null));
+  if (!font || !data) throw new ApiError(404, "Font not found");
+  return new Response(new Uint8Array(data), {
     headers: {
-      ...backendAuthHeaders,
-    },
-    cache: "no-store",
-  });
-
-  if (upstream.status === 404) {
-    upstream = await fetch(`${normalizedApiUrl}/api/fonts/${encodedFontName}`, {
-      headers: {
-        ...backendAuthHeaders,
-      },
-      cache: "no-store",
-    });
-  }
-
-  const arrayBuffer = await upstream.arrayBuffer();
-  return new NextResponse(arrayBuffer, {
-    status: upstream.status,
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",
+      "Content-Type": font.format === "otf" ? "font/otf" : "font/ttf",
+      "Content-Length": String(data.length),
+      // Revalidate so a deleted upload cannot stay cached.
       "Cache-Control": "private, no-cache",
     },
   });
-}
+});
 
-export async function DELETE(_: Request, { params }: Params) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+/** Delete one of the user's own fonts; bundled fonts are refused with 403. */
+export const DELETE = handle(async (request: Request, { params }: Params) => {
   const { fontName } = await params;
-  const apiUrl =
-    process.env.BACKEND_INTERNAL_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8000";
-  const normalizedApiUrl = apiUrl.replace(/\/$/, "");
-  const encodedFontName = encodeURIComponent(fontName);
-  const backendAuthHeaders = { ...buildBackendAuthHeaders(session.user.id), ...(await backendTraceHeaders()) };
-
-  const upstream = await fetch(`${normalizedApiUrl}/fonts/${encodedFontName}`, {
-    method: "DELETE",
-    headers: {
-      ...backendAuthHeaders,
-    },
-  });
-
-  const responseText = await upstream.text();
-  return new NextResponse(responseText, {
-    status: upstream.status,
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") || "application/json",
-    },
-  });
-}
+  const user = await requireUser(request);
+  const deleted = await deleteUserFont(user.id, fontName);
+  return json({ font_name: deleted, message: "Font deleted successfully" });
+});

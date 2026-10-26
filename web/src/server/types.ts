@@ -68,7 +68,15 @@ export type TaskDoc = {
   };
   settings: TaskSettings;
   clips: ClipDoc[];
-  run?: { jobId: string; startedAt?: Date; completedAt?: Date; cacheHit?: boolean; errorCode?: string };
+  /** The run the enqueuing route started: the worker's start CAS must match `jobId`. */
+  run?: {
+    jobId: string;
+    type?: "process_task" | "restyle_task";
+    startedAt?: Date;
+    completedAt?: Date;
+    cacheHit?: boolean;
+    errorCode?: string;
+  };
   editLock?: { jobId: string; until: Date } | null;
   createdAt: Date;
   updatedAt: Date;

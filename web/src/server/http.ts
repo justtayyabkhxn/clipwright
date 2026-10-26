@@ -17,6 +17,43 @@ export function json(data: unknown, init?: ResponseInit): Response {
   return Response.json(data, init);
 }
 
+/** Far above the largest valid body (an EditDocument: 100 segments, 5000 words of at most 120 characters). */
+export const MAX_JSON_BODY_BYTES = 8 * 1024 * 1024;
+const BODY_TOO_LARGE = "Request body is too large";
+
+/** The body as text, 413 past MAX_JSON_BODY_BYTES (declared or streamed); route handlers have no limit of their own. */
+async function readLimitedText(request: Request): Promise<string> {
+  if (Number(request.headers.get("content-length")) > MAX_JSON_BODY_BYTES) throw new ApiError(413, BODY_TOO_LARGE);
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    size += chunk.value.byteLength;
+    if (size > MAX_JSON_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new ApiError(413, BODY_TOO_LARGE);
+    }
+    chunks.push(chunk.value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks)); // strips a BOM, like request.json()
+}
+
+/** A JSON object body (`_read_json_object`): 400 for invalid JSON or anything that is not an object, 413 when too large. */
+export async function readJsonObject(request: Request): Promise<Record<string, unknown>> {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(await readLimitedText(request));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, "Invalid JSON body");
+  }
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ApiError(400, "Request body must be an object");
+  }
+  return payload as Record<string, unknown>;
+}
+
 export function zodDetail(error: ZodError): string {
   return error.issues
     .map((issue) => (issue.path.length ? `${issue.path.join(".")}: ${issue.message}` : issue.message))

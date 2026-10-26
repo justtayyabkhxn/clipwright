@@ -162,6 +162,23 @@ export async function finishJob(lease: JobLease, outcome: JobOutcome): Promise<b
   return result.matchedCount > 0;
 }
 
+/**
+ * Worker shutdown: hand a running job back to the queue without spending an attempt. False when
+ * the lease is gone or a cancel was requested (then the job must be finished, not requeued).
+ */
+export async function releaseJob(lease: JobLease): Promise<boolean> {
+  const now = new Date();
+  const result = await collections().jobs.updateOne(
+    { _id: lease._id, lockedBy: lease.lockedBy, status: "running", cancelRequested: { $ne: true } },
+    {
+      $set: { status: "queued", runAt: now, updatedAt: now },
+      $unset: { lockedBy: "", lockedUntil: "" },
+      $inc: { attempts: -1 },
+    },
+  );
+  return result.matchedCount > 0;
+}
+
 /** Queued jobs become cancelled at once; running ones get `cancelRequested` for their worker. */
 export async function requestCancel(filter: Filter<JobDoc>): Promise<{ cancelled: number; cancelling: number }> {
   const { jobs } = collections();

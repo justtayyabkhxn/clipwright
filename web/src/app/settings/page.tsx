@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils";
 import { FontSelectOption, type FontOption } from "@/components/font-select-option";
 
 interface UserPreferences {
-  fontFamily: string;
-  fontSize: number;
-  fontColor: string;
+  fontFamily: string | null;
+  fontSize: number | null;
+  fontColor: string | null;
 }
 
 export default function SettingsPage() {
@@ -81,10 +81,14 @@ export default function SettingsPage() {
         const response = await fetch('/api/preferences');
         if (response.ok) {
           const data: UserPreferences = await response.json();
-          setFontFamily(data.fontFamily);
-          setFontSize(data.fontSize);
-          setFontColor(data.fontColor);
-          setSavedSnapshot(JSON.stringify([data.fontFamily, data.fontSize, data.fontColor]));
+          // A field never saved may come back null: show the default the route would apply.
+          const family = data.fontFamily ?? "TikTokSans-Regular";
+          const size = data.fontSize ?? 24;
+          const color = data.fontColor ?? "#FFFFFF";
+          setFontFamily(family);
+          setFontSize(size);
+          setFontColor(color);
+          setSavedSnapshot(JSON.stringify([family, size, color]));
         }
       } catch (error) {
         console.error('Failed to load preferences:', error);

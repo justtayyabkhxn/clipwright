@@ -76,13 +76,8 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
   const modelOptions = models.some((option) => option.id === model) ? models : [{ id: model, display_name: model }, ...models];
 
   const missing: string[] = [];
-  if (settings) {
-    if (!keySetting?.configured) missing.push(t("anthropicKeyName"));
-    if (!assemblySetting?.configured) missing.push(t("assemblyKeyName"));
-  } else if (provider && !provider.configured) {
-    // Without the admin view, `configured` covers both keys and `transcription_configured` only AssemblyAI.
-    missing.push(provider.transcription_configured === false ? t("assemblyKeyName") : t("anthropicKeyName"));
-  }
+  if (provider?.llm_configured === false) missing.push(t("anthropicKeyName"));
+  if (provider?.transcription_configured === false) missing.push(t("assemblyKeyName"));
 
   const testConnection = async () => {
     setTesting(true);
@@ -179,10 +174,14 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="anthropic-key" className="text-sm">{t("keyLabel")}</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="anthropic-key" className="text-sm">{t("keyLabel")}</Label>
+              <KeyStatus id="anthropic-key-status" setting={keySetting} />
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <KeyInput
                 id="anthropic-key"
+                describedBy={keySetting ? "anthropic-key-status" : undefined}
                 value={apiKey}
                 onChange={(value) => { setApiKey(value); setResult(null); }}
                 placeholder={keySetting?.configured ? t("keyReplacePlaceholder") : t("keyPlaceholder")}
@@ -226,7 +225,10 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
           </div>
 
           <div className="space-y-2 border-t pt-5">
-            <Label htmlFor="assemblyai-key" className="text-sm">{t("assemblyKeyLabel")}</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="assemblyai-key" className="text-sm">{t("assemblyKeyLabel")}</Label>
+              <KeyStatus id="assemblyai-key-status" setting={assemblySetting} />
+            </div>
             <p className="text-xs text-muted-foreground">
               {t("assemblyKeyHint")}{" "}
               <a href="https://www.assemblyai.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-medium text-brand underline-offset-2 hover:underline">
@@ -236,6 +238,7 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex flex-col gap-2 sm:flex-row">
               <KeyInput
                 id="assemblyai-key"
+                describedBy={assemblySetting ? "assemblyai-key-status" : undefined}
                 value={assemblyKey}
                 onChange={setAssemblyKey}
                 placeholder={assemblySetting?.configured ? t("keyReplacePlaceholder") : t("assemblyKeyPlaceholder")}
@@ -270,12 +273,15 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function KeyInput({ id, value, onChange, placeholder }: { id: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+function KeyInput({ id, describedBy, value, onChange, placeholder }: {
+  id: string; describedBy?: string; value: string; onChange: (value: string) => void; placeholder: string;
+}) {
   return (
     <div className="relative flex-1">
       <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         id={id}
+        aria-describedby={describedBy}
         type="password"
         autoComplete="off"
         spellCheck={false}
@@ -285,6 +291,18 @@ function KeyInput({ id, value, onChange, placeholder }: { id: string; value: str
         className="pl-9 font-mono text-sm"
       />
     </div>
+  );
+}
+
+/** Per-key status next to the field, from the admin runtime-settings row. */
+function KeyStatus({ id, setting }: { id: string; setting?: RuntimeSetting }) {
+  const t = useTranslations("settings.ai");
+  if (!setting) return null;
+  return (
+    <span id={id} className={cn("inline-flex items-center gap-1 text-xs font-medium", setting.configured ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+      {setting.configured ? <CheckCircle2 aria-hidden className="size-3.5" /> : <XCircle aria-hidden className="size-3.5" />}
+      {setting.configured ? t("ready") : t("notConfigured")}
+    </span>
   );
 }
 

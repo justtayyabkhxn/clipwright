@@ -1,26 +1,24 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
+import { testAnthropicConnection } from "@/server/ai";
+import { ApiError, handle, json, readJsonObject } from "@/server/http";
+import { requireAdmin } from "@/server/session";
+import { getRuntimeSettings } from "@/server/settings";
 
-import { createTextProxyResponse, fetchBackend } from "@/server/backend-api";
-import { getServerSession } from "@/server/session";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-// Tests a Claude API key server-side. The key travels only browser → this
-// route → backend and is never echoed back.
-export async function POST(request: Request) {
-  const session = await getServerSession();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!(session.user as { is_admin?: boolean }).is_admin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+const ConnectionTestSchema = z.object({
+  provider: z.string().default("anthropic"),
+  // A key pasted into the form but not saved yet; empty tests the saved key.
+  api_key: z.string().max(512).nullish(),
+  model: z.string().max(200).nullish(),
+});
 
-  const upstream = await fetchBackend("/admin/ai/test-connection", {
-    method: "POST",
-    userId: session.user.id,
-    extraHeaders: { "Content-Type": "application/json" },
-    body: await request.text(),
-    cache: "no-store",
-  });
-
-  return createTextProxyResponse(upstream);
-}
+/** Check a Claude key and model through the Models API, which costs nothing. The key is never echoed. */
+export const POST = handle(async (request: Request) => {
+  await requireAdmin(request);
+  const body = ConnectionTestSchema.parse(await readJsonObject(request));
+  if (body.provider !== "anthropic") throw new ApiError(400, "Only the anthropic provider can be tested here.");
+  const apiKey = body.api_key?.trim() || (await getRuntimeSettings()).anthropicApiKey;
+  return json(await testAnthropicConnection(apiKey, body.model));
+});

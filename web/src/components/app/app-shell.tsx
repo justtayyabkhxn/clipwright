@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sparkles,
+  CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sparkles, X,
 } from "lucide-react";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
 import { toast } from "sonner";
@@ -131,6 +131,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!compact && <RecentProjects pathname={pathname} />}
 
         <div className="mt-auto w-full space-y-2 pb-3">
+          {/* The home page shows this notice in its own content. */}
+          {!compact && pathname !== "/" && <WorkerOfflineNotice className="text-xs" />}
           <ProviderIndicator compact={compact} />
           <UserRow compact={compact} name={user.name} email={user.email} />
           <SourceCredit iconOnly={compact} className={compact ? "flex justify-center rounded-md p-2 hover:bg-sidebar-accent" : "block px-2.5"} />
@@ -226,6 +228,42 @@ function ProviderIndicator({ compact }: { compact: boolean }) {
   );
   if (!compact) return link;
   return <Tooltip><TooltipTrigger asChild>{link}</TooltipTrigger><TooltipContent side="right">{name} · {status}</TooltipContent></Tooltip>;
+}
+
+export const WORKER_OFFLINE_NOTICE = "The Clipwright worker isn't running, so new videos will wait in the queue. Start it with pnpm dev (or pnpm worker).";
+const WORKER_NOTICE_DISMISSED_KEY = "clipwright.worker-notice.dismissed";
+
+/** Checks `GET /api/health` once on mount; a calm, dismissible note while no worker heartbeat is fresh. */
+export function WorkerOfflineNotice({ className }: { className?: string }) {
+  const common = useTranslations("common");
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    try { if (sessionStorage.getItem(WORKER_NOTICE_DISMISSED_KEY) === "1") return; } catch {}
+    let alive = true;
+    void fetch("/api/health", { cache: "no-store" })
+      // The route answers 503 while no worker is alive, so read the body whatever the status. An
+      // unreachable database also reports the worker offline; that is not this notice's message.
+      .then((response) => response.json().catch(() => null))
+      .then((body: { db?: unknown; worker?: { online?: unknown } } | null) =>
+        alive && setOffline(body?.db === true && body.worker?.online === false))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  if (!offline) return null;
+  const dismiss = () => {
+    setOffline(false);
+    try { sessionStorage.setItem(WORKER_NOTICE_DISMISSED_KEY, "1"); } catch {}
+  };
+  return (
+    <div role="status" className={cn("flex items-start gap-2.5 rounded-xl border bg-muted/60 px-3 py-2.5 text-muted-foreground", className)}>
+      <span aria-hidden className="mt-[0.4em] size-2 shrink-0 rounded-full bg-amber-500" />
+      <p className="min-w-0 flex-1 leading-snug">{WORKER_OFFLINE_NOTICE}</p>
+      <button type="button" onClick={dismiss} aria-label={common("close")}
+        className="-m-1 shrink-0 rounded-md p-1 transition-colors hover:bg-background hover:text-foreground">
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
 }
 
 function SidebarLink({ href, label, active, compact, shortcut, className, children }: {

@@ -39,22 +39,6 @@ export function validateVideoSourceUrl(value: string): { source?: "youtube"; err
   return { error: "Only YouTube links are supported. Upload the file instead." };
 }
 
-/** Local storage: the browser streams the file to /api/upload. */
-type ProxyUploadAuthorization = {
-  directUpload: false;
-};
-
-type S3UploadAuthorization = {
-  storage: "s3";
-  video_path: string;
-  uploadId: string;
-  partSize: number;
-  parts: { partNumber: number; url: string }[];
-};
-
-/** Object storage: the browser uploads parts straight to presigned URLs. */
-type UploadAuthorization = ProxyUploadAuthorization | S3UploadAuthorization;
-
 const extractYouTubeVideoId = (value: string): string | null => {
   const input = value.trim();
   if (!input) return null;
@@ -92,7 +76,8 @@ export const getYouTubeThumbnailUrl = (value: string): string | null => {
   return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
 };
 
-async function requestUploadAuthorization(file: File): Promise<UploadAuthorization> {
+/** Asks how to upload. Local storage always answers `{directUpload: false}`: stream to /api/upload. */
+async function requestUploadAuthorization(file: File): Promise<void> {
   const response = await fetch("/api/upload/authorization", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -107,8 +92,6 @@ async function requestUploadAuthorization(file: File): Promise<UploadAuthorizati
     );
     throw new Error(formatSupportMessage(uploadError));
   }
-
-  return response.json() as Promise<UploadAuthorization>;
 }
 
 export async function uploadVideoFile(
@@ -119,105 +102,8 @@ export async function uploadVideoFile(
     throw new Error(uploadTooLargeMessage(maxBytes, file.size));
   }
 
-  const uploadAuthorization = await requestUploadAuthorization(file);
-  if ("storage" in uploadAuthorization) {
-    return uploadVideoFileToS3(file, uploadAuthorization);
-  }
-  return uploadVideoFileViaProxy(file, maxBytes);
-}
+  await requestUploadAuthorization(file);
 
-async function uploadVideoFileToS3(file: File, authorization: S3UploadAuthorization): Promise<string> {
-  const completedParts: { partNumber: number; etag: string }[] = [];
-  const controller = new AbortController();
-  const payload = { video_path: authorization.video_path, uploadId: authorization.uploadId };
-  let nextPart = 0;
-  let failure: unknown;
-  const workers = Array.from({ length: Math.min(3, authorization.parts.length) }, async () => {
-    while (nextPart < authorization.parts.length && !controller.signal.aborted) {
-      const part = authorization.parts[nextPart++];
-      try {
-        const start = (part.partNumber - 1) * authorization.partSize;
-        let partUrl = part.url;
-        let response: Response | undefined;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            response = await fetch(partUrl, {
-              method: "PUT",
-              body: file.slice(start, Math.min(file.size, start + authorization.partSize)),
-              signal: controller.signal,
-            });
-            if (response.ok) break;
-            if (response.status === 403 && attempt < 2) {
-              // Refresh with current credentials without discarding completed
-              // parts when an upload lasts longer than the signed URL/session.
-              const refreshed = await fetch("/api/upload/parts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...payload, partNumbers: [part.partNumber] }),
-                signal: controller.signal,
-              });
-              if (!refreshed.ok) throw new Error("Video upload authorization could not be refreshed.");
-              const result = await refreshed.json();
-              const freshPart = result.parts?.find((item: { partNumber: number; url: string }) => item.partNumber === part.partNumber);
-              if (!freshPart?.url) throw new Error("Video upload authorization could not be refreshed.");
-              partUrl = freshPart.url;
-              continue;
-            }
-            if (response.status < 500) throw new Error("Video upload failed. Please try again.");
-          } catch (error) {
-            if (controller.signal.aborted || attempt === 2) throw error;
-          }
-        }
-        const etag = response?.headers.get("ETag");
-        if (!response?.ok || !etag) {
-          throw new Error("Video upload failed. Please try again.");
-        }
-        completedParts.push({ partNumber: part.partNumber, etag });
-      } catch (error) {
-        failure ??= error;
-        controller.abort();
-      }
-    }
-  });
-  await Promise.all(workers);
-  try {
-    if (failure) throw failure;
-    let response: Response | undefined;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        response = await fetch("/api/upload/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, parts: completedParts.sort((a, b) => a.partNumber - b.partNumber) }),
-        });
-        if (response.ok || response.status < 500) break;
-      } catch (error) {
-        if (attempt === 2) throw error;
-      }
-    }
-    if (!response?.ok) {
-      if (!response) throw new Error("Video upload could not be completed.");
-      throw new Error(formatSupportMessage(await parseApiError(response, "Video upload could not be completed.")));
-    }
-    const result = await response.json();
-    if (typeof result.video_path !== "string" || !result.video_path) {
-      throw new Error("Upload finished without a video path. Please try again.");
-    }
-    return result.video_path;
-  } catch (error) {
-    await fetch("/api/upload/abort", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => undefined);
-    throw error;
-  }
-}
-
-export async function uploadVideoFileViaProxy(
-  file: File,
-  maxBytes: number = maxVideoUploadBytes(),
-): Promise<string> {
   const formData = new FormData();
   formData.append("video", file);
 
