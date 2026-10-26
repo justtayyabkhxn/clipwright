@@ -1,32 +1,29 @@
-.env.local
-.DS_Store
+# Secrets and local config (web/.env.example is the committed template)
+.env
+.env.*
+!.env.example
+
+# Runtime data: storage/ (durable files) and work/ (job temp dirs)
+data/
+
+# Dependencies and build output
+node_modules/
+.venv/
 __pycache__
 *.egg-info
-.coverage
 .next/
+.coverage
+
+# Logs and scratch
 logs/
 temp/
-.env
 *.m4a
+.DS_Store
+
+# Playwright
 web/e2e/.seed.json
 web/playwright-report/
 web/test-results/
 
-# local demo / scratch artifacts (not for the repo)
-backend/demo_clips/
-backend/demo_clips_*.log
-backend/run_demo.py
-
-# Private deployment settings and provider research
-.env.*
-!.env.example
-output/provider-guide*/
-docs/youtube-provider-registry*.json
-
 # Local agent checkouts
 .claude/worktrees/
-
-# Local environments
-.venv/
-node_modules/
-data/

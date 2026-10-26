@@ -1,6 +1,6 @@
 # Clipwright: work log and resume guide
 
-Last updated: 2026-10-26 (Phase 2 done; Phases 3 and 4 running).
+Last updated: 2026-10-26. **PAUSED by the user during Phase 3/4.** Phase 2 is complete and verified; see "PAUSED" below.
 
 **Goal:** rebrand the SupoClip + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
 
@@ -33,7 +33,7 @@ web/       Next.js app: UI, API routes (src/app/api), server modules (src/server
 engine/    Python render engine (uv project, package clipwright_engine, CLI: python -X utf8 -m clipwright_engine <cmd>)
 data/      git-ignored runtime data: storage/ (durable files) and work/ (job temp dirs)
 docs/port/ design and maps
-backend/   OLD FastAPI backend: still present only as reference; delete in Phase 3
+(backend/ deleted in the WIP checkpoint; read the original with git show 1dbb178:backend/...)
 ```
 
 ---
@@ -67,25 +67,36 @@ backend/   OLD FastAPI backend: still present only as reference; delete in Phase
 
 ---
 
-## In progress: Phases 3 and 4 (cleanup and docs, whole-system review, full-stack E2E with fakes)
+## PAUSED (user stopped work on 2026-10-26, during Phase 3/4)
 
-Workflow `wf_5ffbb665-4a6` (task `w96x6mux8`) runs in three steps:
-1. In parallel: docs and cleanup; a full-stack Playwright E2E with a fake Claude API, a fake AssemblyAI and a MongoDB memory replica set; and 5 adversarial review lenses (security, pipeline parity, editor parity, jobs/Windows, frontend contract).
-2. A skeptic verifies each finding.
-3. Fixers grouped by area apply the confirmed fixes, then a final verifier re-runs every check.
+**State when paused**
+- Workflow `wf_5ffbb665-4a6` was paused right after it started. 6 agents had begun (docs-cleanup, e2e, and 4 of the 5 reviewers); **none finished**, so the workflow has no cached results.
+- The only work that reached the files came from the docs-cleanup agent, and it is saved in the **WIP checkpoint commit** (see the git log, "WIP (paused)"):
+  - **Deleted** (`git rm`): `backend/` (entire old FastAPI backend), `mcp/`, `observability/`, `docker-compose.yml`, `init.sql`, `start.sh`, `install_cron.sh`, the root `.env.example`, `.dockerignore`, `DEPLOY_NOTES.md`, `IMPLEMENTATION_PLAN.md`, `QUICKSTART.md`, `assets/banner.jpg`, and all of the old `docs/*.md`, `docs/images` and `docs/screenshots`. `docs/` now holds only `docs/port/`.
+  - **Rewritten:** `Makefile` (targets setup, dev, worker, test, test-web, test-engine, check, build) and `.gitignore` (tidied).
+- **Not done yet:**
+  - `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` and `CHANGELOG.md` still describe the **old SupoClip and Docker system**. They are stale until rewritten.
+  - None of the new docs exist yet.
+  - `NOTICE.md` has not been written.
+  - DESIGN.md has not been updated with the Phase 2 contract additions.
+  - The E2E suite, the 5-lens review and its fixes have not run.
+- `docs/claude.md` was deleted along with the old docs. Its content is still in git: `git show b8131fd:docs/claude.md`. Use it for the new `docs/claude-integration.md`.
+- The checks were not re-run after the partial cleanup. Only files outside `web/` and `engine/` changed, so the Phase 2 results still apply.
+- One test is now skipped instead of run: the Python↔Node settings-interop test in `web/src/server/settings.test.ts` (`skipIf` when `backend/.venv` or `backend/src` is missing). Either drop it, or turn it into a fixture-based test that uses a value encrypted once by the Python code (from `git show 1dbb178:backend/src/runtime_settings.py`).
 
-To resume it in the same session: `Workflow({scriptPath: "C:\Users\wefor\.claude\projects\C--other-projects-supoclip\4ac2f41d-0bf2-456a-819d-126608c4e66c\workflows\scripts\clipwright-phase3-4-wf_5ffbb665-4a6.js", resumeFromRunId: "wf_5ffbb665-4a6"})`.
-
-When it finishes, commit as "Clipwright phase 3/4".
+**How to resume Phase 3/4**
+- **Same session:** `resumeFromRunId` gives no benefit, because no agent finished; just re-run the script. `Workflow({scriptPath: "C:\Users\wefor\.claude\projects\C--other-projects-supoclip\4ac2f41d-0bf2-456a-819d-126608c4e66c\workflows\scripts\clipwright-phase3-4-wf_5ffbb665-4a6.js"})`. The docs agent handles files that are already deleted.
+- **New session:** the script file above can be re-run directly. Or ask Claude to "continue Clipwright Phase 3/4 from work.md"; the checklist below is the source of truth.
 
 ---
 
 ## Left to do
 
 ### Phase 3: cleanup and docs
-- [ ] Delete what is no longer needed: `backend/`, `mcp/`, `observability/`, `docker-compose.yml`, `init.sql`, `start.sh`, `install_cron.sh`, the Dockerfiles, the old e2e specs for dropped features, `assets/banner.jpg` (SupoClip branding), `DEPLOY_NOTES.md`, `CHANGELOG.md` (or reset it), `backend/REFACTORING_GUIDE.md`.
-- [ ] Rewrite `README.md`, `QUICKSTART.md`, `CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md` for Clipwright: prerequisites, setup, commands, architecture.
-- [ ] **Rename `docs/claude.md`.** On Windows its name matches `CLAUDE.md` case-insensitively, so the agent harness loads it as instructions for `docs/`. Move its content into `docs/claude-integration.md` or the new docs.
+- [x] Deleted `backend/`, `mcp/`, `observability/`, `docker-compose.yml`, `init.sql`, `start.sh`, `install_cron.sh`, Docker files, `assets/banner.jpg`, `DEPLOY_NOTES.md`, `IMPLEMENTATION_PLAN.md`, `QUICKSTART.md`, the root `.env.example`, and the old docs (WIP checkpoint).
+- [ ] Delete or rewrite the old e2e specs in `web/e2e/` that target dropped features (`app`, `editor-studio`, `generation-status`, `library-groups`, `local-workflow` specs plus `global-setup.ts`), and reset `CHANGELOG.md`.
+- [ ] Rewrite `README.md`, `CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md` for Clipwright: prerequisites, setup, commands, architecture. `QUICKSTART.md` is deleted; the README covers it. Add `NOTICE.md` crediting SupoClip under AGPL-3.0.
+- [x] `docs/claude.md` deleted (it collided with `CLAUDE.md` on Windows). [ ] Write `docs/claude-integration.md` from `git show b8131fd:docs/claude.md`, updated for Clipwright.
 - [ ] New docs:
   - `docs/setup.md`: Windows/macOS/Linux setup with no Docker. Node 22, `npx pnpm@10` or corepack, `uv`, ffmpeg (a gyan.dev **full** build so libass is included), and an Atlas URI.
   - `docs/configuration.md`: env vars.
@@ -93,7 +104,7 @@ When it finishes, commit as "Clipwright phase 3/4".
   - `docs/testing.md`
   - `docs/troubleshooting.md`: yt-dlp failures, worker offline, key errors, the Windows SWC cache issue, and Store `python` stub on PATH.
   - A Vercel deployment notes section: what is still needed (Blob/R2 storage driver, direct uploads, the worker on an always-on machine).
-- [ ] Root `Makefile` / scripts: `make setup` (pnpm install plus `uv sync` in engine), `make dev`, `make test` (web vitest plus engine pytest).
+- [x] Root `Makefile` rewritten: setup, dev, worker, test, test-web, test-engine, check, build (WIP checkpoint; not yet run end to end).
 - [ ] Optional: bundle Noto Color Emoji or document the emoji fallback (caption emojis are disabled on Windows when no colour emoji font is found).
 
 ### Phase 4: whole-system adversarial review

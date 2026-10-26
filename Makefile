@@ -1,24 +1,33 @@
-BACKEND_TEST_ENV = DATABASE_URL=$${TEST_DATABASE_URL:-$${DATABASE_URL:-postgresql+asyncpg://supoclip:supoclip_password@127.0.0.1:5432/supoclip}} REDIS_HOST=$${REDIS_HOST:-127.0.0.1} REDIS_PORT=$${REDIS_PORT:-6379}
-FRONTEND_TEST_ENV = DATABASE_URL=$${TEST_DATABASE_URL:-$${DATABASE_URL:-postgresql://supoclip:supoclip_password@127.0.0.1:5432/supoclip}} BACKEND_AUTH_SECRET=$${BACKEND_AUTH_SECRET:-supoclip_test_secret} BETTER_AUTH_SECRET=$${BETTER_AUTH_SECRET:-supoclip_better_auth_test_secret} NEXT_PUBLIC_SELF_HOST=true
+# Clipwright tasks. GNU make in Git Bash (Windows), macOS or Linux.
+# Every target is a thin wrapper; the commands are also listed in docs/setup.md and docs/testing.md.
 
-.PHONY: test check test-backend test-frontend test-e2e test-ci
+# pnpm when it is on PATH (e.g. after `corepack enable`), otherwise a one-off pnpm 10 through npx.
+PNPM ?= $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo npx -y pnpm@10)
 
-test: test-backend test-frontend
+.PHONY: setup dev worker test test-web test-engine check build
 
-test-backend:
-	cd backend && uv sync --frozen --all-groups
-	cd backend && $(BACKEND_TEST_ENV) .venv/bin/pytest
+setup:
+	cd web && $(PNPM) install
+	cd engine && uv sync
+	@if [ ! -f web/.env.local ]; then cp web/.env.example web/.env.local; echo "Created web/.env.local: set MONGODB_URI and BETTER_AUTH_SECRET"; fi
 
-test-frontend:
-	cd frontend && pnpm install --frozen-lockfile
-	cd frontend && $(FRONTEND_TEST_ENV) pnpm run test:coverage
+dev:
+	cd web && $(PNPM) dev
 
-test-e2e:
-	cd frontend && pnpm install --frozen-lockfile
-	cd frontend && $(FRONTEND_TEST_ENV) pnpm exec playwright install --with-deps
-	cd frontend && $(FRONTEND_TEST_ENV) pnpm run test:e2e
+worker:
+	cd web && $(PNPM) worker
+
+test: test-web test-engine
+
+test-web:
+	cd web && $(PNPM) exec vitest run
+
+test-engine:
+	cd engine && uv run python -X utf8 -m pytest -q
 
 check:
-	cd frontend && pnpm run lint && pnpm run typecheck
+	cd web && $(PNPM) exec tsc --noEmit -p .
+	cd web && $(PNPM) run lint
 
-test-ci: check test-backend test-frontend test-e2e
+build:
+	cd web && $(PNPM) run build

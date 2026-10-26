@@ -1,2 +1,0 @@
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_plan VARCHAR(20);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_plan_invoice_id VARCHAR(255);
