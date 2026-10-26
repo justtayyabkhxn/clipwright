@@ -29,3 +29,4 @@ docs/youtube-provider-registry*.json
 # Local environments
 .venv/
 node_modules/
+data/
