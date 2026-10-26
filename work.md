@@ -1,6 +1,6 @@
 # Clipwright: work log and resume guide
 
-Last updated: 2026-10-26 (during Phase 2).
+Last updated: 2026-10-26 (Phase 2 done; Phases 3 and 4 running).
 
 **Goal:** rebrand the SupoClip + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
 
@@ -56,26 +56,20 @@ backend/   OLD FastAPI backend: still present only as reference; delete in Phase
    - **Frontend**: dropped features removed, English only, Clipwright rebrand (SVG logo and wordmark), polling, AssemblyAI key field in Settings, restyle-safe cancel UI. 100 tests.
 3. **Cross-stream fixes, also in `42a9502`:** `zod` and `server-only` added as direct dependencies; `web/.gitignore` now un-ignores `.env.example`; stale config cleaned up; the token-limit error reworded.
 
+4. **`b8131fd` Phase 2.** Four parallel streams (each reviewed and fixed), followed by an integrator:
+   - **tasks-api:** explicit route handlers for tasks, clips, uploads (streamed with busboy) and preset exports. YouTube URLs are host-checked and stored as canonical watch URLs; this closed an SSRF and shared-cache poisoning path. A cancelled or failed restyle rolls back its settings.
+   - **editor-api:** editor routes, fonts, caption templates, `/api/ai/provider` (`llm_configured`, `transcription_configured`), admin settings and test-connection, preferences (unsaved fonts come back as `null`, plus a `saved` flag), and `/api/health`. The dropped server modules are deleted.
+   - **worker:** `web/src/worker` with the main loop, the 6 job handlers, failure hooks, and a cron (export expiry, old job docs, work dirs, unreferenced YouTube sources and uploads).
+   - **ui-followups:** per-key "missing" status, saved caption defaults applied on the home page, and a worker-offline notice.
+   - **integrator:** fixed the MongoDB client after a failed first connect, removed the orphaned S3 multipart client path, deleted the leftover generated Prisma client, Dockerfile and `auth-origins`.
+   - **Verified:** `tsc` 0 errors; lint clean; **640 vitest tests passed on two runs**; `next build` OK with no DB; slow real-engine integration test (`CLIPWRIGHT_SLOW_TESTS=1`) passed; the worker smoke test against an in-memory replica set passed.
+   - Afterwards I added `@next/env` as a direct dependency and deleted the stray `web/src/tsconfig.json`.
+
 ---
 
-## In progress: Phase 2 (workflow `wf_b73b729a-195`, task `wa0iaqwbb`)
+## In progress: Phases 3 and 4 (cleanup and docs, whole-system review, full-stack E2E with fakes)
 
-Four parallel streams, each with an adversarial review and a fix pass, followed by an integrator:
-- **tasks-api:** explicit task, clip, upload and preset-export routes replace the old `/api/tasks/[...path]` proxy. Uploads are streamed with busboy.
-- **editor-api:** editor routes (prepare, drafts, media, exports, combine), fonts, caption templates, `/api/ai/provider`, admin runtime settings and test-connection, preferences and `/api/health`; plus deleting the dropped server modules.
-- **worker:** `web/src/worker/main.ts` plus handlers (process_task, restyle_task, prepare_editor, export_editor, combine_editor, export_clip), the cron and the failure hooks. Includes a **real-engine integration test**: a synthetic video, a hand-made transcript sidecar and a faked Claude response, so it needs no paid calls.
-- **ui-followups:** per-key "missing" status, saved caption defaults applied on the home page, and a worker-offline banner.
-- **integrator:** full `tsc`, lint, vitest (run twice), `next build`, an orphan-fetch check, and a worker smoke start against an in-memory replica set.
-
-**Cross-stream contract** (also in the Phase 2 prompt):
-- The task gets `run = {jobId, type}` when its job is enqueued.
-- `run_type` is part of the task JSON.
-- Cancelling a restyle sets the task back to `completed` with its old clips intact.
-- Enqueue responses include `worker_online`.
-- `/api/ai/provider` returns `llm_configured` and `transcription_configured`.
-- `/api/preferences` returns `saved`.
-
-**When it finishes:** read the workflow output, fix any open issues, then commit as "Clipwright phase 2".
+See the checklist below. When it finishes, commit as "Clipwright phase 3/4".
 
 ---
 
