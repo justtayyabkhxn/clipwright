@@ -69,7 +69,14 @@ backend/   OLD FastAPI backend: still present only as reference; delete in Phase
 
 ## In progress: Phases 3 and 4 (cleanup and docs, whole-system review, full-stack E2E with fakes)
 
-See the checklist below. When it finishes, commit as "Clipwright phase 3/4".
+Workflow `wf_5ffbb665-4a6` (task `w96x6mux8`) runs in three steps:
+1. In parallel: docs and cleanup; a full-stack Playwright E2E with a fake Claude API, a fake AssemblyAI and a MongoDB memory replica set; and 5 adversarial review lenses (security, pipeline parity, editor parity, jobs/Windows, frontend contract).
+2. A skeptic verifies each finding.
+3. Fixers grouped by area apply the confirmed fixes, then a final verifier re-runs every check.
+
+To resume it in the same session: `Workflow({scriptPath: "C:\Users\wefor\.claude\projects\C--other-projects-supoclip\4ac2f41d-0bf2-456a-819d-126608c4e66c\workflows\scripts\clipwright-phase3-4-wf_5ffbb665-4a6.js", resumeFromRunId: "wf_5ffbb665-4a6"})`.
+
+When it finishes, commit as "Clipwright phase 3/4".
 
 ---
 
