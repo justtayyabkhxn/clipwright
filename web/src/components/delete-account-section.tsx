@@ -5,8 +5,6 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2, TriangleAlert } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { track } from "@/lib/datafast";
-import { resetAnalytics } from "@/lib/posthog";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -22,13 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-interface DeleteAccountSectionProps {
-  email: string;
-  // An App Store subscription keeps billing until it's cancelled in the App Store.
-  hasAppStoreSubscription?: boolean;
-}
-
-export function DeleteAccountSection({ email, hasAppStoreSubscription = false }: DeleteAccountSectionProps) {
+export function DeleteAccountSection({ email }: { email: string }) {
   const t = useTranslations("settings");
   const common = useTranslations("common");
   const [open, setOpen] = useState(false);
@@ -70,10 +62,8 @@ export function DeleteAccountSection({ email, hasAppStoreSubscription = false }:
       return;
     }
 
-    track("account_deleted");
     // The server already revoked every session; this clears any client state.
     await authClient.signOut().catch(() => undefined);
-    resetAnalytics();
     router.push("/");
     router.refresh();
   };
@@ -104,15 +94,6 @@ export function DeleteAccountSection({ email, hasAppStoreSubscription = false }:
                 <DialogTitle>{t("deleteAccount.dialogTitle")}</DialogTitle>
                 <DialogDescription>{t("deleteAccount.dialogBody")}</DialogDescription>
               </DialogHeader>
-
-              {hasAppStoreSubscription && (
-                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40">
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                  <AlertDescription className="text-sm text-amber-800 dark:text-amber-200">
-                    {t("deleteAccount.appStore")}
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="delete-account-confirmation" className="text-sm font-normal">

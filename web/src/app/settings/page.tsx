@@ -2,39 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { AlertCircle, Check, Loader2, Sparkles, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PaymentFailedBanner } from "@/components/payment-failed-banner";
-import { SubscriptionCancelBanner } from "@/components/subscription-cancel-banner";
 import { DeleteAccountSection } from "@/components/delete-account-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { useSession } from "@/lib/auth-client";
-import { useSocialAccess } from "@/hooks/use-social-access";
-import {
-  annualFullPrice,
-  annualMonthlyEquivalent,
-  annualMonthsFree,
-  getPublicBillingPlans,
-  isPaidBillingPlan,
-  planPrice,
-  type BillingInterval,
-  type BillingPlanId,
-} from "@/lib/billing-plans";
-import { LanguageSwitcher } from "@/components/language-switcher";
-import { BillingIntervalToggle, ComingSoonTag, UpgradeNudge, getUpgradeState, useBillingPlanText } from "@/components/billing/upgrade-prompt";
-import type { BillingSummary } from "@/hooks/use-billing-summary";
-import { startUpgrade } from "@/lib/start-upgrade";
-import { CreatorCodeField } from "@/components/billing/creator-code-field";
-import { toast } from "sonner";
-import { track } from "@/lib/datafast";
-import Link from "next/link";
-import { AlertCircle, Bot, Check, ChevronRight, Clock, CreditCard, Languages, Loader2, Mail, Megaphone, Share2, Sparkles, Type } from "lucide-react";
 import { AiProviderSettings } from "@/components/settings/ai-provider-settings";
 import { cn } from "@/lib/utils";
 import { FontSelectOption, type FontOption } from "@/components/font-select-option";
@@ -43,60 +21,23 @@ interface UserPreferences {
   fontFamily: string;
   fontSize: number;
   fontColor: string;
-  notifyOnCompletion: boolean;
 }
 
 export default function SettingsPage() {
   const [fontFamily, setFontFamily] = useState("TikTokSans-Regular");
   const [fontSize, setFontSize] = useState(24);
   const [fontColor, setFontColor] = useState("#FFFFFF");
-  const [completionEmails, setCompletionEmails] = useState(true);
   const [availableFonts, setAvailableFonts] = useState<FontOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
-  const [isBillingActionLoading, setIsBillingActionLoading] = useState(false);
-  const [billingInterval, setBillingInterval] = useState<BillingInterval>("month");
   const { data: session, isPending } = useSession();
-  const socialAccess = useSocialAccess(Boolean(session?.user));
   const t = useTranslations("settings");
   const common = useTranslations("common");
-  const tLang = useTranslations("language");
-  const plans = useBillingPlanText();
 
-  const paidPlans = getPublicBillingPlans();
-  const upgradeState = getUpgradeState(billingSummary);
-  const paymentNeedsUpdate = upgradeState?.needsPayment ?? false;
-  const currentPaidPlan = paidPlans.find((plan) => plan.id === billingSummary?.plan);
-
-  // Stripe sends people back here after checkout or a plan change.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const outcome = params.get("billing");
-    if (outcome === "success" || outcome === "upgraded") {
-      toast.success(outcome === "upgraded" ? t("toasts.upgraded") : t("toasts.ready"));
-    }
-    if (outcome) {
-      params.delete("billing");
-      const query = params.toString();
-      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
-    }
-  }, [t]);
-
-  const handlePlanChange = async (plan: BillingPlanId, interval: BillingInterval) => {
-    setIsBillingActionLoading(true);
-    try {
-      await startUpgrade(plan, "settings", interval);
-    } catch (upgradeError) {
-      toast.error(upgradeError instanceof Error ? upgradeError.message : plans.t("checkoutError"));
-      setIsBillingActionLoading(false);
-    }
-  };
-
-  // Load available fonts from backend and inject them into the page
+  // Load available fonts and inject them into the page for the preview
   useEffect(() => {
     const loadFonts = async () => {
       try {
@@ -105,7 +46,6 @@ export default function SettingsPage() {
           const data = await response.json();
           setAvailableFonts(data.fonts || []);
 
-          // Dynamically load fonts using @font-face
           const fontFaceStyles = data.fonts.map((font: { name: string }) => {
             return `
               @font-face {
@@ -117,17 +57,10 @@ export default function SettingsPage() {
             `;
           }).join('\n');
 
-          // Inject font styles into the page
           const styleElement = document.createElement('style');
           styleElement.id = 'custom-fonts';
           styleElement.innerHTML = fontFaceStyles;
-
-          // Remove existing custom fonts style if present
-          const existingStyle = document.getElementById('custom-fonts');
-          if (existingStyle) {
-            existingStyle.remove();
-          }
-
+          document.getElementById('custom-fonts')?.remove();
           document.head.appendChild(styleElement);
         }
       } catch (error) {
@@ -151,8 +84,7 @@ export default function SettingsPage() {
           setFontFamily(data.fontFamily);
           setFontSize(data.fontSize);
           setFontColor(data.fontColor);
-          setCompletionEmails(data.notifyOnCompletion ?? true);
-          setSavedSnapshot(JSON.stringify([data.fontFamily, data.fontSize, data.fontColor, data.notifyOnCompletion ?? true]));
+          setSavedSnapshot(JSON.stringify([data.fontFamily, data.fontSize, data.fontColor]));
         }
       } catch (error) {
         console.error('Failed to load preferences:', error);
@@ -163,73 +95,6 @@ export default function SettingsPage() {
 
     loadPreferences();
   }, [session?.user?.id]);
-
-  useEffect(() => {
-    const fetchBillingSummary = async () => {
-      if (!session?.user?.id) return;
-
-      try {
-        const response = await fetch("/api/tasks/billing-summary", {
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const data: BillingSummary = await response.json();
-        setBillingSummary(data);
-      } catch (fetchError) {
-        console.error("Failed to fetch billing summary:", fetchError);
-      }
-    };
-
-    fetchBillingSummary();
-  }, [session?.user?.id]);
-
-  const handleBillingAction = async (selectedPlan?: BillingPlanId) => {
-    if (!billingSummary?.monetization_enabled) return;
-
-    const isPaid = isPaidBillingPlan(billingSummary.plan);
-
-    if (!isPaid) {
-      // Checkout goes through startUpgrade so a remembered creator code is applied.
-      try {
-        setIsBillingActionLoading(true);
-        track("billing_checkout_started", { plan: billingSummary.plan, selected_plan: selectedPlan });
-        await startUpgrade(selectedPlan ?? "pro", "settings", billingInterval);
-      } catch (billingError) {
-        setError(billingError instanceof Error ? billingError.message : t("plan.actionFailed"));
-        setIsBillingActionLoading(false);
-      }
-      return;
-    }
-
-    try {
-      setIsBillingActionLoading(true);
-      const response = await fetch("/api/billing/portal", { method: "POST" });
-      const responseText = await response.text();
-      let data: { url?: string; error?: string } = {};
-      if (responseText) {
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          data = { error: responseText };
-        }
-      }
-
-      if (!response.ok || !data.url) {
-        throw new Error(data.error || t("plan.actionFailed"));
-      }
-
-      track("billing_portal_opened", { plan: billingSummary.plan });
-      window.location.href = data.url;
-    } catch (billingError) {
-      setError(billingError instanceof Error ? billingError.message : t("plan.actionFailed"));
-    } finally {
-      setIsBillingActionLoading(false);
-    }
-  };
 
   const handleSavePreferences = async () => {
     setIsLoading(true);
@@ -242,21 +107,15 @@ export default function SettingsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fontFamily,
-          fontSize,
-          fontColor,
-          notifyOnCompletion: completionEmails,
-        }),
+        body: JSON.stringify({ fontFamily, fontSize, fontColor }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || t("save.failed"));
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error || t("save.failed"));
       }
 
-      track("preferences_saved");
-      setSavedSnapshot(JSON.stringify([fontFamily, fontSize, fontColor, completionEmails]));
+      setSavedSnapshot(JSON.stringify([fontFamily, fontSize, fontColor]));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
@@ -266,8 +125,6 @@ export default function SettingsPage() {
       setIsLoading(false);
     }
   };
-
-
 
   if (isPending || (session?.user && isFetching)) {
     return (
@@ -290,18 +147,9 @@ export default function SettingsPage() {
     );
   }
 
-  const dirty = savedSnapshot !== null && savedSnapshot !== JSON.stringify([fontFamily, fontSize, fontColor, completionEmails]);
+  const dirty = savedSnapshot !== null && savedSnapshot !== JSON.stringify([fontFamily, fontSize, fontColor]);
   // The save bar only appears once there's something to save (and briefly to confirm it).
   const showSaveBar = dirty || isLoading || success;
-  const minuteLimit = billingSummary?.minute_limit ?? null;
-  const usageMinutes = billingSummary?.usage_minutes ?? 0;
-  const usagePct = minuteLimit ? Math.min(100, (usageMinutes / minuteLimit) * 100) : 0;
-  // Monthly Stripe subscribers can move to yearly billing for the same plan.
-  const canSwitchToYearly =
-    currentPaidPlan &&
-    billingSummary?.subscription_provider === "stripe" &&
-    billingSummary.billing_interval === "month" &&
-    !billingSummary.cancel_at;
 
   return (
     <main className={cn("mx-auto w-full max-w-3xl px-4 pt-8 sm:px-8 md:pt-10", showSaveBar ? "pb-32" : "pb-16")}>
@@ -311,10 +159,6 @@ export default function SettingsPage() {
       <div className="mt-8 space-y-6">
         <Section id="ai" icon={<Sparkles className="size-4" />} title={t("ai.title")} description={t("ai.description")}>
           <AiProviderSettings isAdmin={Boolean((session.user as { is_admin?: boolean }).is_admin)} />
-        </Section>
-
-        <Section icon={<Languages className="size-4" />} title={tLang("label")} description={t("languageDescription")}>
-          <LanguageSwitcher />
         </Section>
 
         <Section icon={<Type className="size-4" />} title={t("captions.title")} description={t("captions.description")}>
@@ -390,217 +234,7 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section icon={<Mail className="size-4" />} title={t("notifications.title")} description={t("notifications.description")}>
-          <div className="flex items-center justify-between gap-4">
-            <Label htmlFor="completion-emails" className="flex-col items-start gap-0.5">
-              <span className="text-sm font-medium">{t("notifications.emails")}</span>
-              <span className="text-xs font-normal text-muted-foreground">{t("notifications.emailsHint")}</span>
-            </Label>
-            <Switch id="completion-emails" checked={completionEmails} onCheckedChange={setCompletionEmails} disabled={isLoading} />
-          </div>
-        </Section>
-
-        {billingSummary?.monetization_enabled && (
-          <Section id="plan" icon={<CreditCard className="size-4" />} title={t("plan.title")} description={paymentNeedsUpdate || isPaidBillingPlan(billingSummary.plan) ? t("plan.paidDescription") : t("plan.freeDescription")}>
-            <div className="space-y-4">
-              <div className="rounded-xl bg-muted/50 p-4">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="font-semibold">
-                    {plans.planName(billingSummary.plan)}
-                    <span className="ml-2 text-xs font-normal capitalize text-muted-foreground">{billingSummary.subscription_status}</span>
-                  </p>
-                  <p className="text-sm tabular-nums text-muted-foreground">
-                    {minuteLimit === null ? t("plan.usageMinutes", { used: usageMinutes }) : t("plan.usageMinutesOf", { used: usageMinutes, limit: minuteLimit })}
-                  </p>
-                </div>
-                {minuteLimit !== null && (
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-background"><div className="h-full rounded-full bg-brand" style={{ width: `${usagePct}%` }} /></div>
-                )}
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {paymentNeedsUpdate && !upgradeState?.isPaid
-                    ? t("paymentFailed.paused")
-                    : !upgradeState?.isPaid
-                    ? t("plan.noneYet")
-                    : minuteLimit === null
-                    ? t("plan.minutesThisMonth", { used: usageMinutes })
-                    : upgradeState.atLimit
-                    ? (upgradeState.resetsOn
-                      ? t("plan.allUsedRefresh", { limit: plans.formatMinutes(minuteLimit), date: upgradeState.resetsOn })
-                      : t("plan.allUsedPeriod", { limit: plans.formatMinutes(minuteLimit) }))
-                    : (upgradeState.resetsOn
-                      ? t("plan.leftRefresh", { left: plans.formatMinutes(Math.max(minuteLimit - usageMinutes, 0)), date: upgradeState.resetsOn })
-                      : t("plan.leftPeriod", { left: plans.formatMinutes(Math.max(minuteLimit - usageMinutes, 0)) }))}
-                </p>
-                {upgradeState?.isPaid && billingSummary.output_short_side && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {billingSummary.legacy_hd
-                      ? t("plan.clipsResolutionLegacy", { resolution: `${billingSummary.output_short_side}p` })
-                      : t("plan.clipsResolution", { resolution: `${billingSummary.output_short_side}p` })}
-                    {billingSummary.billing_interval === "year" ? ` · ${t("plan.billedYearly")}` : ""}
-                  </p>
-                )}
-              </div>
-
-              {billingSummary.cancel_at && billingSummary.subscription_provider === "stripe" && (
-                <SubscriptionCancelBanner
-                  cancelAt={billingSummary.cancel_at}
-                  onRestarted={() => setBillingSummary((prev) => (prev ? { ...prev, cancel_at: null } : prev))}
-                />
-              )}
-
-              {paymentNeedsUpdate && <PaymentFailedBanner />}
-
-              {isPaidBillingPlan(billingSummary.plan) ? (
-                billingSummary.subscription_provider === "apple" ? (
-                  <p className="rounded-lg border px-3 py-2 text-sm text-muted-foreground">{t("plan.appStore")}</p>
-                ) : (
-                  <div className="space-y-3">
-                    {!paymentNeedsUpdate && upgradeState?.nextPlan && (
-                      <UpgradeNudge
-                        title={
-                          currentPaidPlan
-                            ? t(
-                                upgradeState.nextPlan.resolution !== currentPaidPlan.resolution && !billingSummary.legacy_hd
-                                  ? "plan.upgradeMultiplierHd"
-                                  : "plan.upgradeMultiplier",
-                                {
-                                  multiplier: formatRatio(upgradeState.nextPlan.minuteLimit / currentPaidPlan.minuteLimit),
-                                  resolution: upgradeState.nextPlan.resolution,
-                                  plan: plans.planName(upgradeState.nextPlan.id),
-                                },
-                              )
-                            : t("plan.upgradeMore", { plan: plans.planName(upgradeState.nextPlan.id) })
-                        }
-                        description={t("plan.upgradeDescription", {
-                          price: upgradeState.nextPlan.priceMonthly,
-                          minutes: plans.formatMinutes(upgradeState.nextPlan.minuteLimit),
-                          resolution: upgradeState.nextPlan.resolution,
-                          length: plans.formatMinutes(upgradeState.nextPlan.youtubeMaxMinutes),
-                        })}
-                        action={t("plan.upgrade")}
-                        onAction={() => handlePlanChange(upgradeState.nextPlan!.id, billingSummary.billing_interval ?? "month")}
-                        loading={isBillingActionLoading}
-                      />
-                    )}
-                    {!paymentNeedsUpdate && canSwitchToYearly && annualMonthsFree(currentPaidPlan) > 0 && (
-                      <UpgradeNudge
-                        title={t("plan.switchYearlyTitle", { count: annualMonthsFree(currentPaidPlan) })}
-                        description={t("plan.switchYearlyDescription", {
-                          price: currentPaidPlan.priceAnnual,
-                          monthly: annualMonthlyEquivalent(currentPaidPlan),
-                        })}
-                        action={t("plan.switch")}
-                        onAction={() => handlePlanChange(currentPaidPlan.id, "year")}
-                        loading={isBillingActionLoading}
-                      />
-                    )}
-                    {billingSummary.subscription_provider === "affiliate" ? (
-                      <p className="rounded-lg border px-3 py-2 text-sm text-muted-foreground">{t("plan.affiliate")}</p>
-                    ) : (
-                      <Button type="button" variant="outline" onClick={() => handleBillingAction()} disabled={isBillingActionLoading}>
-                        {isBillingActionLoading ? t("plan.loading") : t("plan.manage")}
-                      </Button>
-                    )}
-                  </div>
-                )
-              ) : paymentNeedsUpdate ? null : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <BillingIntervalToggle
-                    className="justify-self-start sm:col-span-2"
-                    value={billingInterval}
-                    onChange={setBillingInterval}
-                    plan={paidPlans[0]}
-                  />
-                  {paidPlans.map((plan) => (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      onClick={() => handleBillingAction(plan.id)}
-                      disabled={isBillingActionLoading}
-                      className={cn(
-                        "rounded-xl border p-4 text-left transition-colors hover:border-foreground/30 disabled:opacity-60",
-                        plan.highlighted && "border-foreground ring-1 ring-foreground",
-                      )}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold">{plans.planName(plan.id)}</span>
-                        {plan.highlighted && <span className="text-xs text-muted-foreground">{plans.t("mostPopular")}</span>}
-                      </span>
-                      <span className="mt-1 block text-2xl font-bold tracking-tight">
-                        {billingInterval === "year" && annualMonthsFree(plan) > 0 && (
-                          <span className="mr-1.5 text-sm font-normal text-muted-foreground line-through">${annualFullPrice(plan)}</span>
-                        )}
-                        ${planPrice(plan, billingInterval)}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {billingInterval === "year" ? plans.t("perYear") : plans.t("perMonth")}
-                        </span>
-                      </span>
-                      {billingInterval === "year" && (
-                        <span className="block text-xs text-muted-foreground">
-                          {t("plan.monthlyEquivalentYearly", { price: annualMonthlyEquivalent(plan) })}
-                        </span>
-                      )}
-                      <span className="mt-3 block space-y-1.5">
-                        {plans.highlights(plan).map((highlight) => (
-                          <span key={highlight} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                            <Check className="mt-0.5 size-3 shrink-0" />{highlight}
-                          </span>
-                        ))}
-                        {plans.comingSoon(plan) && (
-                          <span className="flex items-start gap-1.5 text-xs text-muted-foreground/80">
-                            <Clock className="mt-0.5 size-3 shrink-0" />
-                            <span>{plans.comingSoon(plan)} <ComingSoonTag /></span>
-                          </span>
-                        )}
-                      </span>
-                      <span className={cn("mt-4 flex h-9 items-center justify-center rounded-lg text-sm font-medium", plan.highlighted ? "bg-primary text-primary-foreground" : "bg-muted")}>
-                        {isBillingActionLoading ? t("plan.openingCheckout") : t("plan.choose", { name: plans.planName(plan.id) })}
-                      </span>
-                    </button>
-                  ))}
-                  <CreatorCodeField className="justify-self-start sm:col-span-2" />
-                </div>
-              )}
-            </div>
-          </Section>
-        )}
-
-        <Link href="/settings/api-keys" className="group flex items-center gap-4 rounded-2xl border bg-background p-5 transition-colors hover:border-foreground/25">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-muted"><Bot className="size-4" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">{t("links.agentsTitle")}</span>
-            <span className="block text-xs text-muted-foreground">{t("links.agentsDescription")}</span>
-          </span>
-          <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-        </Link>
-
-        {socialAccess === true && (
-          <Link href="/settings/social" className="group flex items-center gap-4 rounded-2xl border bg-background p-5 transition-colors hover:border-foreground/25">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-muted"><Share2 className="size-4" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">{t("links.socialTitle")}</span>
-              <span className="block text-xs text-muted-foreground">{t("links.socialDescription")}</span>
-            </span>
-            <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        )}
-
-        <Link href="/settings/creator-program" className="group flex items-center gap-4 rounded-2xl border bg-background p-5 transition-colors hover:border-foreground/25">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-muted"><Megaphone className="size-4" /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">{t("links.creatorTitle")}</span>
-            <span className="block text-xs text-muted-foreground">{t("links.creatorDescription")}</span>
-          </span>
-          <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-        </Link>
-
-        <DeleteAccountSection
-          email={session.user.email}
-          hasAppStoreSubscription={
-            billingSummary?.subscription_provider === "apple" &&
-            ["active", "trialing", "past_due"].includes(billingSummary.subscription_status)
-          }
-        />
+        <DeleteAccountSection email={session.user.email} />
 
         {error && (
           <Alert className="border-red-200 bg-red-50">
@@ -640,10 +274,4 @@ function Section({ id, icon, title, description, children }: { id?: string; icon
       <div className="p-5">{children}</div>
     </section>
   );
-}
-
-/** 2.5 → "2.5", 3 → "3". */
-function formatRatio(ratio: number) {
-  const rounded = Math.round(ratio * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }

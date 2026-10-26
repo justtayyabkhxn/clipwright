@@ -34,6 +34,10 @@ vi.mock("@testing-library/react", async () => {
   };
 });
 
+// UI suites drive Radix dialogs and sheets in jsdom; with every suite running in parallel they can
+// pass the 5 s default.
+if (typeof window !== "undefined") vi.setConfig({ testTimeout: 15_000 });
+
 export const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));

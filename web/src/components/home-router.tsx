@@ -1,21 +1,24 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-import LandingPage from "@/components/landing-page";
+import { PageLoading } from "@/components/app/page-state";
 import { useSession } from "@/lib/auth-client";
-import { isLandingOnlyModeEnabled } from "@/lib/app-flags";
 
 const HomeApp = dynamic(() => import("@/components/home-app"), {
   ssr: false,
 });
 
 export function HomeRouter() {
+  const router = useRouter();
   const { data: session, isPending } = useSession();
+  const signedOut = !isPending && !session?.user;
 
-  if (!isLandingOnlyModeEnabled && !isPending && session?.user) {
-    return <HomeApp />;
-  }
+  useEffect(() => {
+    if (signedOut) router.replace("/sign-in");
+  }, [router, signedOut]);
 
-  return <LandingPage />;
+  return session?.user ? <HomeApp /> : <PageLoading />;
 }

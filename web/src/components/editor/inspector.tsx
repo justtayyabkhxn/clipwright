@@ -300,7 +300,7 @@ export function Inspector({
                   onClick={() => {
                     try {
                       localStorage.setItem(
-                        "supoclip-caption-style",
+                        "clipwright-caption-style",
                         JSON.stringify(doc.captions),
                       );
                       toast.success(t("captions.saved"));
@@ -318,7 +318,7 @@ export function Inspector({
                   onClick={() => {
                     try {
                       const style = JSON.parse(
-                        localStorage.getItem("supoclip-caption-style") ||
+                        localStorage.getItem("clipwright-caption-style") ||
                           "null",
                       );
                       if (style?.font && style?.size) caption(style);

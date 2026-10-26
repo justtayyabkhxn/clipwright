@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { signIn } from "../../lib/auth-client";
 import { postAuthPath } from "@/lib/auth-redirect";
-import { track } from "@/lib/datafast";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useRouter } from "next/navigation";
@@ -36,9 +35,6 @@ export function SignIn() {
       return;
     }
 
-    track("signin_completed", {
-      auth_method: "email",
-    });
     setOk(true);
     setMessage(t("signIn.success"));
     setLoading(false);

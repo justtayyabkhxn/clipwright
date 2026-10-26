@@ -1,0 +1,29 @@
+[project]
+name = "clipwright-engine"
+version = "0.1.0"
+description = "Clipwright render engine: a JSON-over-stdio CLI around ffmpeg, OpenCV and AssemblyAI"
+requires-python = ">=3.11,<3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+    "assemblyai>=0.63.0",
+    "httpx>=0.28.1",
+    "numpy>=1.24.0",
+    "opencv-python-headless>=4.8.0,<5",
+    "pydantic>=2.7",
+    "requests>=2.32.0",
+    "yt-dlp[default]>=2026.10.21",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4.2"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["clipwright_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["network: real network access (set CLIPWRIGHT_NETWORK_TESTS=1)"]

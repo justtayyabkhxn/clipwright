@@ -51,7 +51,7 @@
 }
 
 :root {
-  /* SupoClip + Claude — warm paper, ink type, terracotta used sparingly. */
+  /* Clipwright — warm paper, ink type, terracotta used sparingly. */
   --radius: 0.625rem;
   --brand: oklch(0.55 0.13 39);
   --brand-foreground: oklch(0.99 0.006 80);
@@ -145,24 +145,8 @@
   * {
     scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
   }
-
-  html[lang="zh-Hans"] body {
-    font-family: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  }
 }
 
-
-/* Landing page animations */
-@keyframes landing-fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 /* Batch command bar */
 @keyframes command-bar-in {
@@ -212,15 +196,3 @@
 
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
-
-/* Landing: the reframing crop drifting to follow the speaker */
-@keyframes landing-pan {
-  0%, 100% { transform: translateX(-14%); }
-  50% { transform: translateX(14%); }
-}
-
-/* Landing: source stickers bobbing on the hero stage */
-@keyframes landing-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}

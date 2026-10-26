@@ -1,54 +1,50 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useTaskProgress } from "./use-task-progress";
+import { TASK_POLL_INTERVAL_MS, useTaskProgress } from "./use-task-progress";
 
-class FakeEventSource extends EventTarget {
-  static instances: FakeEventSource[] = [];
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  close = vi.fn();
-  constructor(public url: string) { super(); FakeEventSource.instances.push(this); }
-  emit(type: string, data: unknown) { this.dispatchEvent(new MessageEvent(type, { data: JSON.stringify(data) })); }
-}
+describe("generation progress polling", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
 
-describe("generation progress recovery", () => {
-  beforeEach(() => { vi.useFakeTimers(); FakeEventSource.instances = []; vi.stubGlobal("EventSource", FakeEventSource); });
-  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
-
-  it("keeps reconnecting after a disconnect and reconciles missed completion", async () => {
+  it("polls every 2 seconds while active and stops when the task settles", async () => {
     const refresh = vi.fn().mockResolvedValue(true);
-    const onClip = vi.fn();
-    const onProgress = vi.fn();
-    const { result, rerender, unmount } = renderHook(({ active }) => useTaskProgress({ taskId: "one", active, refresh, onClip, onProgress }), { initialProps: { active: true } });
-    const source = FakeEventSource.instances[0];
-    await act(async () => { source.onerror?.(); });
-    expect(source.close).not.toHaveBeenCalled();
-    expect(result.current.reconnecting).toBe(true);
-    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
-    expect(refresh).toHaveBeenCalledTimes(2);
-    act(() => { source.onopen?.(); source.emit("clip_ready", { clip: { id: "clip" } }); });
-    expect(onClip).toHaveBeenCalledWith({ id: "clip" });
-    expect(result.current.reconnecting).toBe(false);
-    await act(async () => { source.emit("progress", { status: "completed", progress: 100 }); });
+    const { rerender, unmount } = renderHook(({ active }) => useTaskProgress({ taskId: "one", active, refresh }), { initialProps: { active: true } });
+    expect(refresh).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS * 2); });
     expect(refresh).toHaveBeenCalledTimes(3);
     rerender({ active: false });
-    expect(source.close).toHaveBeenCalled();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(refresh).toHaveBeenCalledTimes(3);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports a failed poll as reconnecting until a later poll succeeds", async () => {
+    const refresh = vi.fn().mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("offline")).mockResolvedValue(true);
+    const { result, unmount } = renderHook(() => useTaskProgress({ taskId: "one", active: true, refresh }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS); });
+    expect(result.current.reconnecting).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS); });
+    expect(result.current.reconnecting).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS); });
+    expect(result.current.reconnecting).toBe(false);
     unmount();
   });
 
-  it("recovers malformed events and never overlaps background requests", async () => {
+  it("refreshes when the tab becomes visible or the network returns, never overlapping requests", async () => {
     let resolve!: () => void;
     const refresh = vi.fn(() => new Promise<void>((done) => { resolve = done; }));
-    const { unmount } = renderHook(() => useTaskProgress({ taskId: "one", active: true, refresh, onProgress: vi.fn(), onClip: vi.fn() }));
-    const source = FakeEventSource.instances[0];
-    act(() => source.dispatchEvent(new MessageEvent("progress", { data: "broken" })));
-    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    const { unmount } = renderHook(() => useTaskProgress({ taskId: "one", active: true, refresh }));
+    act(() => { window.dispatchEvent(new Event("online")); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS * 3); });
+    act(() => { document.dispatchEvent(new Event("visibilitychange")); });
     expect(refresh).toHaveBeenCalledTimes(1);
     await act(async () => resolve());
+    act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+    expect(refresh).toHaveBeenCalledTimes(2);
     unmount();
-    expect(source.close).toHaveBeenCalledOnce();
-    expect(vi.getTimerCount()).toBe(0);
   });
 });

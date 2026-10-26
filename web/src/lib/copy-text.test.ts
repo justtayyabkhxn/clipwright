@@ -13,7 +13,7 @@ function deniedClipboard() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.getElementById("supoclip-manual-copy")?.remove();
+  document.getElementById("clipwright-manual-copy")?.remove();
   vi.mocked(toast.success).mockReset();
   vi.mocked(toast.message).mockReset();
 });
@@ -24,7 +24,7 @@ it("copies with the clipboard API", async () => {
 
   await expect(copyText("sk_secret")).resolves.toBe("copied");
   expect(writeText).toHaveBeenCalledWith("sk_secret");
-  expect(document.getElementById("supoclip-manual-copy")).toBeNull();
+  expect(document.getElementById("clipwright-manual-copy")).toBeNull();
 });
 
 it("falls back to a hidden textarea when the clipboard rejects", async () => {
@@ -36,7 +36,7 @@ it("falls back to a hidden textarea when the clipboard rejects", async () => {
 
   expect(execCommand).toHaveBeenCalledWith("copy");
   expect(document.querySelector("textarea")).toBeNull();
-  expect(document.getElementById("supoclip-manual-copy")).toBeNull();
+  expect(document.getElementById("clipwright-manual-copy")).toBeNull();
 });
 
 it("selects the visible text when both copy methods fail", async () => {
@@ -49,7 +49,7 @@ it("selects the visible text when both copy methods fail", async () => {
   await expect(copyText("sk_secret", { target })).resolves.toBe("manual");
 
   expect(window.getSelection()?.toString()).toBe("sk_secret");
-  expect(document.getElementById("supoclip-manual-copy")).toBeNull();
+  expect(document.getElementById("clipwright-manual-copy")).toBeNull();
   target.remove();
 });
 
@@ -59,11 +59,11 @@ it("shows a selected field when there is nothing on the page to select", async (
     throw new Error("execCommand unsupported");
   });
 
-  await expect(copyText("https://supoclip.com/share/abc", { manualLabel: "Copy by hand" })).resolves.toBe("manual");
+  await expect(copyText("https://clipwright.example/share/abc", { manualLabel: "Copy by hand" })).resolves.toBe("manual");
 
-  const field = document.getElementById("supoclip-manual-copy");
+  const field = document.getElementById("clipwright-manual-copy");
   expect(field).toBeInstanceOf(HTMLTextAreaElement);
-  expect(field).toHaveValue("https://supoclip.com/share/abc");
+  expect(field).toHaveValue("https://clipwright.example/share/abc");
   expect(field).toHaveAttribute("aria-label", "Copy by hand");
   expect(document.activeElement).toBe(field);
 });
@@ -81,8 +81,8 @@ it("toasts success and the manual fallback", async () => {
 
   await expect(result.current("sk_secret")).resolves.toBe("manual");
   expect(toast.message).toHaveBeenCalledWith("Clipboard is blocked. The text is selected so you can copy it manually.");
-  expect(document.getElementById("supoclip-manual-copy")).not.toBeNull();
+  expect(document.getElementById("clipwright-manual-copy")).not.toBeNull();
 
   unmount();
-  expect(document.getElementById("supoclip-manual-copy")).toBeNull();
+  expect(document.getElementById("clipwright-manual-copy")).toBeNull();
 });

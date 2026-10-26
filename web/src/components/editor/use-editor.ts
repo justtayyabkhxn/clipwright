@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatSupportMessage, parseApiError } from "@/lib/api-error";
+import { warnIfWorkerOffline } from "@/lib/worker-notice";
 import type { EditDocument, EditorState } from "@/lib/editor/document";
 
 export async function editorRequest<T>(
@@ -24,7 +25,10 @@ export async function editorRequest<T>(
         await parseApiError(response, "Could not update the editor."),
       ),
     );
-  return response.json();
+  const data = await response.json();
+  // Prepare, export and combine enqueue worker jobs and say so when no worker is running.
+  warnIfWorkerOffline(data);
+  return data;
 }
 interface History {
   past: EditDocument[];
@@ -43,7 +47,7 @@ export function useEditor(endpoint: string) {
     saved = useRef("");
   const inFlight = useRef<Promise<void> | null>(null);
   const mounted = useRef(true);
-  const cacheKey = `supoclip-editor:${endpoint}`;
+  const cacheKey = `clipwright-editor:${endpoint}`;
   const lastEdit = useRef({ group: "", at: 0 });
   const cache = useCallback(
     (value: History) => {

@@ -111,7 +111,7 @@ const BREAKDOWN = [
   { key: "shareability_score", labelKey: "shareability", icon: Share2 },
 ] as const;
 
-export function ClipFocus({ clip, taskId, index, total, busy, editable, onNavigate, onClose, onDownload, onDelete, hookTypeLabel, actions, children }: {
+export function ClipFocus({ clip, taskId, index, total, busy, editable, onNavigate, onClose, onDownload, onDelete, hookTypeLabel }: {
   clip: WallClip | null;
   taskId: string;
   index: number;
@@ -123,10 +123,6 @@ export function ClipFocus({ clip, taskId, index, total, busy, editable, onNaviga
   onDownload: () => void;
   onDelete?: () => void;
   hookTypeLabel: (hookType: string | null) => string;
-  /** Extra footer actions for the focused clip (e.g. publishing). */
-  actions?: React.ReactNode;
-  /** Extra detail content rendered below the transcript. */
-  children?: React.ReactNode;
 }) {
   const t = useTranslations("task");
   useEffect(() => {
@@ -194,7 +190,6 @@ export function ClipFocus({ clip, taskId, index, total, busy, editable, onNaviga
                 )}
 
                 {clip.text && <TranscriptPreview text={clip.text} clipTitle={clipTitle(clip, t("clipNumber", { order: clip.clip_order }))} />}
-                {children}
               </div>
               <div className="mt-auto flex flex-wrap items-center gap-2 border-t bg-muted/30 px-5 py-3">
                 <Button size="sm" onClick={onDownload} disabled={busy}>
@@ -205,7 +200,6 @@ export function ClipFocus({ clip, taskId, index, total, busy, editable, onNaviga
                     <Link href={`/tasks/${taskId}/edit?clip=${clip.id}`}><Scissors className="size-4" />{t("openInEditor")}</Link>
                   </Button>
                 )}
-                {actions}
                 {onDelete && (
                   <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={onDelete}>
                     <Trash2 className="size-4" />{t("delete")}
@@ -236,13 +230,19 @@ function stepFromMessage(message: string) {
   return null;
 }
 
-export function ProcessingPanel({ status, progress, message, readyCount }: { status: string; progress: number; message: string; readyCount: number }) {
+export function ProcessingPanel({ status, progress, message, readyCount, restyling = false }: {
+  status: string; progress: number; message: string; readyCount: number;
+  /** A restyle only re-renders; the clips on the page are the old ones until it swaps them all. */
+  restyling?: boolean;
+}) {
   const t = useTranslations("task");
   // Name the model only when it is Claude; the stage itself comes from the backend.
   const provider = useAiProvider(status === "processing" || status === "queued");
   const aiModel = provider?.provider === "anthropic" ? modelLabel(provider) : null;
   const byProgress = STEPS.findIndex((step) => progress < step.until);
-  const activeStep = status === "queued" ? -1 : stepFromMessage(message) ?? (byProgress === -1 ? STEPS.length - 1 : byProgress);
+  const activeStep = status === "queued" ? -1
+    : restyling ? STEPS.length - 1
+    : stepFromMessage(message) ?? (byProgress === -1 ? STEPS.length - 1 : byProgress);
   return (
     <section className="overflow-hidden rounded-2xl border bg-background" aria-live="polite">
       <div className="relative h-1 bg-muted">
@@ -252,7 +252,7 @@ export function ProcessingPanel({ status, progress, message, readyCount }: { sta
         <div className="min-w-0">
           <p className="shimmer text-lg font-semibold">{message || (status === "queued" ? t("waiting") : t("processing"))}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {readyCount > 0 ? t("clipsReady", { count: readyCount }) : t("grabCoffee")}
+            {restyling ? t("restyleWaiting") : readyCount > 0 ? t("clipsReady", { count: readyCount }) : t("grabCoffee")}
           </p>
         </div>
         <ol className="grid grid-cols-4 gap-2 md:flex md:gap-1">

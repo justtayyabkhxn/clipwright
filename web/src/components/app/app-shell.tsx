@@ -1,39 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Bot, ChartColumn, CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Share2, Shield, Sparkles,
+  CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sparkles,
 } from "lucide-react";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
 import { toast } from "sonner";
 import { signOut, useSession } from "@/lib/auth-client";
-import { resetAnalytics } from "@/lib/posthog";
-import { useBillingSummary } from "@/hooks/use-billing-summary";
-import { useSocialAccess } from "@/hooks/use-social-access";
-import { billingPlanMessageKey } from "@/lib/billing-plans";
-import { getUpgradeState } from "@/components/billing/upgrade-prompt";
 import { fetchGenerations, timeAgo, type GenerationSummary } from "@/lib/generations";
 import { ACTIVE_TASK_STATUSES, StatusBadge } from "@/components/app/status-badge";
-import { Announcements } from "@/components/announcements";
+import { BrandMark, BrandWordmark, SourceCredit } from "@/components/brand";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
-// `mobile: false` keeps an item out of the five-slot mobile tab bar.
-// `social: true` items only show when social publishing is enabled for the user.
-type NavItem = { href: string; labelKey: "create" | "library" | "social" | "analytics" | "agents" | "settings"; icon: typeof Film; match: (path: string) => boolean; mobile?: boolean; social?: boolean };
+type NavItem = { href: string; labelKey: "create" | "library" | "settings"; icon: typeof Film; match: (path: string) => boolean };
 
 const NAV: NavItem[] = [
   { href: "/", labelKey: "create", icon: Sparkles, match: (p) => p === "/" },
   { href: "/list", labelKey: "library", icon: Film, match: (p) => p.startsWith("/list") || p.startsWith("/tasks") },
-  { href: "/settings/social", labelKey: "social", icon: Share2, match: (p) => p.startsWith("/settings/social"), social: true },
-  { href: "/analytics", labelKey: "analytics", icon: ChartColumn, match: (p) => p.startsWith("/analytics"), social: true },
-  { href: "/settings/api-keys", labelKey: "agents", icon: Bot, match: (p) => p.startsWith("/settings/api-keys"), mobile: false },
   { href: "/settings", labelKey: "settings", icon: Settings, match: (p) => p === "/settings" },
 ];
 
@@ -49,7 +38,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [billing] = useBillingSummary(Boolean(session?.user));
   // The editor needs every pixel — collapse the sidebar to an icon rail there.
   const editorRoute = /^\/tasks\/[^/]+\/edit/.test(pathname);
   const [collapsed, setCollapsedState] = useState(false);
@@ -83,12 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Children must keep the same tree position whether or not the session has
   // loaded — otherwise the page remounts and re-runs its initial fetches.
   const user = session?.user;
-  const admin = Boolean((user as { is_admin?: boolean } | undefined)?.is_admin);
-  const socialAccess = useSocialAccess(Boolean(user));
-  const labeled = NAV.map((item) => ({ ...item, label: t(`nav.${item.labelKey}`) }));
-  const nav = labeled.filter((item) => !item.social || socialAccess === true);
-  const mobileNav = nav.filter((item) => item.mobile !== false);
-  const items = admin ? [...nav, { href: "/admin", label: t("nav.admin"), icon: Shield, match: (p: string) => p.startsWith("/admin") }] : nav;
+  const items = NAV.map((item) => ({ ...item, label: t(`nav.${item.labelKey}`) }));
 
   return (
     <div data-app-shell={user ? "" : undefined} className={cn(user && "flex min-h-dvh bg-canvas")}>
@@ -99,8 +82,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className={cn("flex h-14 w-full items-center", compact ? "justify-center" : "justify-between px-2")}>
-          <Link href="/" aria-label="SupoClip + Claude" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="" width={24} height={24} className="size-6" priority />
+          <Link href="/" aria-label="Clipwright" className="flex items-center gap-2">
+            <BrandMark />
             {!compact && <BrandWordmark />}
           </Link>
           {!compact && !editorRoute && (
@@ -148,30 +131,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!compact && <RecentProjects pathname={pathname} />}
 
         <div className="mt-auto w-full space-y-2 pb-3">
-          <Announcements key={user.id} userId={user.id} compact={compact} />
           <ProviderIndicator compact={compact} />
-          {!compact && billing?.monetization_enabled && <UsageCard billing={billing} />}
           <UserRow compact={compact} name={user.name} email={user.email} />
+          <SourceCredit iconOnly={compact} className={compact ? "flex justify-center rounded-md p-2 hover:bg-sidebar-accent" : "block px-2.5"} />
         </div>
       </aside> : null}
 
       <div className={cn(user && "flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0")}>
         {user ? <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:hidden">
-          <Link href="/" aria-label="SupoClip + Claude" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="" width={22} height={22} className="size-[22px]" /><BrandWordmark />
+          <Link href="/" aria-label="Clipwright" className="flex items-center gap-2">
+            <BrandMark className="size-[22px]" /><BrandWordmark />
           </Link>
           <div className="flex items-center gap-1">
-            <Announcements key={user.id} userId={user.id} compact />
             <button type="button" onClick={() => setPaletteOpen(true)} aria-label={t("search.generations")} className="rounded-lg p-2 text-muted-foreground hover:bg-accent">
               <Search className="size-5" />
             </button>
           </div>
         </header> : null}
         {children}
+        {user ? <footer className="px-4 py-4 text-center md:hidden"><SourceCredit /></footer> : null}
       </div>
 
-      {user ? <nav aria-label={t("search.mobileNav")} style={{ gridTemplateColumns: `repeat(${mobileNav.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-40 grid border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {mobileNav.map((item) => {
+      {user ? <nav aria-label={t("search.mobileNav")} style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-40 grid border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {items.map((item) => {
           const active = item.match(pathname);
           return (
             <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
@@ -187,15 +169,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-const SIDEBAR_KEY = "supoclip.sidebar.collapsed";
-
-export function BrandWordmark({ className }: { className?: string }) {
-  return (
-    <span className={cn("font-display text-[1.15rem] font-semibold leading-none tracking-tight", className)}>
-      SupoClip <span className="font-normal italic text-brand">+ Claude</span>
-    </span>
-  );
-}
+const SIDEBAR_KEY = "clipwright.sidebar.collapsed";
 
 /** The last few generations, so returning to a running task is one click. */
 function RecentProjects({ pathname }: { pathname: string }) {
@@ -278,49 +252,12 @@ function SidebarLink({ href, label, active, compact, shortcut, className, childr
   return <Tooltip><TooltipTrigger asChild>{link}</TooltipTrigger><TooltipContent side="right">{label}</TooltipContent></Tooltip>;
 }
 
-function UsageCard({ billing }: { billing: NonNullable<ReturnType<typeof useBillingSummary>[0]> }) {
-  const t = useTranslations("shell");
-  const tCommon = useTranslations("common");
-  const limit = billing.minute_limit ?? null;
-  const used = billing.usage_minutes ?? 0;
-  const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
-  const upgrade = getUpgradeState(billing);
-  const nudge = !upgrade?.isPaid
-    ? t("usage.pickPlan")
-    : upgrade.nextPlan && (upgrade.atLimit || upgrade.nearLimit)
-    ? t("usage.moreWith", { name: tCommon(`plans.${billingPlanMessageKey(upgrade.nextPlan.id)}`) })
-    : null;
-  return (
-    <Link href="/settings#plan" className="group block rounded-xl border border-sidebar-border bg-background p-3 text-xs transition-colors hover:border-foreground/20">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold">{tCommon(`plans.${billingPlanMessageKey(billing.plan)}`)}</span>
-        <span className="text-muted-foreground tabular-nums">
-          {limit ? t("usage.minutesOf", { used, limit }) : t("usage.minutes", { used })}
-        </span>
-      </div>
-      {limit ? (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
-        </div>
-      ) : null}
-      {nudge ? (
-        <p className="mt-2 flex items-center gap-1 font-medium text-foreground">
-          {nudge}
-          <ArrowRight className="ml-auto size-3 transition-transform group-hover:translate-x-0.5" />
-        </p>
-      ) : (
-        <p className="mt-2 text-muted-foreground">{limit && upgrade?.remaining !== null ? t("usage.minutesLeft", { count: upgrade?.remaining ?? 0 }) : t("usage.minutesThisMonth")}</p>
-      )}
-    </Link>
-  );
-}
-
 function UserRow({ compact, name, email }: { compact: boolean; name?: string | null; email?: string | null }) {
   const t = useTranslations("shell");
   const [signingOut, setSigningOut] = useState(false);
   const handleSignOut = async () => {
     setSigningOut(true);
-    try { await signOut(); resetAnalytics(); window.location.assign("/sign-in"); }
+    try { await signOut(); window.location.assign("/sign-in"); }
     catch { toast.error(t("user.signOutError")); setSigningOut(false); }
   };
   return (
@@ -351,7 +288,6 @@ type PaletteEntry = { id: string; label: string; hint?: string; href: string; ic
 
 function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useTranslations("shell");
-  const locale = useLocale();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [generations, setGenerations] = useState<GenerationSummary[]>([]);
@@ -365,26 +301,22 @@ function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     void fetchGenerations().then(setGenerations).catch(() => {});
   }, [open]);
 
-  const socialAccess = useSocialAccess(open);
   const entries = useMemo<PaletteEntry[]>(() => {
     const q = query.trim().toLowerCase();
     const actions: PaletteEntry[] = [
       { id: "new", label: t("nav.newGeneration"), hint: t("palette.newHint"), href: "/", icon: Plus },
       { id: "library", label: t("palette.library"), href: "/list", icon: Film },
-      ...(socialAccess === true ? [{ id: "social", label: t("palette.social"), hint: t("palette.socialHint"), href: "/settings/social", icon: Share2 },
-      { id: "analytics", label: t("nav.analytics"), hint: t("palette.analyticsHint"), href: "/analytics", icon: ChartColumn }] : []),
-      { id: "keys", label: t("nav.agents"), hint: t("palette.agentsHint"), href: "/settings/api-keys", icon: Bot },
       { id: "settings", label: t("nav.settings"), href: "/settings", icon: Settings },
     ].filter((entry) => !q || entry.label.toLowerCase().includes(q));
     const matches = generations
       .filter((generation) => !q || generation.source_title.toLowerCase().includes(q))
       .slice(0, 8)
       .map((generation) => ({
-        id: generation.id, label: generation.source_title, hint: timeAgo(generation.created_at, locale),
+        id: generation.id, label: generation.source_title, hint: timeAgo(generation.created_at),
         href: `/tasks/${generation.id}`, icon: Film, generation,
       }));
     return [...actions, ...matches];
-  }, [generations, query, socialAccess, t, locale]);
+  }, [generations, query, t]);
 
   const go = useCallback((entry: PaletteEntry | undefined) => {
     if (!entry) return;

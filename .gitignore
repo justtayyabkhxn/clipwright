@@ -8,9 +8,9 @@ logs/
 temp/
 .env
 *.m4a
-frontend/e2e/.seed.json
-frontend/playwright-report/
-frontend/test-results/
+web/e2e/.seed.json
+web/playwright-report/
+web/test-results/
 
 # local demo / scratch artifacts (not for the repo)
 backend/demo_clips/

@@ -18,8 +18,6 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "
       user: { id: "user", name: "Alex", email: "alex@example.com", emailVerified: true },
     } }));
     await page.route(/\/api\/tasks\/?(\?.*)?$/, route => route.fulfill({ json: { tasks } }));
-    await page.route("**/api/tasks/billing-summary", route => route.fulfill({ json: { monetization_enabled: false } }));
-    await page.route("**/api/announcements**", route => route.fulfill({ json: { announcements: [] } }));
     await page.route("**/i.ytimg.com/**", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#374151"/></svg>' }));
     await page.goto("/list");
     await expect(page.getByRole("link", { name: /Podcast \(recut\)/ })).toBeVisible();

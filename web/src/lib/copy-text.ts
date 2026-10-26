@@ -13,7 +13,7 @@ export type CopyTextOptions = {
   manualLabel?: string;
 };
 
-const MANUAL_COPY_FIELD_ID = "supoclip-manual-copy";
+const MANUAL_COPY_FIELD_ID = "clipwright-manual-copy";
 
 /**
  * Copy text, then fall back when the Clipboard API is missing or rejects

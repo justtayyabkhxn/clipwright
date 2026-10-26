@@ -9,9 +9,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { RuntimeSetting } from "@/components/admin/runtime-settings-form";
 import { SUGGESTED_CLAUDE_MODELS, modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
 import { cn } from "@/lib/utils";
+
+/** One row of `GET /api/admin/runtime-settings`. Secrets only ever arrive masked. */
+export type RuntimeSetting = {
+  key: string;
+  label: string;
+  description: string;
+  input_type: "password" | "text";
+  source: "environment" | "admin" | "unset";
+  configured: boolean;
+  /** Masked for secrets (`sk-ant-…abcd`), plain for non-secret values such as the model id. */
+  value_hint?: string | null;
+  has_admin_value: boolean;
+  has_env_value: boolean;
+  prefer_admin_value: boolean;
+  overridden_by_env: boolean;
+  updated_at?: string | null;
+};
 
 type ConnectionStatus =
   | "ok" | "missing_key" | "invalid_key" | "permission_denied" | "model_not_found"
@@ -19,13 +35,17 @@ type ConnectionStatus =
 type ConnectionResult = { ok: boolean; status: ConnectionStatus; message: string; models: { id: string; display_name: string }[] };
 
 const DEFAULT_MODEL = "claude-opus-5";
+const ANTHROPIC_KEY = "ANTHROPIC_API_KEY";
+const ASSEMBLY_KEY = "ASSEMBLY_AI_API_KEY";
+const MODEL_KEY = "CLAUDE_MODEL";
 
-/** Settings → AI provider. Admins configure Claude; everyone sees what is active. */
+/** Settings → AI. Admins configure the Claude and AssemblyAI keys; everyone sees what is active. */
 export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
   const t = useTranslations("settings.ai");
   const provider = useAiProvider();
   const [settings, setSettings] = useState<RuntimeSetting[] | null>(null);
   const [apiKey, setApiKey] = useState("");
+  const [assemblyKey, setAssemblyKey] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [preferSaved, setPreferSaved] = useState(false);
   const [models, setModels] = useState(SUGGESTED_CLAUDE_MODELS);
@@ -35,10 +55,10 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
 
   const applySettings = useCallback((next: RuntimeSetting[]) => {
     setSettings(next);
-    const llm = next.find((setting) => setting.key === "LLM");
-    const keySetting = next.find((setting) => setting.key === "ANTHROPIC_API_KEY");
-    if (llm?.value_hint?.startsWith("anthropic:")) setModel(llm.value_hint.slice("anthropic:".length));
-    setPreferSaved(Boolean(keySetting?.prefer_admin_value && llm?.prefer_admin_value));
+    const modelSetting = next.find((setting) => setting.key === MODEL_KEY);
+    if (modelSetting?.value_hint) setModel(modelSetting.value_hint);
+    const saved = next.filter((setting) => setting.has_admin_value);
+    setPreferSaved(saved.length > 0 && saved.every((setting) => setting.prefer_admin_value));
   }, []);
 
   useEffect(() => {
@@ -49,11 +69,20 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
       .catch(() => {});
   }, [applySettings, isAdmin]);
 
-  const keySetting = settings?.find((setting) => setting.key === "ANTHROPIC_API_KEY");
-  const llmSetting = settings?.find((setting) => setting.key === "LLM");
-  const usingClaude = provider?.provider === "anthropic";
-  const envKeys = [keySetting, llmSetting].filter((setting) => setting?.has_env_value).map((setting) => setting!.key);
+  const setting = (key: string) => settings?.find((item) => item.key === key);
+  const keySetting = setting(ANTHROPIC_KEY);
+  const assemblySetting = setting(ASSEMBLY_KEY);
+  const envKeys = (settings ?? []).filter((item) => item.has_env_value).map((item) => item.key);
   const modelOptions = models.some((option) => option.id === model) ? models : [{ id: model, display_name: model }, ...models];
+
+  const missing: string[] = [];
+  if (settings) {
+    if (!keySetting?.configured) missing.push(t("anthropicKeyName"));
+    if (!assemblySetting?.configured) missing.push(t("assemblyKeyName"));
+  } else if (provider && !provider.configured) {
+    // Without the admin view, `configured` covers both keys and `transcription_configured` only AssemblyAI.
+    missing.push(provider.transcription_configured === false ? t("assemblyKeyName") : t("anthropicKeyName"));
+  }
 
   const testConnection = async () => {
     setTesting(true);
@@ -76,7 +105,7 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
-  const save = async (body: Record<string, unknown>, successMessage: string) => {
+  const save = async (body: Record<string, unknown>, successMessage: string, onSaved: () => void) => {
     setSaving(true);
     try {
       const response = await fetch("/api/admin/runtime-settings", {
@@ -87,8 +116,7 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.detail || data?.error || t("saveFailed"));
       applySettings(data.settings);
-      setApiKey("");
-      setResult(null);
+      onSaved();
       window.dispatchEvent(new Event("ai-provider-changed"));
       toast.success(successMessage);
     } catch (error) {
@@ -98,10 +126,21 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
+  const clearClaude = () => { setApiKey(""); setResult(null); };
+  const clearAssembly = () => setAssemblyKey("");
+
   const saveClaude = () => {
-    const updates: Record<string, string> = { LLM: `anthropic:${model}` };
-    if (apiKey.trim()) updates.ANTHROPIC_API_KEY = apiKey.trim();
-    void save({ updates, prefer_admin_values: { LLM: preferSaved, ANTHROPIC_API_KEY: preferSaved } }, t("saved"));
+    const updates: Record<string, string> = { [MODEL_KEY]: model };
+    if (apiKey.trim()) updates[ANTHROPIC_KEY] = apiKey.trim();
+    void save({ updates, prefer_admin_values: { [MODEL_KEY]: preferSaved, [ANTHROPIC_KEY]: preferSaved } }, t("saved"), clearClaude);
+  };
+
+  const saveAssembly = () => {
+    void save(
+      { updates: { [ASSEMBLY_KEY]: assemblyKey.trim() }, prefer_admin_values: { [ASSEMBLY_KEY]: preferSaved } },
+      t("assemblySaved"),
+      clearAssembly,
+    );
   };
 
   const hasKey = Boolean(apiKey.trim() || keySetting?.configured);
@@ -111,10 +150,8 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/60 px-4 py-3">
         <div>
           <p className="text-xs text-muted-foreground">{t("active")}</p>
-          <p className="text-sm font-medium">
-            {provider ? (modelLabel(provider) ?? provider.provider) : "…"}
-            {provider && !usingClaude && <span className="ml-1.5 text-muted-foreground">({provider.provider})</span>}
-          </p>
+          <p className="text-sm font-medium">{provider ? (modelLabel(provider) ?? provider.provider) : "…"}</p>
+          {missing.length > 0 && <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{t("missing", { keys: missing.join(", ") })}</p>}
         </div>
         {provider && (
           <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", provider.configured ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
@@ -144,29 +181,18 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
           <div className="space-y-2">
             <Label htmlFor="anthropic-key" className="text-sm">{t("keyLabel")}</Label>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative flex-1">
-                <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="anthropic-key"
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={apiKey}
-                  onChange={(event) => { setApiKey(event.target.value); setResult(null); }}
-                  placeholder={keySetting?.configured ? t("keyReplacePlaceholder") : t("keyPlaceholder")}
-                  className="pl-9 font-mono text-sm"
-                />
-              </div>
+              <KeyInput
+                id="anthropic-key"
+                value={apiKey}
+                onChange={(value) => { setApiKey(value); setResult(null); }}
+                placeholder={keySetting?.configured ? t("keyReplacePlaceholder") : t("keyPlaceholder")}
+              />
               <Button type="button" variant="outline" onClick={() => void testConnection()} disabled={testing || !hasKey}>
                 {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
                 {testing ? t("testing") : t("test")}
               </Button>
             </div>
-            {keySetting?.value_hint && (
-              <p className="text-xs text-muted-foreground">
-                {keySetting.source === "environment" ? t("keyFromEnv", { hint: keySetting.value_hint }) : t("keySaved", { hint: keySetting.value_hint })}
-              </p>
-            )}
+            <KeyHint setting={keySetting} />
             {result && <ConnectionMessage result={result} />}
           </div>
 
@@ -186,6 +212,47 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-xs text-muted-foreground">{t("modelHint")}</p>
           </div>
 
+          <div className="flex flex-wrap justify-end gap-2">
+            {keySetting?.has_admin_value && (
+              <Button type="button" variant="ghost" disabled={saving}
+                onClick={() => void save({ delete_keys: [ANTHROPIC_KEY] }, t("removed"), clearClaude)}>
+                <Trash2 className="size-4" />{t("remove")}
+              </Button>
+            )}
+            <Button type="button" onClick={saveClaude} disabled={saving || !hasKey}>
+              {saving && <Loader2 className="size-4 animate-spin" />}
+              {saving ? t("saving") : t("save")}
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t pt-5">
+            <Label htmlFor="assemblyai-key" className="text-sm">{t("assemblyKeyLabel")}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t("assemblyKeyHint")}{" "}
+              <a href="https://www.assemblyai.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-medium text-brand underline-offset-2 hover:underline">
+                assemblyai.com <ExternalLink className="size-3" />
+              </a>
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <KeyInput
+                id="assemblyai-key"
+                value={assemblyKey}
+                onChange={setAssemblyKey}
+                placeholder={assemblySetting?.configured ? t("keyReplacePlaceholder") : t("assemblyKeyPlaceholder")}
+              />
+              {assemblySetting?.has_admin_value && (
+                <Button type="button" variant="ghost" disabled={saving}
+                  onClick={() => void save({ delete_keys: [ASSEMBLY_KEY] }, t("assemblyRemoved"), clearAssembly)}>
+                  <Trash2 className="size-4" />{t("remove")}
+                </Button>
+              )}
+              <Button type="button" onClick={saveAssembly} disabled={saving || !assemblyKey.trim()}>
+                {t("assemblySave")}
+              </Button>
+            </div>
+            <KeyHint setting={assemblySetting} />
+          </div>
+
           {envKeys.length > 0 && (
             <label className="flex items-start gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm">
               <input type="checkbox" checked={preferSaved} onChange={(event) => setPreferSaved(event.target.checked)} className="mt-0.5 size-4 accent-foreground" />
@@ -196,26 +263,38 @@ export function AiProviderSettings({ isAdmin }: { isAdmin: boolean }) {
             </label>
           )}
 
-          {provider && !usingClaude && <p className="text-sm text-amber-700 dark:text-amber-400">{t("switchNotice", { provider: provider.provider })}</p>}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <p className="text-xs text-muted-foreground">{t("costNote")}</p>
-            <div className="flex gap-2">
-              {keySetting?.has_admin_value && (
-                <Button type="button" variant="ghost" disabled={saving}
-                  onClick={() => void save({ delete_keys: ["ANTHROPIC_API_KEY"] }, t("removed"))}>
-                  <Trash2 className="size-4" />{t("remove")}
-                </Button>
-              )}
-              <Button type="button" onClick={saveClaude} disabled={saving || !hasKey}>
-                {saving && <Loader2 className="size-4 animate-spin" />}
-                {saving ? t("saving") : t("save")}
-              </Button>
-            </div>
-          </div>
+          <p className="border-t pt-4 text-xs text-muted-foreground">{t("costNote")}</p>
         </>
       )}
     </div>
+  );
+}
+
+function KeyInput({ id, value, onChange, placeholder }: { id: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div className="relative flex-1">
+      <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        id={id}
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="pl-9 font-mono text-sm"
+      />
+    </div>
+  );
+}
+
+function KeyHint({ setting }: { setting?: RuntimeSetting }) {
+  const t = useTranslations("settings.ai");
+  if (!setting?.value_hint) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      {setting.source === "environment" ? t("keyFromEnv", { hint: setting.value_hint }) : t("keySaved", { hint: setting.value_hint })}
+    </p>
   );
 }
 

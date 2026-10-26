@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  AlertCircle, ArrowRight, ArrowUp, Captions, CaptionsOff, Check, ChevronDown, Clapperboard, Crop, FileVideo,
+  AlertCircle, ArrowRight, ArrowUp, Captions, CaptionsOff, Check, ChevronDown, Crop, FileVideo,
   Loader2, Timer, Paperclip, Upload, Link2, Wand2, X,
 } from "lucide-react";
 import { CaptionSizeControl } from "@/components/caption-size-control";
@@ -12,26 +13,18 @@ import { VideoSourceIcon } from "@/components/video-source-icon";
 import { FONT_SEARCH_THRESHOLD, formatUploadLimit, getYouTubeThumbnailUrl, maxVideoUploadBytes, uploadVideoFile, validateVideoSourceUrl } from "@/lib/video-upload";
 import { AppShell } from "@/components/app/app-shell";
 import { GenerationCard } from "@/components/app/generation-card";
-import { VideoDownloadStatus } from "@/components/app/video-download-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PaymentFailedBanner } from "@/components/payment-failed-banner";
-import { SubscriptionCancelBanner } from "@/components/subscription-cancel-banner";
-import { UpgradeDialog, UpgradeNudge, getUpgradeState, upgradeReasonForError, useBillingPlanText, type UpgradeReason } from "@/components/billing/upgrade-prompt";
-import { getPublicBillingPlans } from "@/lib/billing-plans";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Kbd } from "@/components/ui/kbd";
 import { useSession } from "@/lib/auth-client";
-import { useBillingSummary } from "@/hooks/use-billing-summary";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
-import { billingPlanMessageKey } from "@/lib/billing-plans";
-import { hasPaidAccess } from "@/lib/subscription-status";
-import { track } from "@/lib/datafast";
 import { formatSupportMessage, parseApiError } from "@/lib/api-error";
+import { warnIfWorkerOffline } from "@/lib/worker-notice";
 import { buildFontOptionsPayload, FONT_TEMPLATE_DEFAULT_VALUE } from "@/lib/font-options";
 import { fetchGenerations, type GenerationSummary } from "@/lib/generations";
 import { CLIP_LENGTHS, isClipLength, type ClipLength } from "@/lib/clip-duration";
@@ -69,7 +62,7 @@ function greetingText(t: ReturnType<typeof useTranslations<"home">>, name?: stri
 
 export default function HomeApp() {
   const t = useTranslations("home");
-  const tCommon = useTranslations("common");
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -100,27 +93,16 @@ export default function HomeApp() {
   const clipLengthEdited = useRef(false);
   const clipLengthSave = useRef<Promise<unknown>>(Promise.resolve());
   const [addSubtitles, setAddSubtitles] = useState(true);
-  const [brollAvailable, setBrollAvailable] = useState(false);
-  const [includeBroll, setIncludeBroll] = useState(false);
   const [cutLongPauses, setCutLongPauses] = useState(true);
   const [pauseThresholdMs, setPauseThresholdMs] = useState("1200");
   const [removeFillerWords, setRemoveFillerWords] = useState(true);
   const [filteredWords, setFilteredWords] = useState("");
 
   const [recent, setRecent] = useState<GenerationSummary[] | null>(null);
-  const [billingSummary, updateBillingSummary] = useBillingSummary(Boolean(session?.user?.id));
-  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
-  const [lastUpgradeReason, setLastUpgradeReason] = useState<UpgradeReason>({ kind: "start" });
-  const openUpgrade = useCallback((reason: UpgradeReason) => {
-    setLastUpgradeReason(reason);
-    setUpgradeReason(reason);
-  }, []);
   const youtubeThumbnailUrl = sourceType === "youtube" ? getYouTubeThumbnailUrl(url) : null;
   // Brand mark of the pasted link; a neutral link icon until it is recognised.
   const urlSource = url.trim() ? validateVideoSourceUrl(url).source : undefined;
-  const uploadLimitBytes = billingSummary?.max_upload_bytes && billingSummary.max_upload_bytes > 0
-    ? billingSummary.max_upload_bytes
-    : maxVideoUploadBytes();
+  const uploadLimitBytes = maxVideoUploadBytes();
 
   useEffect(() => {
     let cancelled = false;
@@ -196,11 +178,6 @@ export default function HomeApp() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => { if (data) setAvailableTemplates(data.templates || []); })
       .catch((error) => console.error("Failed to load caption templates:", error));
-    // B-roll is only offered when the server has a stock footage provider.
-    fetch("/api/broll/status")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setBrollAvailable(data?.configured === true))
-      .catch(() => setBrollAvailable(false));
   }, []);
 
   useEffect(() => {
@@ -266,18 +243,11 @@ export default function HomeApp() {
     return !keyword || font.display_name.toLowerCase().includes(keyword) || font.name.toLowerCase().includes(keyword);
   });
 
-  const canUploadCustomFonts =
-    !billingSummary?.monetization_enabled ||
-    hasPaidAccess(billingSummary.plan, billingSummary.subscription_status, billingSummary.subscription_provider);
-
   // Effective values for the live preview only — the submitted payload keeps nulls.
   const selectedTemplate = availableTemplates.find((template) => template.id === captionTemplate);
   const previewFontFamily = fontFamily ?? selectedTemplate?.font_family ?? "TikTokSans-Regular";
   const previewFontSize = fontSize ?? selectedTemplate?.font_size ?? 24;
   const previewFontColor = fontColor ?? selectedTemplate?.font_color ?? "#FFFFFF";
-  const generationRequiresUpgrade = Boolean(billingSummary?.monetization_enabled && !billingSummary.can_create_task);
-  const upgradeState = billingSummary?.monetization_enabled ? getUpgradeState(billingSummary) : null;
-  // Users can explore every option; the plan prompt only appears when they hit Generate.
   const controlsDisabled = isLoading;
   const hasSource = sourceType === "upload" ? Boolean(file) : Boolean(url.trim());
   const cleanupCount = [cutLongPauses, removeFillerWords, filteredWords.trim().length > 0].filter(Boolean).length;
@@ -286,10 +256,6 @@ export default function HomeApp() {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!hasSource || isLoading || isClipLengthLoading || !session?.user?.id) return;
-    if (generationRequiresUpgrade) {
-      openUpgrade({ kind: upgradeState?.isPaid ? "limit" : "start" });
-      return;
-    }
     if (sourceType !== "upload") {
       const validation = validateVideoSourceUrl(url);
       if (validation.error) { setError(validation.error); return; }
@@ -313,7 +279,7 @@ export default function HomeApp() {
         videoUrl = await uploadVideoFile(file, uploadLimitBytes);
       }
 
-      setStatusMessage(sourceType === "youtube" ? t("status.checkingLength") : t("status.starting"));
+      setStatusMessage(t("status.starting"));
       const startResponse = await fetch("/api/tasks/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,11 +287,9 @@ export default function HomeApp() {
           source: { url: videoUrl, title: sourceType === "upload" && file?.name ? file.name.slice(0, 500) : null },
           font_options: fontOptions,
           caption_template: captionTemplate,
-          processing_mode: "fast",
           output_format: outputFormat,
           clip_length: clipLength,
           add_subtitles: addSubtitles,
-          include_broll: brollAvailable && includeBroll,
           cut_long_pauses: cutLongPauses,
           pause_threshold_ms: normalizedPauseThreshold,
           remove_filler_words: removeFillerWords,
@@ -334,31 +298,13 @@ export default function HomeApp() {
       });
 
       if (!startResponse.ok) {
-        const info = await parseApiError(startResponse, t("errors.api", { status: startResponse.status }));
-        const upgradeForError = upgradeReasonForError(info.code, info.detail, upgradeState?.nextPlan?.youtubeMaxMinutes);
-        if (upgradeForError) {
-          openUpgrade(upgradeForError);
-          setIsLoading(false);
-          setStatusMessage("");
-          return;
-        }
-        throw new Error(formatSupportMessage(info));
+        throw new Error(formatSupportMessage(await parseApiError(startResponse, t("errors.api", { status: startResponse.status }))));
       }
 
       const startResult = await startResponse.json();
-      track("task_created", {
-        source_type: sourceType,
-        caption_template: captionTemplate,
-        output_format: outputFormat,
-        add_subtitles: addSubtitles,
-        include_broll: brollAvailable && includeBroll,
-        cut_long_pauses: cutLongPauses,
-        pause_threshold_ms: normalizedPauseThreshold,
-        remove_filler_words: removeFillerWords,
-        filtered_words: normalizedFilteredWords,
-        processing_mode: "fast",
-      });
-      window.location.href = `/tasks/${startResult.task_id}`;
+      // Client-side navigation keeps the toaster mounted, so the offline notice stays visible.
+      warnIfWorkerOffline(startResult);
+      router.push(`/tasks/${startResult.task_id}`);
     } catch (error) {
       console.error("Error processing video:", error);
       setError(error instanceof Error ? error.message : t("errors.processVideo"));
@@ -378,24 +324,9 @@ export default function HomeApp() {
     );
   }
 
-  const limitNote = billingSummary?.max_youtube_duration_seconds
-    ? t("limitNote", {
-        plan: tCommon(`plans.${billingPlanMessageKey(billingSummary.plan)}`),
-        minutes: billingSummary.max_youtube_duration_seconds / 60,
-      })
-    : null;
-
   return (
     <AppShell>
       <main className="mx-auto w-full max-w-5xl px-4 pb-20 pt-10 sm:px-8 md:pt-[12vh]">
-        {billingSummary?.cancel_at && billingSummary.subscription_provider === "stripe" && (
-          <SubscriptionCancelBanner
-            cancelAt={billingSummary.cancel_at}
-            onRestarted={() => updateBillingSummary({ cancel_at: null })}
-            className="mb-8"
-          />
-        )}
-        {upgradeState?.needsPayment && <PaymentFailedBanner className="mb-8" />}
 
         <div className="mx-auto max-w-3xl animate-rise">
           <h1 className="text-center font-display text-3xl font-bold tracking-tight sm:text-[2.6rem] sm:leading-tight">
@@ -405,10 +336,6 @@ export default function HomeApp() {
             {t("subtitle")}
           </p>
           <AiProviderNote />
-
-          {upgradeState && <PlanStatusNudge state={upgradeState} onUpgrade={openUpgrade} />}
-
-          <VideoDownloadStatus />
 
           <form
             onSubmit={handleSubmit}
@@ -560,15 +487,10 @@ export default function HomeApp() {
                           <div className="flex items-center justify-between gap-2">
                             <label className="text-sm">{t("font")}</label>
                             <input ref={fontUploadInputRef} type="file" accept=".ttf,.otf" onChange={handleFontUpload} className="hidden" />
-                            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" disabled={controlsDisabled || isUploadingFont} onClick={() => canUploadCustomFonts ? fontUploadInputRef.current?.click() : openUpgrade({ kind: "custom_fonts" })}>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" disabled={controlsDisabled || isUploadingFont} onClick={() => fontUploadInputRef.current?.click()}>
                               <Upload className="size-3" />{isUploadingFont ? t("status.uploadingFont") : t("uploadFont")}
                             </Button>
                           </div>
-                          {!canUploadCustomFonts && (
-                            <button type="button" onClick={() => openUpgrade({ kind: "custom_fonts" })} className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">
-                              {t("customFontsPaid")}
-                            </button>
-                          )}
                           {availableFonts.length > FONT_SEARCH_THRESHOLD && (
                             <Input value={fontSearch} onChange={(e) => setFontSearch(e.target.value)} placeholder={t("searchFonts")} className="h-8" />
                           )}
@@ -643,13 +565,6 @@ export default function HomeApp() {
                 </PopoverContent>
               </Popover>
 
-              {brollAvailable && (
-                // Icon-only so the desktop composer stays on one row.
-                <Chip onClick={() => setIncludeBroll((value) => !value)} disabled={controlsDisabled} aria-pressed={includeBroll} aria-label={t("broll")} active={includeBroll} title={`${t("broll")}: ${t("brollHint")}`} className="px-2">
-                  <Clapperboard className="size-3.5" />
-                </Chip>
-              )}
-
               <Popover>
                 <PopoverTrigger asChild>
                   <Chip disabled={controlsDisabled} active={cleanupCount > 0}>
@@ -714,13 +629,7 @@ export default function HomeApp() {
           )}
 
           <p id="source-limits" className="mt-4 text-center text-xs text-muted-foreground">
-            {t("uploadLimits", { size: formatUploadLimit(uploadLimitBytes) })}{" "}
-            {limitNote ? `${limitNote} ` : ""}
-            {t.rich("completionEmails", {
-              settings: (chunks) => (
-                <Link href="/settings" className="font-medium text-foreground underline-offset-2 hover:underline">{chunks}</Link>
-              ),
-            })}
+            {t("uploadLimits", { size: formatUploadLimit(uploadLimitBytes) })}
           </p>
         </div>
 
@@ -748,13 +657,6 @@ export default function HomeApp() {
           )}
         </section>
       </main>
-      <UpgradeDialog
-        open={upgradeReason !== null}
-        onOpenChange={(open) => { if (!open) setUpgradeReason(null); }}
-        reason={upgradeReason ?? lastUpgradeReason}
-        billing={billingSummary}
-        source="home"
-      />
     </AppShell>
   );
 }
@@ -770,7 +672,9 @@ function AiProviderNote() {
       <span aria-hidden className={cn("size-1.5 rounded-full", provider.configured ? "bg-brand" : "bg-amber-500")} />
       {provider.configured
         ? t("picking", { model: name })
-        : <Link href="/settings#ai" className="font-medium text-foreground underline underline-offset-2 hover:text-brand">{t("setup", { model: name })}</Link>}
+        : <Link href="/settings#ai" className="font-medium text-foreground underline underline-offset-2 hover:text-brand">
+          {provider.transcription_configured === false ? t("setupTranscription") : t("setup", { model: name })}
+        </Link>}
     </p>
   );
 }
@@ -833,60 +737,4 @@ function FramingGlyph({ kind }: { kind: OutputFormat }) {
       )}
     </span>
   );
-}
-
-function PlanStatusNudge({
-  state,
-  onUpgrade,
-}: {
-  state: NonNullable<ReturnType<typeof getUpgradeState>>;
-  onUpgrade: (reason: UpgradeReason) => void;
-}) {
-  const t = useTranslations("home");
-  const tCommon = useTranslations("common");
-  const { formatMinutes } = useBillingPlanText();
-  const { nextPlan, resetsOn } = state;
-  const refreshes = resetsOn ? t("nudge.refreshesOn", { date: resetsOn }) : t("nudge.refreshesNext");
-  const nextPlanName = nextPlan ? tCommon(`plans.${billingPlanMessageKey(nextPlan.id)}`) : "";
-
-  if (state.needsPayment) return null;
-
-  if (!state.isPaid) {
-    const entry = getPublicBillingPlans()[0];
-    return (
-      <UpgradeNudge
-        className="mt-6"
-        title={t("nudge.startTitle")}
-        description={entry ? t("nudge.startDescription", { price: `$${entry.priceMonthly}`, length: formatMinutes(entry.minuteLimit) }) : undefined}
-        action={t("nudge.seePlans")}
-        onAction={() => onUpgrade({ kind: "start" })}
-      />
-    );
-  }
-
-  if (state.atLimit) {
-    return (
-      <UpgradeNudge
-        className="mt-6"
-        title={state.limit ? t("nudge.limitTitle", { length: formatMinutes(state.limit) }) : t("nudge.limitTitleAll")}
-        description={nextPlan ? t("nudge.limitWithPlan", { refreshes, plan: nextPlanName, limit: formatMinutes(nextPlan.minuteLimit) }) : state.managedByAppStore ? t("nudge.limitAppStore", { refreshes }) : refreshes}
-        action={nextPlan ? t("nudge.getPlan", { plan: nextPlanName }) : undefined}
-        onAction={nextPlan ? () => onUpgrade({ kind: "limit" }) : undefined}
-      />
-    );
-  }
-
-  if (state.nearLimit && state.remaining !== null) {
-    return (
-      <UpgradeNudge
-        className="mt-6"
-        title={t("nudge.remaining", { count: state.remaining })}
-        description={nextPlan ? t("nudge.nearWithPlan", { refreshes, plan: nextPlanName, limit: formatMinutes(nextPlan.minuteLimit) }) : refreshes}
-        action={nextPlan ? t("nudge.upgrade") : undefined}
-        onAction={nextPlan ? () => onUpgrade({ kind: "explore" }) : undefined}
-      />
-    );
-  }
-
-  return null;
 }

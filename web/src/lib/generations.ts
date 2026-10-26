@@ -6,6 +6,8 @@ export interface GenerationSummary {
   source_type: string;
   source_url?: string | null;
   status: string;
+  /** Job type of the active run ("process_task" | "restyle_task"), when the API reports it. */
+  run_type?: string | null;
   clips_count: number;
   top_virality_score?: number | null;
   cover_clip_id?: string | null;
@@ -35,23 +37,14 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 86_400], ["hour", 3_600], ["minute", 60],
 ];
 
-const JUST_NOW: Record<string, string> = {
-  en: "just now",
-  es: "ahora mismo",
-  pt: "agora mesmo",
-  de: "gerade eben",
-  zh: "刚刚",
-  id: "baru saja",
-};
+const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
-export function timeAgo(value: string, locale = "en") {
-  const intlLocale = locale === "zh" ? "zh-Hans" : locale === "pt" ? "pt-BR" : locale;
-  const relative = new Intl.RelativeTimeFormat(intlLocale, { numeric: "auto" });
+export function timeAgo(value: string) {
   const seconds = (new Date(value).getTime() - Date.now()) / 1000;
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
   }
-  return JUST_NOW[locale] ?? JUST_NOW.en;
+  return "just now";
 }
 
 /** Tailwind classes for a 0–100 virality score. */

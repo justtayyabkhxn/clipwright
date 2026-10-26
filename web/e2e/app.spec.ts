@@ -15,9 +15,15 @@ async function signIn(page: import("@playwright/test").Page, email: string, pass
   await page.waitForURL("**/");
 }
 
-test("regular user can browse seeded tasks and save preferences", async ({ page }) => {
-  // This flow compiles several routes (list, task, settings, admin) on its first
-  // visit to the dev server; together they can take over a minute in CI.
+test("signed-out visitors are sent to sign in", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForURL("**/sign-in");
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Based on SupoClip/ })).toBeVisible();
+});
+
+test("regular user can browse seeded tasks and save caption defaults", async ({ page }) => {
+  // This flow compiles several routes (list, task, settings) on its first visit to the dev server.
   test.setTimeout(120_000);
   await signIn(page, seed.regular.email, seed.regular.password);
 
@@ -32,44 +38,16 @@ test("regular user can browse seeded tasks and save preferences", async ({ page 
   await expect(preview).not.toBeVisible();
 
   await page.goto("/settings");
-  await page.getByRole("switch", { name: /completion emails/i }).click();
+  await expect(page.getByText("Only an administrator can change these keys.")).toBeVisible();
+  await page.getByRole("button", { name: "Caption color #FFD700" }).click();
   await page.getByRole("button", { name: /save preferences/i }).click();
   await expect(page.getByText(/preferences saved/i)).toBeVisible();
-
-  await page.goto("/admin");
-  await expect(page.getByText(/not an admin/i)).toBeVisible();
 });
 
-test("admin user can access the admin dashboard", async ({ page }) => {
+test("admin user can configure the Claude and AssemblyAI keys", async ({ page }) => {
   await signIn(page, seed.admin.email, seed.admin.password);
 
-  await page.goto("/admin");
-  await expect(page.getByText(/admin dashboard/i)).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /currently processing tasks/i }),
-  ).toBeVisible();
-});
-
-test("social publishing explains missing configuration without breaking task pages", async ({ page }) => {
-  test.setTimeout(60_000);
-  await signIn(page, seed.regular.email, seed.regular.password);
-
-  // With no provider configured, clips offer no Publish action at all.
-  await page.goto(`/tasks/${seed.completedTaskId}`);
-  await page.getByRole("button", { name: "Preview Clip 1", exact: true }).click();
-  const preview = page.getByRole("dialog");
-  await expect(preview.getByText("This is a seeded clip", { exact: true })).toBeVisible();
-  await expect(preview.getByRole("button", { name: "Publish", exact: true })).toHaveCount(0);
-  await page.keyboard.press("Escape");
-
-  await page.goto("/settings/social");
-  await expect(page.getByRole("heading", { name: "Social accounts", exact: true })).toBeVisible();
-  await expect(page.getByText("Coming Soon", { exact: true })).toHaveCount(3);
-  await expect(page.getByRole("link", { name: "Connect", exact: true })).toHaveCount(0);
-  const details = page.getByRole("button", { name: "YouTube Shorts information", exact: true });
-  await details.hover();
-  await expect(page.getByRole("tooltip")).toContainText("We are in the process of verifying SupoClip with this platform.");
-  await expect(page.getByText("No accounts connected yet.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Failed to load social accounts")).toHaveCount(0);
-  await page.screenshot({ path: "test-results/social-accounts-unconfigured.png", fullPage: true });
+  await page.goto("/settings");
+  await expect(page.getByLabel("Anthropic API key")).toBeVisible();
+  await expect(page.getByLabel("AssemblyAI API key")).toBeVisible();
 });

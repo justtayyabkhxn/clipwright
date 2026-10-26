@@ -1,3 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="SupoClip icon">
-  <image href="/icon.png" width="1024" height="1024" />
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#af5233"/>
+  <path fill="#fefbf7" d="M9.2 16.9V7.7A2.5 2.5 0 0 1 11.7 5.2H18.7A2.5 2.5 0 0 1 21.2 7.7V13.9Z"/>
+  <path fill="#fefbf7" d="M10 20.1V23.5A2.5 2.5 0 0 0 12.5 26H19.5A2.5 2.5 0 0 0 22 23.5V17.1Z"/>
 </svg>

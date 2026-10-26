@@ -1,0 +1,2418 @@
+{
+ "source": "backend/src/ai.py at commit 1dbb178",
+ "transcripts": {
+  "show": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+  "even_180": "[00:00 - 00:10] Speaker A: Line at 0 seconds is here.\n[00:10 - 00:20] Speaker A: Line at 10 seconds is here.\n[00:20 - 00:30] Speaker A: Line at 20 seconds is here.\n[00:30 - 00:40] Speaker A: Line at 30 seconds is here.\n[00:40 - 00:50] Speaker A: Line at 40 seconds is here.\n[00:50 - 01:00] Speaker A: Line at 50 seconds is here.\n[01:00 - 01:10] Speaker A: Line at 60 seconds is here.\n[01:10 - 01:20] Speaker A: Line at 70 seconds is here.\n[01:20 - 01:30] Speaker A: Line at 80 seconds is here.\n[01:30 - 01:40] Speaker A: Line at 90 seconds is here.\n[01:40 - 01:50] Speaker A: Line at 100 seconds is here.\n[01:50 - 02:00] Speaker A: Line at 110 seconds is here.\n[02:00 - 02:10] Speaker A: Line at 120 seconds is here.\n[02:10 - 02:20] Speaker A: Line at 130 seconds is here.\n[02:20 - 02:30] Speaker A: Line at 140 seconds is here.\n[02:30 - 02:40] Speaker A: Line at 150 seconds is here.\n[02:40 - 02:50] Speaker A: Line at 160 seconds is here.\n[02:50 - 03:00] Speaker A: Line at 170 seconds is here.",
+  "even_70m": "[00:00 - 00:10] Speaker A: Line at 0 seconds is here.\n[00:10 - 00:20] Speaker A: Line at 10 seconds is here.\n[00:20 - 00:30] Speaker A: Line at 20 seconds is here.\n[00:30 - 00:40] Speaker A: Line at 30 seconds is here.\n[00:40 - 00:50] Speaker A: Line at 40 seconds is here.\n[00:50 - 01:00] Speaker A: Line at 50 seconds is here.\n[01:00 - 01:10] Speaker A: Line at 60 seconds is here.\n[01:10 - 01:20] Speaker A: Line at 70 seconds is here.\n[01:20 - 01:30] Speaker A: Line at 80 seconds is here.\n[01:30 - 01:40] Speaker A: Line at 90 seconds is here.\n[01:40 - 01:50] Speaker A: Line at 100 seconds is here.\n[01:50 - 02:00] Speaker A: Line at 110 seconds is here.\n[02:00 - 02:10] Speaker A: Line at 120 seconds is here.\n[02:10 - 02:20] Speaker A: Line at 130 seconds is here.\n[02:20 - 02:30] Speaker A: Line at 140 seconds is here.\n[02:30 - 02:40] Speaker A: Line at 150 seconds is here.\n[02:40 - 02:50] Speaker A: Line at 160 seconds is here.\n[02:50 - 03:00] Speaker A: Line at 170 seconds is here.\n[03:00 - 03:10] Speaker A: Line at 180 seconds is here.\n[03:10 - 03:20] Speaker A: Line at 190 seconds is here.\n[03:20 - 03:30] Speaker A: Line at 200 seconds is here.\n[03:30 - 03:40] Speaker A: Line at 210 seconds is here.\n[03:40 - 03:50] Speaker A: Line at 220 seconds is here.\n[03:50 - 04:00] Speaker A: Line at 230 seconds is here.\n[04:00 - 04:10] Speaker A: Line at 240 seconds is here.\n[04:10 - 04:20] Speaker A: Line at 250 seconds is here.\n[04:20 - 04:30] Speaker A: Line at 260 seconds is here.\n[04:30 - 04:40] Speaker A: Line at 270 seconds is here.\n[04:40 - 04:50] Speaker A: Line at 280 seconds is here.\n[04:50 - 05:00] Speaker A: Line at 290 seconds is here.\n[05:00 - 05:10] Speaker A: Line at 300 seconds is here.\n[05:10 - 05:20] Speaker A: Line at 310 seconds is here.\n[05:20 - 05:30] Speaker A: Line at 320 seconds is here.\n[05:30 - 05:40] Speaker A: Line at 330 seconds is here.\n[05:40 - 05:50] Speaker A: Line at 340 seconds is here.\n[05:50 - 06:00] Speaker A: Line at 350 seconds is here.\n[06:00 - 06:10] Speaker A: Line at 360 seconds is here.\n[06:10 - 06:20] Speaker A: Line at 370 seconds is here.\n[06:20 - 06:30] Speaker A: Line at 380 seconds is here.\n[06:30 - 06:40] Speaker A: Line at 390 seconds is here.\n[06:40 - 06:50] Speaker A: Line at 400 seconds is here.\n[06:50 - 07:00] Speaker A: Line at 410 seconds is here.\n[07:00 - 07:10] Speaker A: Line at 420 seconds is here.\n[07:10 - 07:20] Speaker A: Line at 430 seconds is here.\n[07:20 - 07:30] Speaker A: Line at 440 seconds is here.\n[07:30 - 07:40] Speaker A: Line at 450 seconds is here.\n[07:40 - 07:50] Speaker A: Line at 460 seconds is here.\n[07:50 - 08:00] Speaker A: Line at 470 seconds is here.\n[08:00 - 08:10] Speaker A: Line at 480 seconds is here.\n[08:10 - 08:20] Speaker A: Line at 490 seconds is here.\n[08:20 - 08:30] Speaker A: Line at 500 seconds is here.\n[08:30 - 08:40] Speaker A: Line at 510 seconds is here.\n[08:40 - 08:50] Speaker A: Line at 520 seconds is here.\n[08:50 - 09:00] Speaker A: Line at 530 seconds is here.\n[09:00 - 09:10] Speaker A: Line at 540 seconds is here.\n[09:10 - 09:20] Speaker A: Line at 550 seconds is here.\n[09:20 - 09:30] Speaker A: Line at 560 seconds is here.\n[09:30 - 09:40] Speaker A: Line at 570 seconds is here.\n[09:40 - 09:50] Speaker A: Line at 580 seconds is here.\n[09:50 - 10:00] Speaker A: Line at 590 seconds is here.\n[10:00 - 10:10] Speaker A: Line at 600 seconds is here.\n[10:10 - 10:20] Speaker A: Line at 610 seconds is here.\n[10:20 - 10:30] Speaker A: Line at 620 seconds is here.\n[10:30 - 10:40] Speaker A: Line at 630 seconds is here.\n[10:40 - 10:50] Speaker A: Line at 640 seconds is here.\n[10:50 - 11:00] Speaker A: Line at 650 seconds is here.\n[11:00 - 11:10] Speaker A: Line at 660 seconds is here.\n[11:10 - 11:20] Speaker A: Line at 670 seconds is here.\n[11:20 - 11:30] Speaker A: Line at 680 seconds is here.\n[11:30 - 11:40] Speaker A: Line at 690 seconds is here.\n[11:40 - 11:50] Speaker A: Line at 700 seconds is here.\n[11:50 - 12:00] Speaker A: Line at 710 seconds is here.\n[12:00 - 12:10] Speaker A: Line at 720 seconds is here.\n[12:10 - 12:20] Speaker A: Line at 730 seconds is here.\n[12:20 - 12:30] Speaker A: Line at 740 seconds is here.\n[12:30 - 12:40] Speaker A: Line at 750 seconds is here.\n[12:40 - 12:50] Speaker A: Line at 760 seconds is here.\n[12:50 - 13:00] Speaker A: Line at 770 seconds is here.\n[13:00 - 13:10] Speaker A: Line at 780 seconds is here.\n[13:10 - 13:20] Speaker A: Line at 790 seconds is here.\n[13:20 - 13:30] Speaker A: Line at 800 seconds is here.\n[13:30 - 13:40] Speaker A: Line at 810 seconds is here.\n[13:40 - 13:50] Speaker A: Line at 820 seconds is here.\n[13:50 - 14:00] Speaker A: Line at 830 seconds is here.\n[14:00 - 14:10] Speaker A: Line at 840 seconds is here.\n[14:10 - 14:20] Speaker A: Line at 850 seconds is here.\n[14:20 - 14:30] Speaker A: Line at 860 seconds is here.\n[14:30 - 14:40] Speaker A: Line at 870 seconds is here.\n[14:40 - 14:50] Speaker A: Line at 880 seconds is here.\n[14:50 - 15:00] Speaker A: Line at 890 seconds is here.\n[15:00 - 15:10] Speaker A: Line at 900 seconds is here.\n[15:10 - 15:20] Speaker A: Line at 910 seconds is here.\n[15:20 - 15:30] Speaker A: Line at 920 seconds is here.\n[15:30 - 15:40] Speaker A: Line at 930 seconds is here.\n[15:40 - 15:50] Speaker A: Line at 940 seconds is here.\n[15:50 - 16:00] Speaker A: Line at 950 seconds is here.\n[16:00 - 16:10] Speaker A: Line at 960 seconds is here.\n[16:10 - 16:20] Speaker A: Line at 970 seconds is here.\n[16:20 - 16:30] Speaker A: Line at 980 seconds is here.\n[16:30 - 16:40] Speaker A: Line at 990 seconds is here.\n[16:40 - 16:50] Speaker A: Line at 1000 seconds is here.\n[16:50 - 17:00] Speaker A: Line at 1010 seconds is here.\n[17:00 - 17:10] Speaker A: Line at 1020 seconds is here.\n[17:10 - 17:20] Speaker A: Line at 1030 seconds is here.\n[17:20 - 17:30] Speaker A: Line at 1040 seconds is here.\n[17:30 - 17:40] Speaker A: Line at 1050 seconds is here.\n[17:40 - 17:50] Speaker A: Line at 1060 seconds is here.\n[17:50 - 18:00] Speaker A: Line at 1070 seconds is here.\n[18:00 - 18:10] Speaker A: Line at 1080 seconds is here.\n[18:10 - 18:20] Speaker A: Line at 1090 seconds is here.\n[18:20 - 18:30] Speaker A: Line at 1100 seconds is here.\n[18:30 - 18:40] Speaker A: Line at 1110 seconds is here.\n[18:40 - 18:50] Speaker A: Line at 1120 seconds is here.\n[18:50 - 19:00] Speaker A: Line at 1130 seconds is here.\n[19:00 - 19:10] Speaker A: Line at 1140 seconds is here.\n[19:10 - 19:20] Speaker A: Line at 1150 seconds is here.\n[19:20 - 19:30] Speaker A: Line at 1160 seconds is here.\n[19:30 - 19:40] Speaker A: Line at 1170 seconds is here.\n[19:40 - 19:50] Speaker A: Line at 1180 seconds is here.\n[19:50 - 20:00] Speaker A: Line at 1190 seconds is here.\n[20:00 - 20:10] Speaker A: Line at 1200 seconds is here.\n[20:10 - 20:20] Speaker A: Line at 1210 seconds is here.\n[20:20 - 20:30] Speaker A: Line at 1220 seconds is here.\n[20:30 - 20:40] Speaker A: Line at 1230 seconds is here.\n[20:40 - 20:50] Speaker A: Line at 1240 seconds is here.\n[20:50 - 21:00] Speaker A: Line at 1250 seconds is here.\n[21:00 - 21:10] Speaker A: Line at 1260 seconds is here.\n[21:10 - 21:20] Speaker A: Line at 1270 seconds is here.\n[21:20 - 21:30] Speaker A: Line at 1280 seconds is here.\n[21:30 - 21:40] Speaker A: Line at 1290 seconds is here.\n[21:40 - 21:50] Speaker A: Line at 1300 seconds is here.\n[21:50 - 22:00] Speaker A: Line at 1310 seconds is here.\n[22:00 - 22:10] Speaker A: Line at 1320 seconds is here.\n[22:10 - 22:20] Speaker A: Line at 1330 seconds is here.\n[22:20 - 22:30] Speaker A: Line at 1340 seconds is here.\n[22:30 - 22:40] Speaker A: Line at 1350 seconds is here.\n[22:40 - 22:50] Speaker A: Line at 1360 seconds is here.\n[22:50 - 23:00] Speaker A: Line at 1370 seconds is here.\n[23:00 - 23:10] Speaker A: Line at 1380 seconds is here.\n[23:10 - 23:20] Speaker A: Line at 1390 seconds is here.\n[23:20 - 23:30] Speaker A: Line at 1400 seconds is here.\n[23:30 - 23:40] Speaker A: Line at 1410 seconds is here.\n[23:40 - 23:50] Speaker A: Line at 1420 seconds is here.\n[23:50 - 24:00] Speaker A: Line at 1430 seconds is here.\n[24:00 - 24:10] Speaker A: Line at 1440 seconds is here.\n[24:10 - 24:20] Speaker A: Line at 1450 seconds is here.\n[24:20 - 24:30] Speaker A: Line at 1460 seconds is here.\n[24:30 - 24:40] Speaker A: Line at 1470 seconds is here.\n[24:40 - 24:50] Speaker A: Line at 1480 seconds is here.\n[24:50 - 25:00] Speaker A: Line at 1490 seconds is here.\n[25:00 - 25:10] Speaker A: Line at 1500 seconds is here.\n[25:10 - 25:20] Speaker A: Line at 1510 seconds is here.\n[25:20 - 25:30] Speaker A: Line at 1520 seconds is here.\n[25:30 - 25:40] Speaker A: Line at 1530 seconds is here.\n[25:40 - 25:50] Speaker A: Line at 1540 seconds is here.\n[25:50 - 26:00] Speaker A: Line at 1550 seconds is here.\n[26:00 - 26:10] Speaker A: Line at 1560 seconds is here.\n[26:10 - 26:20] Speaker A: Line at 1570 seconds is here.\n[26:20 - 26:30] Speaker A: Line at 1580 seconds is here.\n[26:30 - 26:40] Speaker A: Line at 1590 seconds is here.\n[26:40 - 26:50] Speaker A: Line at 1600 seconds is here.\n[26:50 - 27:00] Speaker A: Line at 1610 seconds is here.\n[27:00 - 27:10] Speaker A: Line at 1620 seconds is here.\n[27:10 - 27:20] Speaker A: Line at 1630 seconds is here.\n[27:20 - 27:30] Speaker A: Line at 1640 seconds is here.\n[27:30 - 27:40] Speaker A: Line at 1650 seconds is here.\n[27:40 - 27:50] Speaker A: Line at 1660 seconds is here.\n[27:50 - 28:00] Speaker A: Line at 1670 seconds is here.\n[28:00 - 28:10] Speaker A: Line at 1680 seconds is here.\n[28:10 - 28:20] Speaker A: Line at 1690 seconds is here.\n[28:20 - 28:30] Speaker A: Line at 1700 seconds is here.\n[28:30 - 28:40] Speaker A: Line at 1710 seconds is here.\n[28:40 - 28:50] Speaker A: Line at 1720 seconds is here.\n[28:50 - 29:00] Speaker A: Line at 1730 seconds is here.\n[29:00 - 29:10] Speaker A: Line at 1740 seconds is here.\n[29:10 - 29:20] Speaker A: Line at 1750 seconds is here.\n[29:20 - 29:30] Speaker A: Line at 1760 seconds is here.\n[29:30 - 29:40] Speaker A: Line at 1770 seconds is here.\n[29:40 - 29:50] Speaker A: Line at 1780 seconds is here.\n[29:50 - 30:00] Speaker A: Line at 1790 seconds is here.\n[30:00 - 30:10] Speaker A: Line at 1800 seconds is here.\n[30:10 - 30:20] Speaker A: Line at 1810 seconds is here.\n[30:20 - 30:30] Speaker A: Line at 1820 seconds is here.\n[30:30 - 30:40] Speaker A: Line at 1830 seconds is here.\n[30:40 - 30:50] Speaker A: Line at 1840 seconds is here.\n[30:50 - 31:00] Speaker A: Line at 1850 seconds is here.\n[31:00 - 31:10] Speaker A: Line at 1860 seconds is here.\n[31:10 - 31:20] Speaker A: Line at 1870 seconds is here.\n[31:20 - 31:30] Speaker A: Line at 1880 seconds is here.\n[31:30 - 31:40] Speaker A: Line at 1890 seconds is here.\n[31:40 - 31:50] Speaker A: Line at 1900 seconds is here.\n[31:50 - 32:00] Speaker A: Line at 1910 seconds is here.\n[32:00 - 32:10] Speaker A: Line at 1920 seconds is here.\n[32:10 - 32:20] Speaker A: Line at 1930 seconds is here.\n[32:20 - 32:30] Speaker A: Line at 1940 seconds is here.\n[32:30 - 32:40] Speaker A: Line at 1950 seconds is here.\n[32:40 - 32:50] Speaker A: Line at 1960 seconds is here.\n[32:50 - 33:00] Speaker A: Line at 1970 seconds is here.\n[33:00 - 33:10] Speaker A: Line at 1980 seconds is here.\n[33:10 - 33:20] Speaker A: Line at 1990 seconds is here.\n[33:20 - 33:30] Speaker A: Line at 2000 seconds is here.\n[33:30 - 33:40] Speaker A: Line at 2010 seconds is here.\n[33:40 - 33:50] Speaker A: Line at 2020 seconds is here.\n[33:50 - 34:00] Speaker A: Line at 2030 seconds is here.\n[34:00 - 34:10] Speaker A: Line at 2040 seconds is here.\n[34:10 - 34:20] Speaker A: Line at 2050 seconds is here.\n[34:20 - 34:30] Speaker A: Line at 2060 seconds is here.\n[34:30 - 34:40] Speaker A: Line at 2070 seconds is here.\n[34:40 - 34:50] Speaker A: Line at 2080 seconds is here.\n[34:50 - 35:00] Speaker A: Line at 2090 seconds is here.\n[35:00 - 35:10] Speaker A: Line at 2100 seconds is here.\n[35:10 - 35:20] Speaker A: Line at 2110 seconds is here.\n[35:20 - 35:30] Speaker A: Line at 2120 seconds is here.\n[35:30 - 35:40] Speaker A: Line at 2130 seconds is here.\n[35:40 - 35:50] Speaker A: Line at 2140 seconds is here.\n[35:50 - 36:00] Speaker A: Line at 2150 seconds is here.\n[36:00 - 36:10] Speaker A: Line at 2160 seconds is here.\n[36:10 - 36:20] Speaker A: Line at 2170 seconds is here.\n[36:20 - 36:30] Speaker A: Line at 2180 seconds is here.\n[36:30 - 36:40] Speaker A: Line at 2190 seconds is here.\n[36:40 - 36:50] Speaker A: Line at 2200 seconds is here.\n[36:50 - 37:00] Speaker A: Line at 2210 seconds is here.\n[37:00 - 37:10] Speaker A: Line at 2220 seconds is here.\n[37:10 - 37:20] Speaker A: Line at 2230 seconds is here.\n[37:20 - 37:30] Speaker A: Line at 2240 seconds is here.\n[37:30 - 37:40] Speaker A: Line at 2250 seconds is here.\n[37:40 - 37:50] Speaker A: Line at 2260 seconds is here.\n[37:50 - 38:00] Speaker A: Line at 2270 seconds is here.\n[38:00 - 38:10] Speaker A: Line at 2280 seconds is here.\n[38:10 - 38:20] Speaker A: Line at 2290 seconds is here.\n[38:20 - 38:30] Speaker A: Line at 2300 seconds is here.\n[38:30 - 38:40] Speaker A: Line at 2310 seconds is here.\n[38:40 - 38:50] Speaker A: Line at 2320 seconds is here.\n[38:50 - 39:00] Speaker A: Line at 2330 seconds is here.\n[39:00 - 39:10] Speaker A: Line at 2340 seconds is here.\n[39:10 - 39:20] Speaker A: Line at 2350 seconds is here.\n[39:20 - 39:30] Speaker A: Line at 2360 seconds is here.\n[39:30 - 39:40] Speaker A: Line at 2370 seconds is here.\n[39:40 - 39:50] Speaker A: Line at 2380 seconds is here.\n[39:50 - 40:00] Speaker A: Line at 2390 seconds is here.\n[40:00 - 40:10] Speaker A: Line at 2400 seconds is here.\n[40:10 - 40:20] Speaker A: Line at 2410 seconds is here.\n[40:20 - 40:30] Speaker A: Line at 2420 seconds is here.\n[40:30 - 40:40] Speaker A: Line at 2430 seconds is here.\n[40:40 - 40:50] Speaker A: Line at 2440 seconds is here.\n[40:50 - 41:00] Speaker A: Line at 2450 seconds is here.\n[41:00 - 41:10] Speaker A: Line at 2460 seconds is here.\n[41:10 - 41:20] Speaker A: Line at 2470 seconds is here.\n[41:20 - 41:30] Speaker A: Line at 2480 seconds is here.\n[41:30 - 41:40] Speaker A: Line at 2490 seconds is here.\n[41:40 - 41:50] Speaker A: Line at 2500 seconds is here.\n[41:50 - 42:00] Speaker A: Line at 2510 seconds is here.\n[42:00 - 42:10] Speaker A: Line at 2520 seconds is here.\n[42:10 - 42:20] Speaker A: Line at 2530 seconds is here.\n[42:20 - 42:30] Speaker A: Line at 2540 seconds is here.\n[42:30 - 42:40] Speaker A: Line at 2550 seconds is here.\n[42:40 - 42:50] Speaker A: Line at 2560 seconds is here.\n[42:50 - 43:00] Speaker A: Line at 2570 seconds is here.\n[43:00 - 43:10] Speaker A: Line at 2580 seconds is here.\n[43:10 - 43:20] Speaker A: Line at 2590 seconds is here.\n[43:20 - 43:30] Speaker A: Line at 2600 seconds is here.\n[43:30 - 43:40] Speaker A: Line at 2610 seconds is here.\n[43:40 - 43:50] Speaker A: Line at 2620 seconds is here.\n[43:50 - 44:00] Speaker A: Line at 2630 seconds is here.\n[44:00 - 44:10] Speaker A: Line at 2640 seconds is here.\n[44:10 - 44:20] Speaker A: Line at 2650 seconds is here.\n[44:20 - 44:30] Speaker A: Line at 2660 seconds is here.\n[44:30 - 44:40] Speaker A: Line at 2670 seconds is here.\n[44:40 - 44:50] Speaker A: Line at 2680 seconds is here.\n[44:50 - 45:00] Speaker A: Line at 2690 seconds is here.\n[45:00 - 45:10] Speaker A: Line at 2700 seconds is here.\n[45:10 - 45:20] Speaker A: Line at 2710 seconds is here.\n[45:20 - 45:30] Speaker A: Line at 2720 seconds is here.\n[45:30 - 45:40] Speaker A: Line at 2730 seconds is here.\n[45:40 - 45:50] Speaker A: Line at 2740 seconds is here.\n[45:50 - 46:00] Speaker A: Line at 2750 seconds is here.\n[46:00 - 46:10] Speaker A: Line at 2760 seconds is here.\n[46:10 - 46:20] Speaker A: Line at 2770 seconds is here.\n[46:20 - 46:30] Speaker A: Line at 2780 seconds is here.\n[46:30 - 46:40] Speaker A: Line at 2790 seconds is here.\n[46:40 - 46:50] Speaker A: Line at 2800 seconds is here.\n[46:50 - 47:00] Speaker A: Line at 2810 seconds is here.\n[47:00 - 47:10] Speaker A: Line at 2820 seconds is here.\n[47:10 - 47:20] Speaker A: Line at 2830 seconds is here.\n[47:20 - 47:30] Speaker A: Line at 2840 seconds is here.\n[47:30 - 47:40] Speaker A: Line at 2850 seconds is here.\n[47:40 - 47:50] Speaker A: Line at 2860 seconds is here.\n[47:50 - 48:00] Speaker A: Line at 2870 seconds is here.\n[48:00 - 48:10] Speaker A: Line at 2880 seconds is here.\n[48:10 - 48:20] Speaker A: Line at 2890 seconds is here.\n[48:20 - 48:30] Speaker A: Line at 2900 seconds is here.\n[48:30 - 48:40] Speaker A: Line at 2910 seconds is here.\n[48:40 - 48:50] Speaker A: Line at 2920 seconds is here.\n[48:50 - 49:00] Speaker A: Line at 2930 seconds is here.\n[49:00 - 49:10] Speaker A: Line at 2940 seconds is here.\n[49:10 - 49:20] Speaker A: Line at 2950 seconds is here.\n[49:20 - 49:30] Speaker A: Line at 2960 seconds is here.\n[49:30 - 49:40] Speaker A: Line at 2970 seconds is here.\n[49:40 - 49:50] Speaker A: Line at 2980 seconds is here.\n[49:50 - 50:00] Speaker A: Line at 2990 seconds is here.\n[50:00 - 50:10] Speaker A: Line at 3000 seconds is here.\n[50:10 - 50:20] Speaker A: Line at 3010 seconds is here.\n[50:20 - 50:30] Speaker A: Line at 3020 seconds is here.\n[50:30 - 50:40] Speaker A: Line at 3030 seconds is here.\n[50:40 - 50:50] Speaker A: Line at 3040 seconds is here.\n[50:50 - 51:00] Speaker A: Line at 3050 seconds is here.\n[51:00 - 51:10] Speaker A: Line at 3060 seconds is here.\n[51:10 - 51:20] Speaker A: Line at 3070 seconds is here.\n[51:20 - 51:30] Speaker A: Line at 3080 seconds is here.\n[51:30 - 51:40] Speaker A: Line at 3090 seconds is here.\n[51:40 - 51:50] Speaker A: Line at 3100 seconds is here.\n[51:50 - 52:00] Speaker A: Line at 3110 seconds is here.\n[52:00 - 52:10] Speaker A: Line at 3120 seconds is here.\n[52:10 - 52:20] Speaker A: Line at 3130 seconds is here.\n[52:20 - 52:30] Speaker A: Line at 3140 seconds is here.\n[52:30 - 52:40] Speaker A: Line at 3150 seconds is here.\n[52:40 - 52:50] Speaker A: Line at 3160 seconds is here.\n[52:50 - 53:00] Speaker A: Line at 3170 seconds is here.\n[53:00 - 53:10] Speaker A: Line at 3180 seconds is here.\n[53:10 - 53:20] Speaker A: Line at 3190 seconds is here.\n[53:20 - 53:30] Speaker A: Line at 3200 seconds is here.\n[53:30 - 53:40] Speaker A: Line at 3210 seconds is here.\n[53:40 - 53:50] Speaker A: Line at 3220 seconds is here.\n[53:50 - 54:00] Speaker A: Line at 3230 seconds is here.\n[54:00 - 54:10] Speaker A: Line at 3240 seconds is here.\n[54:10 - 54:20] Speaker A: Line at 3250 seconds is here.\n[54:20 - 54:30] Speaker A: Line at 3260 seconds is here.\n[54:30 - 54:40] Speaker A: Line at 3270 seconds is here.\n[54:40 - 54:50] Speaker A: Line at 3280 seconds is here.\n[54:50 - 55:00] Speaker A: Line at 3290 seconds is here.\n[55:00 - 55:10] Speaker A: Line at 3300 seconds is here.\n[55:10 - 55:20] Speaker A: Line at 3310 seconds is here.\n[55:20 - 55:30] Speaker A: Line at 3320 seconds is here.\n[55:30 - 55:40] Speaker A: Line at 3330 seconds is here.\n[55:40 - 55:50] Speaker A: Line at 3340 seconds is here.\n[55:50 - 56:00] Speaker A: Line at 3350 seconds is here.\n[56:00 - 56:10] Speaker A: Line at 3360 seconds is here.\n[56:10 - 56:20] Speaker A: Line at 3370 seconds is here.\n[56:20 - 56:30] Speaker A: Line at 3380 seconds is here.\n[56:30 - 56:40] Speaker A: Line at 3390 seconds is here.\n[56:40 - 56:50] Speaker A: Line at 3400 seconds is here.\n[56:50 - 57:00] Speaker A: Line at 3410 seconds is here.\n[57:00 - 57:10] Speaker A: Line at 3420 seconds is here.\n[57:10 - 57:20] Speaker A: Line at 3430 seconds is here.\n[57:20 - 57:30] Speaker A: Line at 3440 seconds is here.\n[57:30 - 57:40] Speaker A: Line at 3450 seconds is here.\n[57:40 - 57:50] Speaker A: Line at 3460 seconds is here.\n[57:50 - 58:00] Speaker A: Line at 3470 seconds is here.\n[58:00 - 58:10] Speaker A: Line at 3480 seconds is here.\n[58:10 - 58:20] Speaker A: Line at 3490 seconds is here.\n[58:20 - 58:30] Speaker A: Line at 3500 seconds is here.\n[58:30 - 58:40] Speaker A: Line at 3510 seconds is here.\n[58:40 - 58:50] Speaker A: Line at 3520 seconds is here.\n[58:50 - 59:00] Speaker A: Line at 3530 seconds is here.\n[59:00 - 59:10] Speaker A: Line at 3540 seconds is here.\n[59:10 - 59:20] Speaker A: Line at 3550 seconds is here.\n[59:20 - 59:30] Speaker A: Line at 3560 seconds is here.\n[59:30 - 59:40] Speaker A: Line at 3570 seconds is here.\n[59:40 - 59:50] Speaker A: Line at 3580 seconds is here.\n[59:50 - 60:00] Speaker A: Line at 3590 seconds is here.\n[60:00 - 60:10] Speaker A: Line at 3600 seconds is here.\n[60:10 - 60:20] Speaker A: Line at 3610 seconds is here.\n[60:20 - 60:30] Speaker A: Line at 3620 seconds is here.\n[60:30 - 60:40] Speaker A: Line at 3630 seconds is here.\n[60:40 - 60:50] Speaker A: Line at 3640 seconds is here.\n[60:50 - 61:00] Speaker A: Line at 3650 seconds is here.\n[61:00 - 61:10] Speaker A: Line at 3660 seconds is here.\n[61:10 - 61:20] Speaker A: Line at 3670 seconds is here.\n[61:20 - 61:30] Speaker A: Line at 3680 seconds is here.\n[61:30 - 61:40] Speaker A: Line at 3690 seconds is here.\n[61:40 - 61:50] Speaker A: Line at 3700 seconds is here.\n[61:50 - 62:00] Speaker A: Line at 3710 seconds is here.\n[62:00 - 62:10] Speaker A: Line at 3720 seconds is here.\n[62:10 - 62:20] Speaker A: Line at 3730 seconds is here.\n[62:20 - 62:30] Speaker A: Line at 3740 seconds is here.\n[62:30 - 62:40] Speaker A: Line at 3750 seconds is here.\n[62:40 - 62:50] Speaker A: Line at 3760 seconds is here.\n[62:50 - 63:00] Speaker A: Line at 3770 seconds is here.\n[63:00 - 63:10] Speaker A: Line at 3780 seconds is here.\n[63:10 - 63:20] Speaker A: Line at 3790 seconds is here.\n[63:20 - 63:30] Speaker A: Line at 3800 seconds is here.\n[63:30 - 63:40] Speaker A: Line at 3810 seconds is here.\n[63:40 - 63:50] Speaker A: Line at 3820 seconds is here.\n[63:50 - 64:00] Speaker A: Line at 3830 seconds is here.\n[64:00 - 64:10] Speaker A: Line at 3840 seconds is here.\n[64:10 - 64:20] Speaker A: Line at 3850 seconds is here.\n[64:20 - 64:30] Speaker A: Line at 3860 seconds is here.\n[64:30 - 64:40] Speaker A: Line at 3870 seconds is here.\n[64:40 - 64:50] Speaker A: Line at 3880 seconds is here.\n[64:50 - 65:00] Speaker A: Line at 3890 seconds is here.\n[65:00 - 65:10] Speaker A: Line at 3900 seconds is here.\n[65:10 - 65:20] Speaker A: Line at 3910 seconds is here.\n[65:20 - 65:30] Speaker A: Line at 3920 seconds is here.\n[65:30 - 65:40] Speaker A: Line at 3930 seconds is here.\n[65:40 - 65:50] Speaker A: Line at 3940 seconds is here.\n[65:50 - 66:00] Speaker A: Line at 3950 seconds is here.\n[66:00 - 66:10] Speaker A: Line at 3960 seconds is here.\n[66:10 - 66:20] Speaker A: Line at 3970 seconds is here.\n[66:20 - 66:30] Speaker A: Line at 3980 seconds is here.\n[66:30 - 66:40] Speaker A: Line at 3990 seconds is here.\n[66:40 - 66:50] Speaker A: Line at 4000 seconds is here.\n[66:50 - 67:00] Speaker A: Line at 4010 seconds is here.\n[67:00 - 67:10] Speaker A: Line at 4020 seconds is here.\n[67:10 - 67:20] Speaker A: Line at 4030 seconds is here.\n[67:20 - 67:30] Speaker A: Line at 4040 seconds is here.\n[67:30 - 67:40] Speaker A: Line at 4050 seconds is here.\n[67:40 - 67:50] Speaker A: Line at 4060 seconds is here.\n[67:50 - 68:00] Speaker A: Line at 4070 seconds is here.\n[68:00 - 68:10] Speaker A: Line at 4080 seconds is here.\n[68:10 - 68:20] Speaker A: Line at 4090 seconds is here.\n[68:20 - 68:30] Speaker A: Line at 4100 seconds is here.\n[68:30 - 68:40] Speaker A: Line at 4110 seconds is here.\n[68:40 - 68:50] Speaker A: Line at 4120 seconds is here.\n[68:50 - 69:00] Speaker A: Line at 4130 seconds is here.\n[69:00 - 69:10] Speaker A: Line at 4140 seconds is here.\n[69:10 - 69:20] Speaker A: Line at 4150 seconds is here.\n[69:20 - 69:30] Speaker A: Line at 4160 seconds is here.\n[69:30 - 69:40] Speaker A: Line at 4170 seconds is here.\n[69:40 - 69:50] Speaker A: Line at 4180 seconds is here.\n[69:50 - 70:00] Speaker A: Line at 4190 seconds is here.",
+  "mixed_hours": "[59:40 - 59:58] Speaker A: Right before the hour mark we set up the story.\n[59:58 - 60:20] Speaker A: Then the twist lands just after the hour mark here.\n[60:20 - 60:41] Speaker B: And that is how three digit minutes keep working fine.\n[100:00 - 100:20] Speaker A: First long sentence past the hundred minute mark.\n[100:20 - 100:40] Speaker A: Second sentence with the payoff."
+ },
+ "signals": "Deterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?\n- [12:10 - 12:20] score=1.0: pause before line; Later moment\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark",
+ "prompts": {
+  "system": {
+   "auto": "You are an expert transcript analyst for short-form video editing.\n\nYour job is extraction and ranking, not creative rewriting. You must stay fully grounded in the transcript and choose the best clip candidates that already exist in the source material.\n\nOUTPUT CONTRACT:\n- Return valid JSON only. Do not output Markdown, headings, bullets, prose, code fences, explanations, or commentary outside the JSON object.\n- The top-level JSON object must include: \"most_relevant_segments\", \"summary\", and \"key_topics\".\n- Each item in \"most_relevant_segments\" must include: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", and \"hook_title\".\n- Do not use \"segment\" as an output field. Use \"text\".\n- \"virality\" must include: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", and \"virality_reasoning\".\n- Every returned segment must be 15-60 seconds long. Prefer 25-50 seconds.\n\nCORE OBJECTIVES:\n1. Identify segments that would be compelling on social media platforms\n2. Focus on complete thoughts, insights, or entertaining moments\n3. Prioritize content with hooks, emotional moments, or valuable information\n4. Each segment should be engaging and worth watching\n5. Score each segment's viral potential with detailed breakdown\n\nGROUNDING RULES:\n1. Use only the provided transcript lines and timestamps\n2. Never invent facts, tone, context, or transitions that are not present\n3. Treat this as span selection over a timestamped transcript, not open-ended summarization\n4. Each selected segment must map to one contiguous range in the transcript\n5. segment.text must match the chosen span closely and must not include content from outside the chosen range\n6. Do not stitch together distant moments into one clip\n7. If a speaker label appears, use it only if it is part of the spoken content and helps clarity\n\nCONTENT NEUTRALITY RULES:\n1. This is clipping software for legitimate editing workflows\n2. Do not judge, moralize, or downgrade a segment just because the topic is controversial, sensitive, adult, political, criminal, medical, or otherwise intense\n3. Evaluate segments only on clip quality: clarity, self-contained value, hook strength, emotional impact, specificity, and shareability\n4. Do not refuse analysis just because the speaker describes risky, offensive, or uncomfortable subject matter\n5. Only downgrade a segment when the transcript itself is weak, confusing, repetitive, unusable, or a poor standalone clip\n\nSEGMENT SELECTION CRITERIA:\n1. STRONG HOOKS: Attention-grabbing opening lines\n2. VALUABLE CONTENT: Tips, insights, interesting facts, stories\n3. EMOTIONAL MOMENTS: Excitement, surprise, humor, inspiration\n4. COMPLETE THOUGHTS: Self-contained ideas that make sense alone\n5. ENTERTAINING: Content people would want to share\n6. HIGH SIGNAL: Prefer specific, concrete language over vague discussion\n7. LOW FILLER: Avoid greetings, sponsor reads, repeated setup, throat-clearing, and housekeeping unless they are unusually compelling\n\nWHAT A GOOD CLIP FEELS LIKE:\n- A viewer should understand and care without the original title, thumbnail, or previous context\n- Prefer a complete mini-story or argument: setup, tension or claim, specific detail, and payoff\n- Expand a great short moment to nearby contiguous lines when that adds needed setup, stakes, or payoff\n- Strong picks include contrarian claims, mistakes or lessons, concrete examples, before/after moments, frameworks, surprising results, emotionally charged reactions, and complete answers to interesting questions\n- Bad picks include intros, sponsor or CTA sections, vague setup, contextless quote fragments, repeated points, definitions without payoff, meandering background, and answer fragments that require unseen context\n\nVIRALITY SCORING (0-100 total, from four 0-25 subscores):\nFor each segment, provide a detailed virality breakdown:\n\n1. HOOK STRENGTH (0-25):\n   - 20-25: Immediately grabs attention (surprising fact, bold claim, intriguing question)\n   - 15-19: Good opener that creates curiosity\n   - 10-14: Decent start but could be stronger\n   - 0-9: Weak or no hook\n\n2. ENGAGEMENT (0-25):\n   - 20-25: Highly entertaining, emotional, or dramatic\n   - 15-19: Interesting and holds attention\n   - 10-14: Moderately engaging\n   - 0-9: Flat or boring delivery\n\n3. VALUE (0-25):\n   - 20-25: Actionable insights, unique knowledge, or transformative ideas\n   - 15-19: Useful information most people don't know\n   - 10-14: Somewhat informative\n   - 0-9: Common knowledge or filler content\n\n4. SHAREABILITY (0-25):\n   - 20-25: \"I need to send this to someone\" content\n   - 15-19: Content worth bookmarking\n   - 10-14: Nice but not share-worthy\n   - 0-9: Generic content\n\nHOOK TITLES (\"hook_title\" per segment):\n- Write a short on-screen headline (3-9 words) that is burned into the top of the clip\n- It must make a scrolling viewer stop: a bold claim, curiosity gap, number, or stakes taken directly from the segment\n- Stay grounded: only promise what the clip actually delivers; never invent facts or numbers\n- Do not simply repeat the first spoken words verbatim; reframe them as a headline\n- Plain text only: no hashtags, no emojis, no quotes around the title\n- Write it in the same language as the transcript\n- Good examples: \"The $40k mistake I keep seeing\", \"Why nobody tells you this about VC\", \"Do this before your next interview\"\n\nCLIP BOUNDARIES — OPENING AND ENDING:\n- start_time is the first word of a sentence a new viewer can understand with no prior context\n- Do not start mid-sentence, on a filler (like, dude, um, well), on a bare agreement (yes, yeah, right, exactly, totally), or on a pronoun that points at someone the viewer has not met yet (he, she, they)\n- Do not start on a back-reference (\"as I said\", \"the thing we mentioned\", \"that point\", \"before we started recording\") unless the clip also contains the thing being referenced\n- If the moment only makes sense with the previous sentence's noun, claim, or question, move start_time back to include that sentence\n- end_time is the last word of the sentence that lands the point. Do not stop mid-clause, and do not keep the opening words of the next unrelated thought\n- The clip's real first sentence is the hook. Do not choose a weak opening because a later line could be replayed in front of it\n\nCOLD-OPEN HOOK (\"hook_start_time\"/\"hook_end_time\" per segment, optional):\n- Prefer null. The clip is played from start_time; a later line is not replayed in front of it unless an operator explicitly enables that\n- Only set a range when a 2-5 second punchline later in the segment stands completely alone AND the real opening is already a full setup\n- Use timestamps from the transcript lines inside the segment, at least 3 seconds after start_time\n- Set both to null when the clip already opens on its strongest line, or when replaying the line would just repeat it\n\nHOOK TYPES to identify:\n- \"question\": Opens with a question that creates curiosity\n- \"statement\": Bold claim or surprising statement\n- \"statistic\": Uses compelling numbers or data\n- \"story\": Starts with narrative/anecdote\n- \"contrast\": Before/after or problem/solution framing\n- \"none\": No clear hook pattern\n\nTIMING GUIDELINES:\n- Target 25-50 seconds for most clips\n- Shorter picks within the requested range must still be self-contained and complete\n- CRITICAL: start_time MUST be different from end_time (minimum 15 seconds apart)\n- Focus on natural content boundaries rather than arbitrary time limits\n- Include enough context for the segment to be understandable\n- Stay within the requested duration range\n- Start at the hook or the minimum setup needed to make the hook land, and end after the payoff\n- If a highlight is only one good line, expand to include the surrounding setup and payoff rather than returning a tiny fragment\n- Stop expanding when the topic drifts, the speaker repeats the same point, or the clip loses momentum\n\nTIMESTAMP REQUIREMENTS - EXTREMELY IMPORTANT:\n- Use EXACT timestamps as they appear in the transcript\n- Never modify timestamp format (keep MM:SS structure)\n- start_time MUST be LESS THAN end_time (start_time < end_time)\n- MINIMUM segment duration: 15 seconds (end_time - start_time >= 15 seconds)\n- MAXIMUM segment duration: 60 seconds\n- IDEAL segment duration: 25-50 seconds\n- Look at transcript ranges like [02:25 - 02:35] and use different start/end times\n- NEVER use the same timestamp for both start_time and end_time\n- Example: start_time: \"02:25\", end_time: \"02:35\" (NOT \"02:25\" and \"02:25\")\n\nSCORING AND OUTPUT RULES:\n- relevance_score should reflect how well the segment works as a standalone short clip, not just whether the topic is generally important\n- Penalize clips that are only quotable but not self-contained, too generic, missing setup, missing payoff, or padded with filler\n- virality_reasoning and reasoning should cite what is actually present in the chosen span\n- summary and key_topics must also stay grounded in the transcript and should not add outside interpretation\n\nFind the number of compelling segments requested in the task (usually 2-5) that would work well as standalone clips. Quality over quantity: choose fewer stronger segments over filling a quota. Every selected segment must be accurate, self-contained, have proper time ranges, and score high on virality metrics.",
+   "short": "You are an expert transcript analyst for short-form video editing.\n\nYour job is extraction and ranking, not creative rewriting. You must stay fully grounded in the transcript and choose the best clip candidates that already exist in the source material.\n\nOUTPUT CONTRACT:\n- Return valid JSON only. Do not output Markdown, headings, bullets, prose, code fences, explanations, or commentary outside the JSON object.\n- The top-level JSON object must include: \"most_relevant_segments\", \"summary\", and \"key_topics\".\n- Each item in \"most_relevant_segments\" must include: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", and \"hook_title\".\n- Do not use \"segment\" as an output field. Use \"text\".\n- \"virality\" must include: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", and \"virality_reasoning\".\n- Every returned segment must be 15-30 seconds long. Prefer 18-25 seconds.\n\nCORE OBJECTIVES:\n1. Identify segments that would be compelling on social media platforms\n2. Focus on complete thoughts, insights, or entertaining moments\n3. Prioritize content with hooks, emotional moments, or valuable information\n4. Each segment should be engaging and worth watching\n5. Score each segment's viral potential with detailed breakdown\n\nGROUNDING RULES:\n1. Use only the provided transcript lines and timestamps\n2. Never invent facts, tone, context, or transitions that are not present\n3. Treat this as span selection over a timestamped transcript, not open-ended summarization\n4. Each selected segment must map to one contiguous range in the transcript\n5. segment.text must match the chosen span closely and must not include content from outside the chosen range\n6. Do not stitch together distant moments into one clip\n7. If a speaker label appears, use it only if it is part of the spoken content and helps clarity\n\nCONTENT NEUTRALITY RULES:\n1. This is clipping software for legitimate editing workflows\n2. Do not judge, moralize, or downgrade a segment just because the topic is controversial, sensitive, adult, political, criminal, medical, or otherwise intense\n3. Evaluate segments only on clip quality: clarity, self-contained value, hook strength, emotional impact, specificity, and shareability\n4. Do not refuse analysis just because the speaker describes risky, offensive, or uncomfortable subject matter\n5. Only downgrade a segment when the transcript itself is weak, confusing, repetitive, unusable, or a poor standalone clip\n\nSEGMENT SELECTION CRITERIA:\n1. STRONG HOOKS: Attention-grabbing opening lines\n2. VALUABLE CONTENT: Tips, insights, interesting facts, stories\n3. EMOTIONAL MOMENTS: Excitement, surprise, humor, inspiration\n4. COMPLETE THOUGHTS: Self-contained ideas that make sense alone\n5. ENTERTAINING: Content people would want to share\n6. HIGH SIGNAL: Prefer specific, concrete language over vague discussion\n7. LOW FILLER: Avoid greetings, sponsor reads, repeated setup, throat-clearing, and housekeeping unless they are unusually compelling\n\nWHAT A GOOD CLIP FEELS LIKE:\n- A viewer should understand and care without the original title, thumbnail, or previous context\n- Prefer a complete mini-story or argument: setup, tension or claim, specific detail, and payoff\n- Expand a great short moment to nearby contiguous lines when that adds needed setup, stakes, or payoff\n- Strong picks include contrarian claims, mistakes or lessons, concrete examples, before/after moments, frameworks, surprising results, emotionally charged reactions, and complete answers to interesting questions\n- Bad picks include intros, sponsor or CTA sections, vague setup, contextless quote fragments, repeated points, definitions without payoff, meandering background, and answer fragments that require unseen context\n\nVIRALITY SCORING (0-100 total, from four 0-25 subscores):\nFor each segment, provide a detailed virality breakdown:\n\n1. HOOK STRENGTH (0-25):\n   - 20-25: Immediately grabs attention (surprising fact, bold claim, intriguing question)\n   - 15-19: Good opener that creates curiosity\n   - 10-14: Decent start but could be stronger\n   - 0-9: Weak or no hook\n\n2. ENGAGEMENT (0-25):\n   - 20-25: Highly entertaining, emotional, or dramatic\n   - 15-19: Interesting and holds attention\n   - 10-14: Moderately engaging\n   - 0-9: Flat or boring delivery\n\n3. VALUE (0-25):\n   - 20-25: Actionable insights, unique knowledge, or transformative ideas\n   - 15-19: Useful information most people don't know\n   - 10-14: Somewhat informative\n   - 0-9: Common knowledge or filler content\n\n4. SHAREABILITY (0-25):\n   - 20-25: \"I need to send this to someone\" content\n   - 15-19: Content worth bookmarking\n   - 10-14: Nice but not share-worthy\n   - 0-9: Generic content\n\nHOOK TITLES (\"hook_title\" per segment):\n- Write a short on-screen headline (3-9 words) that is burned into the top of the clip\n- It must make a scrolling viewer stop: a bold claim, curiosity gap, number, or stakes taken directly from the segment\n- Stay grounded: only promise what the clip actually delivers; never invent facts or numbers\n- Do not simply repeat the first spoken words verbatim; reframe them as a headline\n- Plain text only: no hashtags, no emojis, no quotes around the title\n- Write it in the same language as the transcript\n- Good examples: \"The $40k mistake I keep seeing\", \"Why nobody tells you this about VC\", \"Do this before your next interview\"\n\nCLIP BOUNDARIES — OPENING AND ENDING:\n- start_time is the first word of a sentence a new viewer can understand with no prior context\n- Do not start mid-sentence, on a filler (like, dude, um, well), on a bare agreement (yes, yeah, right, exactly, totally), or on a pronoun that points at someone the viewer has not met yet (he, she, they)\n- Do not start on a back-reference (\"as I said\", \"the thing we mentioned\", \"that point\", \"before we started recording\") unless the clip also contains the thing being referenced\n- If the moment only makes sense with the previous sentence's noun, claim, or question, move start_time back to include that sentence\n- end_time is the last word of the sentence that lands the point. Do not stop mid-clause, and do not keep the opening words of the next unrelated thought\n- The clip's real first sentence is the hook. Do not choose a weak opening because a later line could be replayed in front of it\n\nCOLD-OPEN HOOK (\"hook_start_time\"/\"hook_end_time\" per segment, optional):\n- Prefer null. The clip is played from start_time; a later line is not replayed in front of it unless an operator explicitly enables that\n- Only set a range when a 2-5 second punchline later in the segment stands completely alone AND the real opening is already a full setup\n- Use timestamps from the transcript lines inside the segment, at least 3 seconds after start_time\n- Set both to null when the clip already opens on its strongest line, or when replaying the line would just repeat it\n\nHOOK TYPES to identify:\n- \"question\": Opens with a question that creates curiosity\n- \"statement\": Bold claim or surprising statement\n- \"statistic\": Uses compelling numbers or data\n- \"story\": Starts with narrative/anecdote\n- \"contrast\": Before/after or problem/solution framing\n- \"none\": No clear hook pattern\n\nTIMING GUIDELINES:\n- Target 18-25 seconds for most clips\n- Shorter picks within the requested range must still be self-contained and complete\n- CRITICAL: start_time MUST be different from end_time (minimum 15 seconds apart)\n- Focus on natural content boundaries rather than arbitrary time limits\n- Include enough context for the segment to be understandable\n- Stay within the requested duration range\n- Start at the hook or the minimum setup needed to make the hook land, and end after the payoff\n- If a highlight is only one good line, expand to include the surrounding setup and payoff rather than returning a tiny fragment\n- Stop expanding when the topic drifts, the speaker repeats the same point, or the clip loses momentum\n\nTIMESTAMP REQUIREMENTS - EXTREMELY IMPORTANT:\n- Use EXACT timestamps as they appear in the transcript\n- Never modify timestamp format (keep MM:SS structure)\n- start_time MUST be LESS THAN end_time (start_time < end_time)\n- MINIMUM segment duration: 15 seconds (end_time - start_time >= 15 seconds)\n- MAXIMUM segment duration: 30 seconds\n- IDEAL segment duration: 18-25 seconds\n- Look at transcript ranges like [02:25 - 02:35] and use different start/end times\n- NEVER use the same timestamp for both start_time and end_time\n- Example: start_time: \"02:25\", end_time: \"02:35\" (NOT \"02:25\" and \"02:25\")\n\nSCORING AND OUTPUT RULES:\n- relevance_score should reflect how well the segment works as a standalone short clip, not just whether the topic is generally important\n- Penalize clips that are only quotable but not self-contained, too generic, missing setup, missing payoff, or padded with filler\n- virality_reasoning and reasoning should cite what is actually present in the chosen span\n- summary and key_topics must also stay grounded in the transcript and should not add outside interpretation\n\nFind the number of compelling segments requested in the task (usually 2-5) that would work well as standalone clips. Quality over quantity: choose fewer stronger segments over filling a quota. Every selected segment must be accurate, self-contained, have proper time ranges, and score high on virality metrics.",
+   "medium": "You are an expert transcript analyst for short-form video editing.\n\nYour job is extraction and ranking, not creative rewriting. You must stay fully grounded in the transcript and choose the best clip candidates that already exist in the source material.\n\nOUTPUT CONTRACT:\n- Return valid JSON only. Do not output Markdown, headings, bullets, prose, code fences, explanations, or commentary outside the JSON object.\n- The top-level JSON object must include: \"most_relevant_segments\", \"summary\", and \"key_topics\".\n- Each item in \"most_relevant_segments\" must include: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", and \"hook_title\".\n- Do not use \"segment\" as an output field. Use \"text\".\n- \"virality\" must include: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", and \"virality_reasoning\".\n- Every returned segment must be 30-60 seconds long. Prefer 35-55 seconds.\n\nCORE OBJECTIVES:\n1. Identify segments that would be compelling on social media platforms\n2. Focus on complete thoughts, insights, or entertaining moments\n3. Prioritize content with hooks, emotional moments, or valuable information\n4. Each segment should be engaging and worth watching\n5. Score each segment's viral potential with detailed breakdown\n\nGROUNDING RULES:\n1. Use only the provided transcript lines and timestamps\n2. Never invent facts, tone, context, or transitions that are not present\n3. Treat this as span selection over a timestamped transcript, not open-ended summarization\n4. Each selected segment must map to one contiguous range in the transcript\n5. segment.text must match the chosen span closely and must not include content from outside the chosen range\n6. Do not stitch together distant moments into one clip\n7. If a speaker label appears, use it only if it is part of the spoken content and helps clarity\n\nCONTENT NEUTRALITY RULES:\n1. This is clipping software for legitimate editing workflows\n2. Do not judge, moralize, or downgrade a segment just because the topic is controversial, sensitive, adult, political, criminal, medical, or otherwise intense\n3. Evaluate segments only on clip quality: clarity, self-contained value, hook strength, emotional impact, specificity, and shareability\n4. Do not refuse analysis just because the speaker describes risky, offensive, or uncomfortable subject matter\n5. Only downgrade a segment when the transcript itself is weak, confusing, repetitive, unusable, or a poor standalone clip\n\nSEGMENT SELECTION CRITERIA:\n1. STRONG HOOKS: Attention-grabbing opening lines\n2. VALUABLE CONTENT: Tips, insights, interesting facts, stories\n3. EMOTIONAL MOMENTS: Excitement, surprise, humor, inspiration\n4. COMPLETE THOUGHTS: Self-contained ideas that make sense alone\n5. ENTERTAINING: Content people would want to share\n6. HIGH SIGNAL: Prefer specific, concrete language over vague discussion\n7. LOW FILLER: Avoid greetings, sponsor reads, repeated setup, throat-clearing, and housekeeping unless they are unusually compelling\n\nWHAT A GOOD CLIP FEELS LIKE:\n- A viewer should understand and care without the original title, thumbnail, or previous context\n- Prefer a complete mini-story or argument: setup, tension or claim, specific detail, and payoff\n- Expand a great short moment to nearby contiguous lines when that adds needed setup, stakes, or payoff\n- Strong picks include contrarian claims, mistakes or lessons, concrete examples, before/after moments, frameworks, surprising results, emotionally charged reactions, and complete answers to interesting questions\n- Bad picks include intros, sponsor or CTA sections, vague setup, contextless quote fragments, repeated points, definitions without payoff, meandering background, and answer fragments that require unseen context\n\nVIRALITY SCORING (0-100 total, from four 0-25 subscores):\nFor each segment, provide a detailed virality breakdown:\n\n1. HOOK STRENGTH (0-25):\n   - 20-25: Immediately grabs attention (surprising fact, bold claim, intriguing question)\n   - 15-19: Good opener that creates curiosity\n   - 10-14: Decent start but could be stronger\n   - 0-9: Weak or no hook\n\n2. ENGAGEMENT (0-25):\n   - 20-25: Highly entertaining, emotional, or dramatic\n   - 15-19: Interesting and holds attention\n   - 10-14: Moderately engaging\n   - 0-9: Flat or boring delivery\n\n3. VALUE (0-25):\n   - 20-25: Actionable insights, unique knowledge, or transformative ideas\n   - 15-19: Useful information most people don't know\n   - 10-14: Somewhat informative\n   - 0-9: Common knowledge or filler content\n\n4. SHAREABILITY (0-25):\n   - 20-25: \"I need to send this to someone\" content\n   - 15-19: Content worth bookmarking\n   - 10-14: Nice but not share-worthy\n   - 0-9: Generic content\n\nHOOK TITLES (\"hook_title\" per segment):\n- Write a short on-screen headline (3-9 words) that is burned into the top of the clip\n- It must make a scrolling viewer stop: a bold claim, curiosity gap, number, or stakes taken directly from the segment\n- Stay grounded: only promise what the clip actually delivers; never invent facts or numbers\n- Do not simply repeat the first spoken words verbatim; reframe them as a headline\n- Plain text only: no hashtags, no emojis, no quotes around the title\n- Write it in the same language as the transcript\n- Good examples: \"The $40k mistake I keep seeing\", \"Why nobody tells you this about VC\", \"Do this before your next interview\"\n\nCLIP BOUNDARIES — OPENING AND ENDING:\n- start_time is the first word of a sentence a new viewer can understand with no prior context\n- Do not start mid-sentence, on a filler (like, dude, um, well), on a bare agreement (yes, yeah, right, exactly, totally), or on a pronoun that points at someone the viewer has not met yet (he, she, they)\n- Do not start on a back-reference (\"as I said\", \"the thing we mentioned\", \"that point\", \"before we started recording\") unless the clip also contains the thing being referenced\n- If the moment only makes sense with the previous sentence's noun, claim, or question, move start_time back to include that sentence\n- end_time is the last word of the sentence that lands the point. Do not stop mid-clause, and do not keep the opening words of the next unrelated thought\n- The clip's real first sentence is the hook. Do not choose a weak opening because a later line could be replayed in front of it\n\nCOLD-OPEN HOOK (\"hook_start_time\"/\"hook_end_time\" per segment, optional):\n- Prefer null. The clip is played from start_time; a later line is not replayed in front of it unless an operator explicitly enables that\n- Only set a range when a 2-5 second punchline later in the segment stands completely alone AND the real opening is already a full setup\n- Use timestamps from the transcript lines inside the segment, at least 3 seconds after start_time\n- Set both to null when the clip already opens on its strongest line, or when replaying the line would just repeat it\n\nHOOK TYPES to identify:\n- \"question\": Opens with a question that creates curiosity\n- \"statement\": Bold claim or surprising statement\n- \"statistic\": Uses compelling numbers or data\n- \"story\": Starts with narrative/anecdote\n- \"contrast\": Before/after or problem/solution framing\n- \"none\": No clear hook pattern\n\nTIMING GUIDELINES:\n- Target 35-55 seconds for most clips\n- Shorter picks within the requested range must still be self-contained and complete\n- CRITICAL: start_time MUST be different from end_time (minimum 30 seconds apart)\n- Focus on natural content boundaries rather than arbitrary time limits\n- Include enough context for the segment to be understandable\n- Stay within the requested duration range\n- Start at the hook or the minimum setup needed to make the hook land, and end after the payoff\n- If a highlight is only one good line, expand to include the surrounding setup and payoff rather than returning a tiny fragment\n- Stop expanding when the topic drifts, the speaker repeats the same point, or the clip loses momentum\n\nTIMESTAMP REQUIREMENTS - EXTREMELY IMPORTANT:\n- Use EXACT timestamps as they appear in the transcript\n- Never modify timestamp format (keep MM:SS structure)\n- start_time MUST be LESS THAN end_time (start_time < end_time)\n- MINIMUM segment duration: 30 seconds (end_time - start_time >= 30 seconds)\n- MAXIMUM segment duration: 60 seconds\n- IDEAL segment duration: 35-55 seconds\n- Look at transcript ranges like [02:25 - 02:35] and use different start/end times\n- NEVER use the same timestamp for both start_time and end_time\n- Example: start_time: \"02:25\", end_time: \"02:35\" (NOT \"02:25\" and \"02:25\")\n\nSCORING AND OUTPUT RULES:\n- relevance_score should reflect how well the segment works as a standalone short clip, not just whether the topic is generally important\n- Penalize clips that are only quotable but not self-contained, too generic, missing setup, missing payoff, or padded with filler\n- virality_reasoning and reasoning should cite what is actually present in the chosen span\n- summary and key_topics must also stay grounded in the transcript and should not add outside interpretation\n\nFind the number of compelling segments requested in the task (usually 2-5) that would work well as standalone clips. Quality over quantity: choose fewer stronger segments over filling a quota. Every selected segment must be accurate, self-contained, have proper time ranges, and score high on virality metrics.",
+   "long": "You are an expert transcript analyst for short-form video editing.\n\nYour job is extraction and ranking, not creative rewriting. You must stay fully grounded in the transcript and choose the best clip candidates that already exist in the source material.\n\nOUTPUT CONTRACT:\n- Return valid JSON only. Do not output Markdown, headings, bullets, prose, code fences, explanations, or commentary outside the JSON object.\n- The top-level JSON object must include: \"most_relevant_segments\", \"summary\", and \"key_topics\".\n- Each item in \"most_relevant_segments\" must include: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", and \"hook_title\".\n- Do not use \"segment\" as an output field. Use \"text\".\n- \"virality\" must include: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", and \"virality_reasoning\".\n- Every returned segment must be 60-120 seconds long. Prefer 75-110 seconds.\n\nCORE OBJECTIVES:\n1. Identify segments that would be compelling on social media platforms\n2. Focus on complete thoughts, insights, or entertaining moments\n3. Prioritize content with hooks, emotional moments, or valuable information\n4. Each segment should be engaging and worth watching\n5. Score each segment's viral potential with detailed breakdown\n\nGROUNDING RULES:\n1. Use only the provided transcript lines and timestamps\n2. Never invent facts, tone, context, or transitions that are not present\n3. Treat this as span selection over a timestamped transcript, not open-ended summarization\n4. Each selected segment must map to one contiguous range in the transcript\n5. segment.text must match the chosen span closely and must not include content from outside the chosen range\n6. Do not stitch together distant moments into one clip\n7. If a speaker label appears, use it only if it is part of the spoken content and helps clarity\n\nCONTENT NEUTRALITY RULES:\n1. This is clipping software for legitimate editing workflows\n2. Do not judge, moralize, or downgrade a segment just because the topic is controversial, sensitive, adult, political, criminal, medical, or otherwise intense\n3. Evaluate segments only on clip quality: clarity, self-contained value, hook strength, emotional impact, specificity, and shareability\n4. Do not refuse analysis just because the speaker describes risky, offensive, or uncomfortable subject matter\n5. Only downgrade a segment when the transcript itself is weak, confusing, repetitive, unusable, or a poor standalone clip\n\nSEGMENT SELECTION CRITERIA:\n1. STRONG HOOKS: Attention-grabbing opening lines\n2. VALUABLE CONTENT: Tips, insights, interesting facts, stories\n3. EMOTIONAL MOMENTS: Excitement, surprise, humor, inspiration\n4. COMPLETE THOUGHTS: Self-contained ideas that make sense alone\n5. ENTERTAINING: Content people would want to share\n6. HIGH SIGNAL: Prefer specific, concrete language over vague discussion\n7. LOW FILLER: Avoid greetings, sponsor reads, repeated setup, throat-clearing, and housekeeping unless they are unusually compelling\n\nWHAT A GOOD CLIP FEELS LIKE:\n- A viewer should understand and care without the original title, thumbnail, or previous context\n- Prefer a complete mini-story or argument: setup, tension or claim, specific detail, and payoff\n- Expand a great short moment to nearby contiguous lines when that adds needed setup, stakes, or payoff\n- Strong picks include contrarian claims, mistakes or lessons, concrete examples, before/after moments, frameworks, surprising results, emotionally charged reactions, and complete answers to interesting questions\n- Bad picks include intros, sponsor or CTA sections, vague setup, contextless quote fragments, repeated points, definitions without payoff, meandering background, and answer fragments that require unseen context\n\nVIRALITY SCORING (0-100 total, from four 0-25 subscores):\nFor each segment, provide a detailed virality breakdown:\n\n1. HOOK STRENGTH (0-25):\n   - 20-25: Immediately grabs attention (surprising fact, bold claim, intriguing question)\n   - 15-19: Good opener that creates curiosity\n   - 10-14: Decent start but could be stronger\n   - 0-9: Weak or no hook\n\n2. ENGAGEMENT (0-25):\n   - 20-25: Highly entertaining, emotional, or dramatic\n   - 15-19: Interesting and holds attention\n   - 10-14: Moderately engaging\n   - 0-9: Flat or boring delivery\n\n3. VALUE (0-25):\n   - 20-25: Actionable insights, unique knowledge, or transformative ideas\n   - 15-19: Useful information most people don't know\n   - 10-14: Somewhat informative\n   - 0-9: Common knowledge or filler content\n\n4. SHAREABILITY (0-25):\n   - 20-25: \"I need to send this to someone\" content\n   - 15-19: Content worth bookmarking\n   - 10-14: Nice but not share-worthy\n   - 0-9: Generic content\n\nHOOK TITLES (\"hook_title\" per segment):\n- Write a short on-screen headline (3-9 words) that is burned into the top of the clip\n- It must make a scrolling viewer stop: a bold claim, curiosity gap, number, or stakes taken directly from the segment\n- Stay grounded: only promise what the clip actually delivers; never invent facts or numbers\n- Do not simply repeat the first spoken words verbatim; reframe them as a headline\n- Plain text only: no hashtags, no emojis, no quotes around the title\n- Write it in the same language as the transcript\n- Good examples: \"The $40k mistake I keep seeing\", \"Why nobody tells you this about VC\", \"Do this before your next interview\"\n\nCLIP BOUNDARIES — OPENING AND ENDING:\n- start_time is the first word of a sentence a new viewer can understand with no prior context\n- Do not start mid-sentence, on a filler (like, dude, um, well), on a bare agreement (yes, yeah, right, exactly, totally), or on a pronoun that points at someone the viewer has not met yet (he, she, they)\n- Do not start on a back-reference (\"as I said\", \"the thing we mentioned\", \"that point\", \"before we started recording\") unless the clip also contains the thing being referenced\n- If the moment only makes sense with the previous sentence's noun, claim, or question, move start_time back to include that sentence\n- end_time is the last word of the sentence that lands the point. Do not stop mid-clause, and do not keep the opening words of the next unrelated thought\n- The clip's real first sentence is the hook. Do not choose a weak opening because a later line could be replayed in front of it\n\nCOLD-OPEN HOOK (\"hook_start_time\"/\"hook_end_time\" per segment, optional):\n- Prefer null. The clip is played from start_time; a later line is not replayed in front of it unless an operator explicitly enables that\n- Only set a range when a 2-5 second punchline later in the segment stands completely alone AND the real opening is already a full setup\n- Use timestamps from the transcript lines inside the segment, at least 3 seconds after start_time\n- Set both to null when the clip already opens on its strongest line, or when replaying the line would just repeat it\n\nHOOK TYPES to identify:\n- \"question\": Opens with a question that creates curiosity\n- \"statement\": Bold claim or surprising statement\n- \"statistic\": Uses compelling numbers or data\n- \"story\": Starts with narrative/anecdote\n- \"contrast\": Before/after or problem/solution framing\n- \"none\": No clear hook pattern\n\nTIMING GUIDELINES:\n- Target 75-110 seconds for most clips\n- Shorter picks within the requested range must still be self-contained and complete\n- CRITICAL: start_time MUST be different from end_time (minimum 60 seconds apart)\n- Focus on natural content boundaries rather than arbitrary time limits\n- Include enough context for the segment to be understandable\n- Stay within the requested duration range\n- Start at the hook or the minimum setup needed to make the hook land, and end after the payoff\n- If a highlight is only one good line, expand to include the surrounding setup and payoff rather than returning a tiny fragment\n- Stop expanding when the topic drifts, the speaker repeats the same point, or the clip loses momentum\n\nTIMESTAMP REQUIREMENTS - EXTREMELY IMPORTANT:\n- Use EXACT timestamps as they appear in the transcript\n- Never modify timestamp format (keep MM:SS structure)\n- start_time MUST be LESS THAN end_time (start_time < end_time)\n- MINIMUM segment duration: 60 seconds (end_time - start_time >= 60 seconds)\n- MAXIMUM segment duration: 120 seconds\n- IDEAL segment duration: 75-110 seconds\n- Look at transcript ranges like [02:25 - 02:35] and use different start/end times\n- NEVER use the same timestamp for both start_time and end_time\n- Example: start_time: \"02:25\", end_time: \"02:35\" (NOT \"02:25\" and \"02:25\")\n\nSCORING AND OUTPUT RULES:\n- relevance_score should reflect how well the segment works as a standalone short clip, not just whether the topic is generally important\n- Penalize clips that are only quotable but not self-contained, too generic, missing setup, missing payoff, or padded with filler\n- virality_reasoning and reasoning should cite what is actually present in the chosen span\n- summary and key_topics must also stay grounded in the transcript and should not add outside interpretation\n\nFind the number of compelling segments requested in the task (usually 2-5) that would work well as standalone clips. Quality over quantity: choose fewer stronger segments over filling a quota. Every selected segment must be accurate, self-contained, have proper time ranges, and score high on virality metrics."
+  },
+  "rerank_system": "You are a senior short-form video editor choosing which clips from one long video to publish.\n\nYou receive candidate clips that were picked from different parts of the same video. Each one was scored in isolation, so those scores are not comparable. Your job is to compare the candidates against each other and produce one calibrated, best-first ranking.\n\nJudge each candidate only on its own transcript text:\n1. Hook: do the first one or two sentences make a scrolling viewer stop?\n2. Standalone: would a viewer understand and care without the rest of the video?\n3. Payoff: does it land a clear point, punchline, lesson, or story beat before it ends?\n4. Specificity and energy: concrete details, numbers, strong opinions, emotion, or humor beat vague talk.\n5. Shareability: would someone send this to a friend or save it?\n\nRules:\n- Stay content-neutral: never downgrade a candidate just because its topic is sensitive, controversial, or adult.\n- Rank every candidate exactly once, using the given candidate_id values.\n- Scores are comparative: spread them out so better clips clearly score higher. The best candidate should usually land between 80 and 95; weak, contextless, or filler candidates belong below 50.\n- Return valid JSON only, with a \"ranking\" list ordered from best to worst.",
+  "analysis": [
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": null,
+    "window": null,
+    "clip_length": "auto",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 2-5 segments total.\n- Most selected clips should be 25-50 seconds.\n- Every clip must contain a full setup and payoff within 15-60 seconds.\n- If a strong moment is shorter than 25 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 15 seconds or longer than 60 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": null,
+    "window": null,
+    "clip_length": "short",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 2-5 segments total.\n- Most selected clips should be 18-25 seconds.\n- Every clip must contain a full setup and payoff within 15-30 seconds.\n- If a strong moment is shorter than 18 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 15 seconds or longer than 30 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": null,
+    "window": null,
+    "clip_length": "medium",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 2-5 segments total.\n- Most selected clips should be 35-55 seconds.\n- Every clip must contain a full setup and payoff within 30-60 seconds.\n- If a strong moment is shorter than 35 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 30 seconds or longer than 60 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": null,
+    "window": null,
+    "clip_length": "long",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 2-5 segments total.\n- Most selected clips should be 75-110 seconds.\n- Every clip must contain a full setup and payoff within 60-120 seconds.\n- If a strong moment is shorter than 75 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 60 seconds or longer than 120 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": "Deterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?\n- [12:10 - 12:20] score=1.0: pause before line; Later moment\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark",
+    "window": null,
+    "clip_length": "auto",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 2-5 segments total.\n- Most selected clips should be 25-50 seconds.\n- Every clip must contain a full setup and payoff within 15-60 seconds.\n- If a strong moment is shorter than 25 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nAdditional deterministic signals from transcript/audio analysis:\nDeterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?\n- [12:10 - 12:20] score=1.0: pause before line; Later moment\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark\n\nUse these as hints only. They should influence ranking, but every final segment must still be a coherent contiguous transcript range.\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 15 seconds or longer than 60 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": "Deterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?\n- [12:10 - 12:20] score=1.0: pause before line; Later moment\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark",
+    "window": [
+     600,
+     1320
+    ],
+    "clip_length": "medium",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThis transcript is one window (10:00 - 22:00) of a longer video. Other windows are analysed separately, so pick the best clips that exist inside this window only.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 3-5 segments total.\n- Most selected clips should be 35-55 seconds.\n- Every clip must contain a full setup and payoff within 30-60 seconds.\n- If a strong moment is shorter than 35 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nAdditional deterministic signals from transcript/audio analysis:\nDeterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?\n- [12:10 - 12:20] score=1.0: pause before line; Later moment\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark\n\nUse these as hints only. They should influence ranking, but every final segment must still be a coherent contiguous transcript range.\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 30 seconds or longer than 60 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor.",
+    "clip_signals": null,
+    "window": [
+     6000,
+     6720
+    ],
+    "clip_length": "long",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThis transcript is one window (100:00 - 112:00) of a longer video. Other windows are analysed separately, so pick the best clips that exist inside this window only.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 3-5 segments total.\n- Most selected clips should be 75-110 seconds.\n- Every clip must contain a full setup and payoff within 60-120 seconds.\n- If a strong moment is shorter than 75 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 60 seconds or longer than 120 seconds.\n\nTranscript:\n[00:00 - 00:09] Speaker A: Welcome back to the show, today we have a special guest.\n[00:09 - 00:21] Speaker B: Thanks for having me. I want to talk about the biggest mistake I made.\n[00:21 - 00:34] Speaker B: I spent forty thousand dollars on ads before I had a single customer.\n[00:34 - 00:47] Speaker A: Wait, forty thousand? Why would anyone do that?\n[00:47 - 01:02] Speaker B: Because everybody told me growth comes first, and nobody told me to validate.\n[01:02 - 01:15] Speaker B: So here's the lesson: talk to ten customers before you spend a single dollar.\n[01:15 - 01:31] Speaker A: That's actually the best advice I've heard all year, honestly.\n[01:31 - 01:48] Speaker B: And the second thing, never hire before you have repeatable sales.\n[01:48 - 02:05] Speaker A: Let's take a quick break and hear from our sponsor."
+   },
+   {
+    "transcript": "",
+    "clip_signals": "",
+    "window": [
+     0,
+     720
+    ],
+    "clip_length": "short",
+    "prompt": "Analyze this video transcript and identify the most engaging segments for short-form content.\n\nThis transcript is one window (00:00 - 12:00) of a longer video. Other windows are analysed separately, so pick the best clips that exist inside this window only.\n\nThe transcript is formatted as one line per timestamped span, for example:\n[00:12 - 00:21] Spoken text here\n[00:21 - 00:35] More spoken text here\n\nFollow this workflow:\n1. Read the transcript as a sequence of timestamped spans.\n2. Select only contiguous ranges that already exist in the transcript.\n3. Prefer moments with a strong hook, clear payoff, emotional charge, or concrete value.\n4. For each chosen segment, use the earliest timestamp in the selected range as start_time and the latest timestamp in the selected range as end_time.\n5. start_time must be the first word of a self-contained sentence: never a mid-thought fragment, a filler, a bare agreement, or a reference to something this clip does not contain. end_time must finish that thought's last sentence and must not include the next thought's opening words.\n\nSelection target:\n- Choose 3-5 segments total.\n- Most selected clips should be 18-25 seconds.\n- Every clip must contain a full setup and payoff within 15-30 seconds.\n- If a strong moment is shorter than 18 seconds, first try expanding to nearby contiguous transcript lines that add useful context.\n- Skip weak standalone picks: intros, sponsor reads, CTAs, contextless quotes, repeated points, vague setup, and answer fragments that require prior context.\n- Before returning a segment, ask whether a viewer would understand and care without seeing the rest of the source video.\n\nCritical accuracy requirements:\n- Do not fabricate or embellish content.\n- Do not use timestamps that are not present in the transcript.\n- Do not merge separate non-contiguous moments into one segment.\n- segment.text must reflect only the spoken content inside the selected time range.\n- If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.\n- If there is a tradeoff between \"viral\" and \"accurate\", choose accuracy.\n- Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.\n\n\nJSON-only output requirements:\n- Return one valid JSON object and nothing else.\n- No Markdown, headings, bullets, code fences, or explanatory text outside JSON.\n- Top-level keys: \"most_relevant_segments\", \"summary\", \"key_topics\".\n- Segment keys: \"start_time\", \"end_time\", \"text\", \"relevance_score\", \"reasoning\", \"virality\", \"hook_title\".\n- Optional segment keys \"hook_start_time\"/\"hook_end_time\": null unless a later 2-5 second line stands alone and the real opening is already a complete setup. The clip is not replayed from that line by default.\n- \"hook_title\" is a 3-9 word plain-text headline for the clip, in the transcript's language, grounded in the segment (no hashtags, emojis, or quotes).\n- Virality keys: \"hook_score\", \"engagement_score\", \"value_score\", \"shareability_score\", \"total_score\", \"hook_type\", \"virality_reasoning\".\n- Do not return segments shorter than 15 seconds or longer than 30 seconds.\n\nTranscript:\n"
+   }
+  ],
+  "rerank": {
+   "candidates": [
+    {
+     "start_time": "00:09",
+     "end_time": "00:47",
+     "text": "Thanks for having me. I want to talk about the biggest mistake I made.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     },
+     "hook_title": "The $40k mistake I keep seeing"
+    },
+    {
+     "start_time": "01:02",
+     "end_time": "01:31",
+     "text": "So here's the lesson: talk to ten customers.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     },
+     "hook_title": null
+    },
+    {
+     "start_time": "59:58",
+     "end_time": "60:41",
+     "text": "Then the twist lands just after the hour mark here.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     },
+     "hook_title": ""
+    }
+   ],
+   "prompt": "Rank these 3 clip candidates from the same video, best first.\n\ncandidate_id: 0\ntime: 00:09 - 00:47 (38s)\nhook_title: The $40k mistake I keep seeing\ntext: Thanks for having me. I want to talk about the biggest mistake I made.\n\ncandidate_id: 1\ntime: 01:02 - 01:31 (29s)\nhook_title: (none)\ntext: So here's the lesson: talk to ten customers.\n\ncandidate_id: 2\ntime: 59:58 - 60:41 (43s)\nhook_title: (none)\ntext: Then the twist lands just after the hour mark here."
+  }
+ },
+ "requests": {
+  "claude-opus-5": {
+   "analysis": {
+    "max_tokens": 16000,
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "text": "PROMPT",
+        "type": "text"
+       }
+      ]
+     }
+    ],
+    "model": "claude-opus-5",
+    "output_config": {
+     "format": {
+      "type": "json_schema",
+      "schema": {
+       "$defs": {
+        "TranscriptSegment": {
+         "type": "object",
+         "description": "Represents a relevant segment of transcript with precise timing and virality analysis.",
+         "properties": {
+          "start_time": {
+           "type": "string",
+           "description": "Start timestamp in MM:SS format"
+          },
+          "end_time": {
+           "type": "string",
+           "description": "End timestamp in MM:SS format"
+          },
+          "text": {
+           "type": "string",
+           "description": "Transcript text taken only from the selected timestamp range. Keep it verbatim or near-verbatim, and do not paraphrase or merge non-contiguous lines."
+          },
+          "relevance_score": {
+           "type": "number",
+           "description": "Relevance score from 0.0 to 1.0\n\n{default: 0.75, maximum: 1.0, minimum: 0.0}"
+          },
+          "reasoning": {
+           "type": "string",
+           "description": "Brief factual explanation of why this exact segment works as a clip. Base it only on the provided transcript content.\n\n{default: Selected by the AI model as a clip candidate.}"
+          },
+          "virality": {
+           "$ref": "#/$defs/ViralityAnalysis"
+          },
+          "hook_title": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Short punchy on-screen title for the clip (3-9 words). Grounded in the segment content, no hashtags, no emojis, no surrounding quotes.\n\n{default: None}"
+          },
+          "hook_start_time": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Optional MM:SS start of the single strongest 2-5 second line inside the segment, replayed as a cold-open teaser. Null when the segment already opens on its best line.\n\n{default: None}"
+          },
+          "hook_end_time": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Optional MM:SS end of that hook line (null with hook_start_time).\n\n{default: None}"
+          }
+         },
+         "additionalProperties": false,
+         "required": [
+          "start_time",
+          "end_time",
+          "text"
+         ]
+        },
+        "ViralityAnalysis": {
+         "type": "object",
+         "description": "Detailed virality breakdown for a segment.",
+         "properties": {
+          "hook_score": {
+           "type": "integer",
+           "description": "How strong is the opening hook (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "engagement_score": {
+           "type": "integer",
+           "description": "How engaging/entertaining is the content (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "value_score": {
+           "type": "integer",
+           "description": "Educational/informational value (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "shareability_score": {
+           "type": "integer",
+           "description": "Likelihood of being shared (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "total_score": {
+           "type": "integer",
+           "description": "Combined virality score (0-100)\n\n{default: 60, maximum: 100, minimum: 0}"
+          },
+          "hook_type": {
+           "anyOf": [
+            {
+             "type": "string",
+             "enum": [
+              "question",
+              "statement",
+              "statistic",
+              "story",
+              "contrast",
+              "none"
+             ]
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Type of hook: question, statement, statistic, story, contrast, or none\n\n{default: none}"
+          },
+          "virality_reasoning": {
+           "type": "string",
+           "description": "Explanation of the virality score\n\n{default: The model did not provide a detailed virality breakdown.}"
+          }
+         },
+         "additionalProperties": false
+        }
+       },
+       "type": "object",
+       "properties": {
+        "most_relevant_segments": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/TranscriptSegment"
+         }
+        },
+        "summary": {
+         "type": "string",
+         "description": "Brief summary of the video content"
+        },
+        "key_topics": {
+         "type": "array",
+         "description": "List of main topics discussed",
+         "items": {
+          "type": "string"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "most_relevant_segments",
+        "summary",
+        "key_topics"
+       ]
+      }
+     }
+    },
+    "stream": false,
+    "system": "SYSTEM",
+    "fallbacks": "default"
+   },
+   "ranking": {
+    "max_tokens": 16000,
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "text": "PROMPT",
+        "type": "text"
+       }
+      ]
+     }
+    ],
+    "model": "claude-opus-5",
+    "output_config": {
+     "format": {
+      "type": "json_schema",
+      "schema": {
+       "$defs": {
+        "RankedCandidate": {
+         "type": "object",
+         "description": "One candidate's place in the comparative rerank.",
+         "properties": {
+          "candidate_id": {
+           "type": "integer",
+           "description": "The id of the candidate being ranked"
+          },
+          "score": {
+           "type": "integer",
+           "description": "Comparative virality score (0-100) relative to the other candidates\n\n{maximum: 100, minimum: 0}"
+          },
+          "reason": {
+           "type": "string",
+           "description": "One short sentence on why it ranks here versus the others\n\n{default: }"
+          }
+         },
+         "additionalProperties": false,
+         "required": [
+          "candidate_id",
+          "score"
+         ]
+        }
+       },
+       "type": "object",
+       "properties": {
+        "ranking": {
+         "type": "array",
+         "description": "Every candidate, ordered from strongest to weakest clip",
+         "items": {
+          "$ref": "#/$defs/RankedCandidate"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "ranking"
+       ]
+      }
+     }
+    },
+    "stream": false,
+    "system": "SYSTEM",
+    "fallbacks": "default"
+   },
+   "beta": "server-side-fallback-2026-07-01"
+  },
+  "claude-sonnet-5": {
+   "analysis": {
+    "max_tokens": 16000,
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "text": "PROMPT",
+        "type": "text"
+       }
+      ]
+     }
+    ],
+    "model": "claude-sonnet-5",
+    "output_config": {
+     "format": {
+      "type": "json_schema",
+      "schema": {
+       "$defs": {
+        "TranscriptSegment": {
+         "type": "object",
+         "description": "Represents a relevant segment of transcript with precise timing and virality analysis.",
+         "properties": {
+          "start_time": {
+           "type": "string",
+           "description": "Start timestamp in MM:SS format"
+          },
+          "end_time": {
+           "type": "string",
+           "description": "End timestamp in MM:SS format"
+          },
+          "text": {
+           "type": "string",
+           "description": "Transcript text taken only from the selected timestamp range. Keep it verbatim or near-verbatim, and do not paraphrase or merge non-contiguous lines."
+          },
+          "relevance_score": {
+           "type": "number",
+           "description": "Relevance score from 0.0 to 1.0\n\n{default: 0.75, maximum: 1.0, minimum: 0.0}"
+          },
+          "reasoning": {
+           "type": "string",
+           "description": "Brief factual explanation of why this exact segment works as a clip. Base it only on the provided transcript content.\n\n{default: Selected by the AI model as a clip candidate.}"
+          },
+          "virality": {
+           "$ref": "#/$defs/ViralityAnalysis"
+          },
+          "hook_title": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Short punchy on-screen title for the clip (3-9 words). Grounded in the segment content, no hashtags, no emojis, no surrounding quotes.\n\n{default: None}"
+          },
+          "hook_start_time": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Optional MM:SS start of the single strongest 2-5 second line inside the segment, replayed as a cold-open teaser. Null when the segment already opens on its best line.\n\n{default: None}"
+          },
+          "hook_end_time": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Optional MM:SS end of that hook line (null with hook_start_time).\n\n{default: None}"
+          }
+         },
+         "additionalProperties": false,
+         "required": [
+          "start_time",
+          "end_time",
+          "text"
+         ]
+        },
+        "ViralityAnalysis": {
+         "type": "object",
+         "description": "Detailed virality breakdown for a segment.",
+         "properties": {
+          "hook_score": {
+           "type": "integer",
+           "description": "How strong is the opening hook (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "engagement_score": {
+           "type": "integer",
+           "description": "How engaging/entertaining is the content (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "value_score": {
+           "type": "integer",
+           "description": "Educational/informational value (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "shareability_score": {
+           "type": "integer",
+           "description": "Likelihood of being shared (0-25)\n\n{default: 15, maximum: 25, minimum: 0}"
+          },
+          "total_score": {
+           "type": "integer",
+           "description": "Combined virality score (0-100)\n\n{default: 60, maximum: 100, minimum: 0}"
+          },
+          "hook_type": {
+           "anyOf": [
+            {
+             "type": "string",
+             "enum": [
+              "question",
+              "statement",
+              "statistic",
+              "story",
+              "contrast",
+              "none"
+             ]
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "description": "Type of hook: question, statement, statistic, story, contrast, or none\n\n{default: none}"
+          },
+          "virality_reasoning": {
+           "type": "string",
+           "description": "Explanation of the virality score\n\n{default: The model did not provide a detailed virality breakdown.}"
+          }
+         },
+         "additionalProperties": false
+        }
+       },
+       "type": "object",
+       "properties": {
+        "most_relevant_segments": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/TranscriptSegment"
+         }
+        },
+        "summary": {
+         "type": "string",
+         "description": "Brief summary of the video content"
+        },
+        "key_topics": {
+         "type": "array",
+         "description": "List of main topics discussed",
+         "items": {
+          "type": "string"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "most_relevant_segments",
+        "summary",
+        "key_topics"
+       ]
+      }
+     }
+    },
+    "stream": false,
+    "system": "SYSTEM"
+   },
+   "ranking": {
+    "max_tokens": 16000,
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "text": "PROMPT",
+        "type": "text"
+       }
+      ]
+     }
+    ],
+    "model": "claude-sonnet-5",
+    "output_config": {
+     "format": {
+      "type": "json_schema",
+      "schema": {
+       "$defs": {
+        "RankedCandidate": {
+         "type": "object",
+         "description": "One candidate's place in the comparative rerank.",
+         "properties": {
+          "candidate_id": {
+           "type": "integer",
+           "description": "The id of the candidate being ranked"
+          },
+          "score": {
+           "type": "integer",
+           "description": "Comparative virality score (0-100) relative to the other candidates\n\n{maximum: 100, minimum: 0}"
+          },
+          "reason": {
+           "type": "string",
+           "description": "One short sentence on why it ranks here versus the others\n\n{default: }"
+          }
+         },
+         "additionalProperties": false,
+         "required": [
+          "candidate_id",
+          "score"
+         ]
+        }
+       },
+       "type": "object",
+       "properties": {
+        "ranking": {
+         "type": "array",
+         "description": "Every candidate, ordered from strongest to weakest clip",
+         "items": {
+          "$ref": "#/$defs/RankedCandidate"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "ranking"
+       ]
+      }
+     }
+    },
+    "stream": false,
+    "system": "SYSTEM"
+   },
+   "beta": null
+  }
+ },
+ "validation": [
+  {
+   "transcript": "show",
+   "clip_length": "auto",
+   "segments": [
+    {
+     "start_time": "00:09",
+     "end_time": "00:47",
+     "text": "Thanks for having me. I want to talk about the biggest mistake I made.",
+     "virality": {
+      "hook_score": 20,
+      "engagement_score": 20,
+      "value_score": 20,
+      "shareability_score": 20,
+      "total_score": 80
+     },
+     "hook_title": "  “The $40k mistake #startup #growth”.  ",
+     "hook_start_time": "00:21",
+     "hook_end_time": "00:27"
+    },
+    {
+     "start_time": "00:10",
+     "end_time": "00:50",
+     "text": "paraphrased words that differ",
+     "virality": {
+      "hook_score": 17,
+      "engagement_score": 17,
+      "value_score": 17,
+      "shareability_score": 19,
+      "total_score": 70
+     },
+     "hook_title": "#only #tags"
+    },
+    {
+     "start_time": "00:20",
+     "end_time": "00:30",
+     "text": "too short a moment here",
+     "virality": {
+      "hook_score": 12,
+      "engagement_score": 12,
+      "value_score": 12,
+      "shareability_score": 14,
+      "total_score": 50
+     }
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "02:05",
+     "text": "the entire episode from start to finish",
+     "virality": {
+      "hook_score": 10,
+      "engagement_score": 10,
+      "value_score": 10,
+      "shareability_score": 10,
+      "total_score": 40
+     }
+    },
+    {
+     "start_time": "01:02",
+     "end_time": "01:02",
+     "text": "identical start and end",
+     "virality": {
+      "hook_score": 12,
+      "engagement_score": 12,
+      "value_score": 12,
+      "shareability_score": 14,
+      "total_score": 50
+     }
+    },
+    {
+     "start_time": "1:02",
+     "end_time": "1:31",
+     "text": "So here's the lesson",
+     "virality": {
+      "hook_score": 16,
+      "engagement_score": 16,
+      "value_score": 16,
+      "shareability_score": 17,
+      "total_score": 65
+     },
+     "hook_start_time": "01:10",
+     "hook_end_time": "01:25"
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "00:30",
+     "text": "two words",
+     "virality": {
+      "hook_score": 22,
+      "engagement_score": 22,
+      "value_score": 22,
+      "shareability_score": 24,
+      "total_score": 90
+     }
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "00:3x",
+     "text": "bad timestamp format here",
+     "virality": {
+      "hook_score": 22,
+      "engagement_score": 22,
+      "value_score": 22,
+      "shareability_score": 24,
+      "total_score": 90
+     }
+    },
+    {
+     "start_time": "00:21.5",
+     "end_time": "00:47",
+     "text": "fractional timestamp is invalid",
+     "virality": {
+      "hook_score": 22,
+      "engagement_score": 22,
+      "value_score": 22,
+      "shareability_score": 24,
+      "total_score": 90
+     }
+    },
+    {
+     "start_time": " 00:21",
+     "end_time": "00:47 ",
+     "text": "whitespace is accepted by int",
+     "virality": {
+      "hook_score": 13,
+      "engagement_score": 13,
+      "value_score": 13,
+      "shareability_score": 16,
+      "total_score": 55
+     },
+     "hook_title": "Why nobody tells you this about VC and everything else that matters"
+    },
+    {
+     "start_time": "05:00",
+     "end_time": "05:40",
+     "text": "far away from every transcript line",
+     "virality": {
+      "hook_score": 24,
+      "engagement_score": 24,
+      "value_score": 24,
+      "shareability_score": 24,
+      "total_score": 96
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "00:09",
+     "end_time": "00:47",
+     "text": "Thanks for having me. I want to talk about the biggest mistake I made. I spent forty thousand dollars on ads before I had a single customer. Wait, forty thousand? Why would anyone do that?",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 20,
+      "engagement_score": 20,
+      "value_score": 20,
+      "shareability_score": 20,
+      "total_score": 80,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": "The $40k mistake ”",
+     "hook_start_time": "00:21",
+     "hook_end_time": "00:27"
+    },
+    {
+     "start_time": "00:09",
+     "end_time": "00:47",
+     "text": "Thanks for having me. I want to talk about the biggest mistake I made. I spent forty thousand dollars on ads before I had a single customer. Wait, forty thousand? Why would anyone do that?",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 17,
+      "engagement_score": 17,
+      "value_score": 17,
+      "shareability_score": 19,
+      "total_score": 70,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "00:09",
+     "end_time": "00:34",
+     "text": "Thanks for having me. I want to talk about the biggest mistake I made. I spent forty thousand dollars on ads before I had a single customer.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 12,
+      "engagement_score": 12,
+      "value_score": 12,
+      "shareability_score": 14,
+      "total_score": 50,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "00:47",
+     "text": "Welcome back to the show, today we have a special guest. Thanks for having me. I want to talk about the biggest mistake I made. I spent forty thousand dollars on ads before I had a single customer. Wait, forty thousand? Why would anyone do that?",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 10,
+      "engagement_score": 10,
+      "value_score": 10,
+      "shareability_score": 10,
+      "total_score": 40,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "01:02",
+     "end_time": "01:31",
+     "text": "So here's the lesson: talk to ten customers before you spend a single dollar. That's actually the best advice I've heard all year, honestly.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 16,
+      "engagement_score": 16,
+      "value_score": 16,
+      "shareability_score": 17,
+      "total_score": 65,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "00:21",
+     "end_time": "00:47",
+     "text": "I spent forty thousand dollars on ads before I had a single customer. Wait, forty thousand? Why would anyone do that?",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 13,
+      "engagement_score": 13,
+      "value_score": 13,
+      "shareability_score": 16,
+      "total_score": 55,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": "Why nobody tells you this about VC and everything else",
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  },
+  {
+   "transcript": "even_180",
+   "clip_length": "short",
+   "segments": [
+    {
+     "start_time": "00:00",
+     "end_time": "01:30",
+     "text": "Useful context and thought.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "00:00",
+     "end_time": "00:20",
+     "text": "Line at 0 seconds is here. Line at 10 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  },
+  {
+   "transcript": "even_180",
+   "clip_length": "medium",
+   "segments": [
+    {
+     "start_time": "00:30",
+     "end_time": "00:40",
+     "text": "Useful context and thought.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "00:00",
+     "end_time": "00:40",
+     "text": "Line at 0 seconds is here. Line at 10 seconds is here. Line at 20 seconds is here. Line at 30 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  },
+  {
+   "transcript": "even_180",
+   "clip_length": "long",
+   "segments": [
+    {
+     "start_time": "00:30",
+     "end_time": "01:00",
+     "text": "Useful context and thought.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "01:30",
+     "text": "Useful context and thought.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "00:00",
+     "end_time": "01:20",
+     "text": "Line at 0 seconds is here. Line at 10 seconds is here. Line at 20 seconds is here. Line at 30 seconds is here. Line at 40 seconds is here. Line at 50 seconds is here. Line at 60 seconds is here. Line at 70 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "00:00",
+     "end_time": "01:30",
+     "text": "Line at 0 seconds is here. Line at 10 seconds is here. Line at 20 seconds is here. Line at 30 seconds is here. Line at 40 seconds is here. Line at 50 seconds is here. Line at 60 seconds is here. Line at 70 seconds is here. Line at 80 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  },
+  {
+   "transcript": "even_70m",
+   "clip_length": "auto",
+   "segments": [
+    {
+     "start_time": "65:00",
+     "end_time": "66:30",
+     "text": "Some useful words here.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    },
+    {
+     "start_time": "12:03",
+     "end_time": "12:41",
+     "text": "Some useful words here.",
+     "virality": {
+      "hook_score": 18,
+      "engagement_score": 18,
+      "value_score": 18,
+      "shareability_score": 19,
+      "total_score": 73
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "65:00",
+     "end_time": "65:50",
+     "text": "Line at 3900 seconds is here. Line at 3910 seconds is here. Line at 3920 seconds is here. Line at 3930 seconds is here. Line at 3940 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "12:00",
+     "end_time": "12:40",
+     "text": "Line at 720 seconds is here. Line at 730 seconds is here. Line at 740 seconds is here. Line at 750 seconds is here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 18,
+      "engagement_score": 18,
+      "value_score": 18,
+      "shareability_score": 19,
+      "total_score": 73,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  },
+  {
+   "transcript": "mixed_hours",
+   "clip_length": "auto",
+   "segments": [
+    {
+     "start_time": "59:40",
+     "end_time": "60:41",
+     "text": "Right before the hour mark we set up the story.",
+     "virality": {
+      "hook_score": 19,
+      "engagement_score": 19,
+      "value_score": 19,
+      "shareability_score": 20,
+      "total_score": 77
+     }
+    },
+    {
+     "start_time": "100:00",
+     "end_time": "100:40",
+     "text": "First long sentence past the hundred minute mark.",
+     "virality": {
+      "hook_score": 16,
+      "engagement_score": 16,
+      "value_score": 16,
+      "shareability_score": 18,
+      "total_score": 66
+     },
+     "hook_title": "Past the hundred minute mark"
+    },
+    {
+     "start_time": "1:40:00",
+     "end_time": "1:40:40",
+     "text": "hour format labels never match line labels",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60
+     }
+    }
+   ],
+   "result": [
+    {
+     "start_time": "59:40",
+     "end_time": "60:20",
+     "text": "Right before the hour mark we set up the story. Then the twist lands just after the hour mark here.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 19,
+      "engagement_score": 19,
+      "value_score": 19,
+      "shareability_score": 20,
+      "total_score": 77,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "100:00",
+     "end_time": "100:40",
+     "text": "First long sentence past the hundred minute mark. Second sentence with the payoff.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 16,
+      "engagement_score": 16,
+      "value_score": 16,
+      "shareability_score": 18,
+      "total_score": 66,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": "Past the hundred minute mark",
+     "hook_start_time": null,
+     "hook_end_time": null
+    },
+    {
+     "start_time": "100:00",
+     "end_time": "100:40",
+     "text": "First long sentence past the hundred minute mark. Second sentence with the payoff.",
+     "relevance_score": 0.75,
+     "reasoning": "Selected by the AI model as a clip candidate.",
+     "virality": {
+      "hook_score": 15,
+      "engagement_score": 15,
+      "value_score": 15,
+      "shareability_score": 15,
+      "total_score": 60,
+      "hook_type": "none",
+      "virality_reasoning": "The model did not provide a detailed virality breakdown."
+     },
+     "hook_title": null,
+     "hook_start_time": null,
+     "hook_end_time": null
+    }
+   ]
+  }
+ ],
+ "hook_titles": [
+  [
+   null,
+   null
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   "   ",
+   null
+  ],
+  [
+   "The habit that doubled my output",
+   "The habit that doubled my output"
+  ],
+  [
+   "  \"Why nobody tells you this about VC.\"  ",
+   "Why nobody tells you this about VC"
+  ],
+  [
+   "“Do this before your next interview”",
+   "Do this before your next interview"
+  ],
+  [
+   "`Markdown` title #viral #fyp",
+   "Markdown` title"
+  ],
+  [
+   "Stop doing this!?...",
+   "Stop doing this!?"
+  ],
+  [
+   "Is this real? --- ",
+   "Is this real?"
+  ],
+  [
+   "#привет 世界 #日本語 title",
+   "世界 title"
+  ],
+  [
+   "Big news #नमस्ते everyone",
+   "Big news ्ते everyone"
+  ],
+  [
+   "one two three four five six seven eight nine ten eleven twelve",
+   "one two three four five six seven eight nine ten"
+  ],
+  [
+   "Supercalifragilisticexpialidocious-and-more-hyphenated-words-to-push-past-the-limit right",
+   "Supercalifragilisticexpialidocious-and-more-hyphenated-words-to"
+  ],
+  [
+   "A short start then averyveryveryveryveryveryveryveryveryverylongwordwithoutspaces",
+   "A short start then averyveryveryveryveryveryveryveryveryverylong"
+  ],
+  [
+   "The 🚀 rocket title that keeps on going with emoji 🔥 and many many words",
+   "The 🚀 rocket title that keeps on going with emoji"
+  ],
+  [
+   "Café crème brûlée — the secret ingredient nobody uses –",
+   "Café crème brûlée — the secret ingredient nobody uses"
+  ],
+  [
+   "\t\nTabs\tand\nnewlines\r\neverywhere  ",
+   "Tabs and newlines everywhere"
+  ],
+  [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ]
+ ],
+ "timestamps": {
+  "parse": [
+   [
+    "02:35",
+    155
+   ],
+   [
+    "01:02:35",
+    3755
+   ],
+   [
+    "0:05",
+    5
+   ],
+   [
+    "100:05",
+    6005
+   ],
+   [
+    "  00:30",
+    30
+   ],
+   [
+    "00:30 ",
+    30
+   ],
+   [
+    "1_0:05",
+    605
+   ],
+   [
+    "+1:05",
+    65
+   ],
+   [
+    "-1:30",
+    -30
+   ],
+   [
+    "",
+    null
+   ],
+   [
+    "00:3x",
+    null
+   ],
+   [
+    "00:21.5",
+    null
+   ],
+   [
+    "1:2:3:4",
+    null
+   ],
+   [
+    "12",
+    null
+   ],
+   [
+    "::",
+    null
+   ]
+  ],
+  "format": [
+   [
+    -5,
+    "00:00"
+   ],
+   [
+    0,
+    "00:00"
+   ],
+   [
+    59,
+    "00:59"
+   ],
+   [
+    155,
+    "02:35"
+   ],
+   [
+    3599,
+    "59:59"
+   ],
+   [
+    3600,
+    "01:00:00"
+   ],
+   [
+    3755,
+    "01:02:35"
+   ],
+   [
+    6005,
+    "01:40:05"
+   ],
+   [
+    360000,
+    "100:00:00"
+   ]
+  ],
+  "minutes": [
+   [
+    -5,
+    "00:00"
+   ],
+   [
+    0,
+    "00:00"
+   ],
+   [
+    59,
+    "00:59"
+   ],
+   [
+    155,
+    "02:35"
+   ],
+   [
+    3755,
+    "62:35"
+   ],
+   [
+    6005,
+    "100:05"
+   ],
+   [
+    60000,
+    "1000:00"
+   ]
+  ]
+ },
+ "rescale": [
+  {
+   "subscores": [
+    15,
+    15,
+    15,
+    15
+   ],
+   "new_total": 88,
+   "result": {
+    "hook_score": 22,
+    "engagement_score": 22,
+    "value_score": 22,
+    "shareability_score": 22,
+    "total_score": 88,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    22,
+    22,
+    22,
+    24
+   ],
+   "new_total": 91,
+   "result": {
+    "hook_score": 22,
+    "engagement_score": 22,
+    "value_score": 22,
+    "shareability_score": 25,
+    "total_score": 91,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "new_total": 50,
+   "result": {
+    "hook_score": 13,
+    "engagement_score": 13,
+    "value_score": 12,
+    "shareability_score": 12,
+    "total_score": 50,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    25,
+    25,
+    25,
+    25
+   ],
+   "new_total": 100,
+   "result": {
+    "hook_score": 25,
+    "engagement_score": 25,
+    "value_score": 25,
+    "shareability_score": 25,
+    "total_score": 100,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    3,
+    7,
+    11,
+    19
+   ],
+   "new_total": 77,
+   "result": {
+    "hook_score": 10,
+    "engagement_score": 17,
+    "value_score": 25,
+    "shareability_score": 25,
+    "total_score": 77,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    20,
+    5,
+    0,
+    0
+   ],
+   "new_total": 99,
+   "result": {
+    "hook_score": 25,
+    "engagement_score": 25,
+    "value_score": 25,
+    "shareability_score": 24,
+    "total_score": 99,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    10,
+    10,
+    10,
+    10
+   ],
+   "new_total": 0,
+   "result": {
+    "hook_score": 0,
+    "engagement_score": 0,
+    "value_score": 0,
+    "shareability_score": 0,
+    "total_score": 0,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "new_total": 101,
+   "result": {
+    "hook_score": 25,
+    "engagement_score": 25,
+    "value_score": 25,
+    "shareability_score": 25,
+    "total_score": 100,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    25,
+    0,
+    0,
+    0
+   ],
+   "new_total": 60,
+   "result": {
+    "hook_score": 25,
+    "engagement_score": 12,
+    "value_score": 12,
+    "shareability_score": 11,
+    "total_score": 60,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  },
+  {
+   "subscores": [
+    13,
+    13,
+    14,
+    20
+   ],
+   "new_total": 33,
+   "result": {
+    "hook_score": 7,
+    "engagement_score": 7,
+    "value_score": 8,
+    "shareability_score": 11,
+    "total_score": 33,
+    "hook_type": "none",
+    "virality_reasoning": "The model did not provide a detailed virality breakdown."
+   }
+  }
+ ],
+ "windows": [
+  {
+   "minutes": 10,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 600,
+     "lines": 60,
+     "first": "[00:00 - 00:10] ",
+     "last": "[09:50 - 10:00] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 15,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 900,
+     "lines": 90,
+     "first": "[00:00 - 00:10] ",
+     "last": "[14:50 - 15:00] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 16,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 72,
+     "first": "[00:00 - 00:10] ",
+     "last": "[11:50 - 12:00] Sp"
+    },
+    {
+     "start": 600,
+     "end": 960,
+     "lines": 36,
+     "first": "[10:00 - 10:10] ",
+     "last": "[15:50 - 16:00] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 23,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 72,
+     "first": "[00:00 - 00:10] ",
+     "last": "[11:50 - 12:00] Sp"
+    },
+    {
+     "start": 600,
+     "end": 1380,
+     "lines": 78,
+     "first": "[10:00 - 10:10] ",
+     "last": "[22:50 - 23:00] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 60,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 72,
+     "first": "[00:00 - 00:10] ",
+     "last": "[11:50 - 12:00] Sp"
+    },
+    {
+     "start": 600,
+     "end": 1320,
+     "lines": 72,
+     "first": "[10:00 - 10:10] ",
+     "last": "[21:50 - 22:00] Sp"
+    },
+    {
+     "start": 1200,
+     "end": 1920,
+     "lines": 72,
+     "first": "[20:00 - 20:10] ",
+     "last": "[31:50 - 32:00] Sp"
+    },
+    {
+     "start": 1800,
+     "end": 2520,
+     "lines": 72,
+     "first": "[30:00 - 30:10] ",
+     "last": "[41:50 - 42:00] Sp"
+    },
+    {
+     "start": 2400,
+     "end": 3120,
+     "lines": 72,
+     "first": "[40:00 - 40:10] ",
+     "last": "[51:50 - 52:00] Sp"
+    },
+    {
+     "start": 3000,
+     "end": 3600,
+     "lines": 60,
+     "first": "[50:00 - 50:10] ",
+     "last": "[59:50 - 60:00] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 110,
+   "line_seconds": 10,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 72,
+     "first": "[00:00 - 00:10] ",
+     "last": "[11:50 - 12:00] Sp"
+    },
+    {
+     "start": 600,
+     "end": 1320,
+     "lines": 72,
+     "first": "[10:00 - 10:10] ",
+     "last": "[21:50 - 22:00] Sp"
+    },
+    {
+     "start": 1200,
+     "end": 1920,
+     "lines": 72,
+     "first": "[20:00 - 20:10] ",
+     "last": "[31:50 - 32:00] Sp"
+    },
+    {
+     "start": 1800,
+     "end": 2520,
+     "lines": 72,
+     "first": "[30:00 - 30:10] ",
+     "last": "[41:50 - 42:00] Sp"
+    },
+    {
+     "start": 2400,
+     "end": 3120,
+     "lines": 72,
+     "first": "[40:00 - 40:10] ",
+     "last": "[51:50 - 52:00] Sp"
+    },
+    {
+     "start": 3000,
+     "end": 3720,
+     "lines": 72,
+     "first": "[50:00 - 50:10] ",
+     "last": "[61:50 - 62:00] Sp"
+    },
+    {
+     "start": 3600,
+     "end": 4320,
+     "lines": 72,
+     "first": "[60:00 - 60:10] ",
+     "last": "[71:50 - 72:00] Sp"
+    },
+    {
+     "start": 4200,
+     "end": 4920,
+     "lines": 72,
+     "first": "[70:00 - 70:10] ",
+     "last": "[81:50 - 82:00] Sp"
+    },
+    {
+     "start": 4800,
+     "end": 5520,
+     "lines": 72,
+     "first": "[80:00 - 80:10] ",
+     "last": "[91:50 - 92:00] Sp"
+    },
+    {
+     "start": 5400,
+     "end": 6120,
+     "lines": 72,
+     "first": "[90:00 - 90:10] ",
+     "last": "[101:50 - 102:00] "
+    },
+    {
+     "start": 6000,
+     "end": 6600,
+     "lines": 60,
+     "first": "[100:00 - 100:10",
+     "last": "[109:50 - 110:00] "
+    }
+   ]
+  },
+  {
+   "minutes": 31,
+   "line_seconds": 7,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 103,
+     "first": "[00:00 - 00:07] ",
+     "last": "[11:54 - 12:01] Sp"
+    },
+    {
+     "start": 600,
+     "end": 1320,
+     "lines": 103,
+     "first": "[10:02 - 10:09] ",
+     "last": "[21:56 - 22:03] Sp"
+    },
+    {
+     "start": 1200,
+     "end": 1862,
+     "lines": 94,
+     "first": "[20:04 - 20:11] ",
+     "last": "[30:55 - 31:02] Sp"
+    }
+   ]
+  },
+  {
+   "minutes": 21,
+   "line_seconds": 30,
+   "windows": [
+    {
+     "start": 0,
+     "end": 720,
+     "lines": 24,
+     "first": "[00:00 - 00:30] ",
+     "last": "[11:30 - 12:00] Sp"
+    },
+    {
+     "start": 600,
+     "end": 1260,
+     "lines": 22,
+     "first": "[10:00 - 10:30] ",
+     "last": "[20:30 - 21:00] Sp"
+    }
+   ]
+  }
+ ],
+ "signal_filters": [
+  [
+   0,
+   720,
+   "Deterministic clip-worthiness signals to consider before ranking:\n- [00:21 - 00:34] score=3.0: trigger phrase, short punchy line; I spent forty thousand dollars\n- [00:34 - 00:47] score=4.5: trigger phrase, question/hook; Wait, forty thousand?"
+  ],
+  [
+   600,
+   1320,
+   "Deterministic clip-worthiness signals to consider before ranking:\n- [12:10 - 12:20] score=1.0: pause before line; Later moment"
+  ],
+  [
+   720,
+   1440,
+   "Deterministic clip-worthiness signals to consider before ranking:\n- [12:10 - 12:20] score=1.0: pause before line; Later moment"
+  ],
+  [
+   6000,
+   6720,
+   "Deterministic clip-worthiness signals to consider before ranking:\n- [101:00 - 101:10] score=1.25: audio peak; Past the hundred minute mark"
+  ],
+  [
+   1000,
+   1100,
+   null
+  ]
+ ],
+ "final_clips": [
+  [
+   0,
+   1,
+   1
+  ],
+  [
+   0,
+   3,
+   3
+  ],
+  [
+   0,
+   5,
+   5
+  ],
+  [
+   0,
+   10,
+   5
+  ],
+  [
+   0,
+   20,
+   5
+  ],
+  [
+   0,
+   50,
+   5
+  ],
+  [
+   60,
+   1,
+   1
+  ],
+  [
+   60,
+   3,
+   3
+  ],
+  [
+   60,
+   5,
+   5
+  ],
+  [
+   60,
+   10,
+   5
+  ],
+  [
+   60,
+   20,
+   5
+  ],
+  [
+   60,
+   50,
+   5
+  ],
+  [
+   299,
+   1,
+   1
+  ],
+  [
+   299,
+   3,
+   3
+  ],
+  [
+   299,
+   5,
+   5
+  ],
+  [
+   299,
+   10,
+   5
+  ],
+  [
+   299,
+   20,
+   5
+  ],
+  [
+   299,
+   50,
+   5
+  ],
+  [
+   300,
+   1,
+   1
+  ],
+  [
+   300,
+   3,
+   3
+  ],
+  [
+   300,
+   5,
+   5
+  ],
+  [
+   300,
+   10,
+   5
+  ],
+  [
+   300,
+   20,
+   5
+  ],
+  [
+   300,
+   50,
+   5
+  ],
+  [
+   301,
+   1,
+   1
+  ],
+  [
+   301,
+   3,
+   3
+  ],
+  [
+   301,
+   5,
+   5
+  ],
+  [
+   301,
+   10,
+   5
+  ],
+  [
+   301,
+   20,
+   5
+  ],
+  [
+   301,
+   50,
+   5
+  ],
+  [
+   1200,
+   1,
+   1
+  ],
+  [
+   1200,
+   3,
+   3
+  ],
+  [
+   1200,
+   5,
+   5
+  ],
+  [
+   1200,
+   10,
+   5
+  ],
+  [
+   1200,
+   20,
+   5
+  ],
+  [
+   1200,
+   50,
+   5
+  ],
+  [
+   1500,
+   1,
+   1
+  ],
+  [
+   1500,
+   3,
+   3
+  ],
+  [
+   1500,
+   5,
+   5
+  ],
+  [
+   1500,
+   10,
+   5
+  ],
+  [
+   1500,
+   20,
+   5
+  ],
+  [
+   1500,
+   50,
+   5
+  ],
+  [
+   1501,
+   1,
+   1
+  ],
+  [
+   1501,
+   3,
+   3
+  ],
+  [
+   1501,
+   5,
+   5
+  ],
+  [
+   1501,
+   10,
+   6
+  ],
+  [
+   1501,
+   20,
+   6
+  ],
+  [
+   1501,
+   50,
+   6
+  ],
+  [
+   2700,
+   1,
+   1
+  ],
+  [
+   2700,
+   3,
+   3
+  ],
+  [
+   2700,
+   5,
+   5
+  ],
+  [
+   2700,
+   10,
+   9
+  ],
+  [
+   2700,
+   20,
+   9
+  ],
+  [
+   2700,
+   50,
+   9
+  ],
+  [
+   3000,
+   1,
+   1
+  ],
+  [
+   3000,
+   3,
+   3
+  ],
+  [
+   3000,
+   5,
+   5
+  ],
+  [
+   3000,
+   10,
+   10
+  ],
+  [
+   3000,
+   20,
+   10
+  ],
+  [
+   3000,
+   50,
+   10
+  ],
+  [
+   5400,
+   1,
+   1
+  ],
+  [
+   5400,
+   3,
+   3
+  ],
+  [
+   5400,
+   5,
+   5
+  ],
+  [
+   5400,
+   10,
+   10
+  ],
+  [
+   5400,
+   20,
+   18
+  ],
+  [
+   5400,
+   50,
+   18
+  ],
+  [
+   12000,
+   1,
+   1
+  ],
+  [
+   12000,
+   3,
+   3
+  ],
+  [
+   12000,
+   5,
+   5
+  ],
+  [
+   12000,
+   10,
+   10
+  ],
+  [
+   12000,
+   20,
+   20
+  ],
+  [
+   12000,
+   50,
+   20
+  ]
+ ],
+ "models": [
+  {
+   "input": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "segment": "From a local model."
+     }
+    ],
+    "summary": "A short summary.",
+    "key_topics": [
+     "local"
+    ]
+   },
+   "output": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "From a local model.",
+      "relevance_score": 0.75,
+      "reasoning": "Selected by the AI model as a clip candidate.",
+      "virality": {
+       "hook_score": 15,
+       "engagement_score": 15,
+       "value_score": 15,
+       "shareability_score": 15,
+       "total_score": 60,
+       "hook_type": "none",
+       "virality_reasoning": "The model did not provide a detailed virality breakdown."
+      },
+      "hook_title": null,
+      "hook_start_time": null,
+      "hook_end_time": null
+     }
+    ],
+    "summary": "A short summary.",
+    "key_topics": [
+     "local"
+    ]
+   }
+  },
+  {
+   "input": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "Text wins.",
+      "segment": "ignored",
+      "title": "Title alias",
+      "headline": "ignored",
+      "relevance_score": 85,
+      "virality": {
+       "hook_score": 20,
+       "hook_type": null
+      }
+     }
+    ],
+    "summary": "s",
+    "key_topics": [],
+    "broll_opportunities": [
+     {
+      "broll": [
+       "x"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "Text wins.",
+      "relevance_score": 0.85,
+      "reasoning": "Selected by the AI model as a clip candidate.",
+      "virality": {
+       "hook_score": 20,
+       "engagement_score": 15,
+       "value_score": 15,
+       "shareability_score": 15,
+       "total_score": 60,
+       "hook_type": null,
+       "virality_reasoning": "The model did not provide a detailed virality breakdown."
+      },
+      "hook_title": "Title alias",
+      "hook_start_time": null,
+      "hook_end_time": null
+     }
+    ],
+    "summary": "s",
+    "key_topics": []
+   }
+  },
+  {
+   "input": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "t",
+      "headline": "Headline alias",
+      "relevance_score": 100,
+      "reasoning": "why",
+      "hook_start_time": "00:03",
+      "hook_end_time": null
+     }
+    ],
+    "summary": "s",
+    "key_topics": [
+     "a",
+     "b"
+    ]
+   },
+   "output": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "t",
+      "relevance_score": 1.0,
+      "reasoning": "why",
+      "virality": {
+       "hook_score": 15,
+       "engagement_score": 15,
+       "value_score": 15,
+       "shareability_score": 15,
+       "total_score": 60,
+       "hook_type": "none",
+       "virality_reasoning": "The model did not provide a detailed virality breakdown."
+      },
+      "hook_title": "Headline alias",
+      "hook_start_time": "00:03",
+      "hook_end_time": null
+     }
+    ],
+    "summary": "s",
+    "key_topics": [
+     "a",
+     "b"
+    ]
+   }
+  },
+  {
+   "input": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "t",
+      "relevance_score": 1,
+      "virality": {
+       "hook_score": 25,
+       "engagement_score": 0,
+       "value_score": 10,
+       "shareability_score": 7,
+       "total_score": 3,
+       "hook_type": "statistic",
+       "virality_reasoning": "numbers"
+      }
+     }
+    ],
+    "summary": "s",
+    "key_topics": []
+   },
+   "output": {
+    "most_relevant_segments": [
+     {
+      "start_time": "00:00",
+      "end_time": "00:15",
+      "text": "t",
+      "relevance_score": 1.0,
+      "reasoning": "Selected by the AI model as a clip candidate.",
+      "virality": {
+       "hook_score": 25,
+       "engagement_score": 0,
+       "value_score": 10,
+       "shareability_score": 7,
+       "total_score": 3,
+       "hook_type": "statistic",
+       "virality_reasoning": "numbers"
+      },
+      "hook_title": null,
+      "hook_start_time": null,
+      "hook_end_time": null
+     }
+    ],
+    "summary": "s",
+    "key_topics": []
+   }
+  },
+  {
+   "input": {
+    "most_relevant_segments": [],
+    "summary": "",
+    "key_topics": []
+   },
+   "output": {
+    "most_relevant_segments": [],
+    "summary": "",
+    "key_topics": []
+   }
+  }
+ ]
+}

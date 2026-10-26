@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import { ClipCover, ScoreRing } from "@/components/app/clip-cover";
 import { StatusBadge, ACTIVE_TASK_STATUSES } from "@/components/app/status-badge";
@@ -19,7 +19,6 @@ export function GenerationCard({ generation, selected, onToggle, selectionDisabl
   className?: string;
 }) {
   const t = useTranslations("library");
-  const locale = useLocale();
   const active = ACTIVE_TASK_STATUSES.includes(generation.status);
   const failed = generation.status === "error";
   const selectable = Boolean(onToggle);
@@ -62,7 +61,7 @@ export function GenerationCard({ generation, selected, onToggle, selectionDisabl
         <div className="mt-2.5 space-y-1 px-0.5">
           <h3 className="line-clamp-2 text-sm font-semibold leading-snug">{generation.source_title}</h3>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{timeAgo(generation.created_at, locale)}</span>
+            <span>{timeAgo(generation.created_at)}</span>
             {(showStatus || generation.status !== "completed") && <StatusBadge status={generation.status} />}
           </div>
         </div>

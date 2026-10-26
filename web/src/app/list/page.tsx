@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { ACTIVE_TASK_STATUSES, RESUMABLE_TASK_STATUSES } from "@/components/app/status-badge";
+import { ACTIVE_TASK_STATUSES, RESUMABLE_TASK_STATUSES, isRestyleRun } from "@/components/app/status-badge";
 import { PageLoading } from "@/components/app/page-state";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSession } from "@/lib/auth-client";
 import { formatSupportMessage, parseApiError } from "@/lib/api-error";
+import { warnIfWorkerOfflineResponse } from "@/lib/worker-notice";
 import { cn } from "@/lib/utils";
 import {
   PlayCircle,
@@ -145,9 +146,8 @@ export default function ListPage() {
   const completedCount = tasks.filter((task) => task.status === "completed").length;
   const activeCount = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status)).length;
   const attentionCount = tasks.filter((task) => RESUMABLE_TASK_STATUSES.includes(task.status)).length;
-  const cancelableCount = selectedTasks.filter((task) =>
-    ACTIVE_TASK_STATUSES.includes(task.status),
-  ).length;
+  const isCancelable = (task: Task) => ACTIVE_TASK_STATUSES.includes(task.status) && !isRestyleRun(task);
+  const cancelableCount = selectedTasks.filter(isCancelable).length;
   const resumableCount = selectedTasks.filter((task) =>
     RESUMABLE_TASK_STATUSES.includes(task.status),
   ).length;
@@ -244,9 +244,7 @@ export default function ListPage() {
   };
 
   const handleCancelSelected = async () => {
-    const targetTaskIds = selectedTasks
-      .filter((task) => ACTIVE_TASK_STATUSES.includes(task.status))
-      .map((task) => task.id);
+    const targetTaskIds = selectedTasks.filter(isCancelable).map((task) => task.id);
 
     await runBatchAction(
       "cancel",
@@ -269,7 +267,11 @@ export default function ListPage() {
     await runBatchAction(
       "resume",
       targetTaskIds,
-      (taskId) => fetch(`/api/tasks/${taskId}/resume`, { method: "POST" }),
+      async (taskId) => {
+        const response = await fetch(`/api/tasks/${taskId}/resume`, { method: "POST" });
+        if (response.ok) await warnIfWorkerOfflineResponse(response);
+        return response;
+      },
       {
         empty: t("resume.empty"),
         fallback: t("resume.fallback"),

@@ -2,18 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type ProgressEvent = { progress?: number; message?: string; status?: string };
+export const TASK_POLL_INTERVAL_MS = 2000;
 
-/** SSE is the fast path; reconciliation also recovers missed terminal events. */
-export function useTaskProgress<T>({ taskId, active, refresh, onProgress, onClip }: {
+/**
+ * Polls a running task every 2 s, and again when the tab becomes visible or the
+ * network comes back. `refresh` resolves `false` (or throws) when a poll fails;
+ * `reconnecting` stays true until a later poll succeeds.
+ */
+export function useTaskProgress({ taskId, active, refresh }: {
   taskId: string;
   active: boolean;
   refresh: () => Promise<unknown>;
-  onProgress: (event: ProgressEvent) => void;
-  onClip: (clip: T) => void;
 }) {
-  const callbacks = useRef({ refresh, onProgress, onClip });
-  callbacks.current = { refresh, onProgress, onClip };
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
@@ -26,46 +28,22 @@ export function useTaskProgress<T>({ taskId, active, refresh, onProgress, onClip
     const reconcile = async () => {
       if (disposed || refreshing) return;
       refreshing = true;
-      try { await callbacks.current.refresh(); }
-      catch { /* Keep retrying; a transport failure is not a failed generation. */ }
-      finally { refreshing = false; }
-    };
-    const source = new EventSource(`/api/tasks/${taskId}/progress`);
-    source.onopen = () => setReconnecting(false);
-    source.onerror = () => {
-      setReconnecting(true);
-      void reconcile();
-      // Leave the source open so the browser reconnects with its retry policy.
-    };
-    const read = (event: Event) => {
       try {
-        const data = JSON.parse((event as MessageEvent<string>).data);
-        return data && typeof data === "object" ? data : null;
-      } catch { void reconcile(); return null; }
+        const ok = await refreshRef.current();
+        if (!disposed) setReconnecting(ok === false);
+      } catch {
+        // Keep polling; a transport failure is not a failed generation.
+        if (!disposed) setReconnecting(true);
+      } finally {
+        refreshing = false;
+      }
     };
-    const progress = (event: Event) => {
-      const data = read(event);
-      if (!data) return;
-      callbacks.current.onProgress(data);
-      if (["completed", "cancelled", "error"].includes(data.status)) void reconcile();
-    };
-    source.addEventListener("status", progress);
-    source.addEventListener("progress", progress);
-    source.addEventListener("clip_ready", (event) => {
-      const data = read(event);
-      if (data?.clip) callbacks.current.onClip(data.clip as T);
-    });
-    source.addEventListener("close", () => {
-      source.close();
-      void reconcile();
-    });
-    const timer = window.setInterval(() => { void reconcile(); }, 5000);
+    const timer = window.setInterval(() => { void reconcile(); }, TASK_POLL_INTERVAL_MS);
     const onVisible = () => { if (document.visibilityState === "visible") void reconcile(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onVisible);
     return () => {
       disposed = true;
-      source.close();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onVisible);

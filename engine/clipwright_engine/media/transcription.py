@@ -1,0 +1,493 @@
+"""AssemblyAI transcription, the word-timing sidecar, and analysis formatting.
+
+The AssemblyAI SDK (and httpx) load lazily: importing them costs over a second
+and only the ``transcribe`` command needs them.
+"""
+
+from types import SimpleNamespace
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from pathlib import Path
+import contextlib
+import json
+import os
+import tempfile
+import time
+import uuid
+from .common import (
+    ANALYSIS_LONG_UTTERANCE_MAX_DURATION_MS,
+    ANALYSIS_LONG_UTTERANCE_MAX_WORDS,
+    ANALYSIS_SEGMENT_MAX_DURATION_MS,
+    ANALYSIS_SEGMENT_MAX_WORDS,
+    ANALYSIS_SEGMENT_MIN_WORDS,
+    ANALYSIS_UTTERANCE_SPLIT_THRESHOLD_MS,
+    ANALYSIS_UTTERANCE_SPLIT_THRESHOLD_WORDS,
+    TRANSCRIPT_CACHE_SCHEMA_VERSION,
+    logger,
+)
+from .ffmpeg import (
+    run_ffmpeg_command,
+    select_audio_stream_index,
+)
+
+
+def transcript_cache_path(video_path: Path) -> Path:
+    return Path(video_path).with_suffix(".transcript_cache.json")
+
+
+def _prepare_audio_for_transcription(video_path: Path) -> Path:
+    """Extract a compact audio-only file for transcription.
+
+    It goes to the temp dir (the job's work_dir under the CLI), never beside
+    the stored source. The name is unique and never reused: every source is
+    ``source.mp4``, and a killed run can leave a truncated extract behind.
+    """
+    audio_path = Path(tempfile.gettempdir()) / f"{video_path.stem}.{uuid.uuid4().hex}.transcription.mp3"
+
+    # Transcribe the same track the renderer cuts, not ffmpeg's implicit pick.
+    audio_stream = select_audio_stream_index(video_path)
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        *(["-map", f"0:a:{audio_stream}"] if audio_stream is not None else []),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-b:a",
+        "64k",
+        str(audio_path),
+    ]
+    try:
+        result = run_ffmpeg_command(command, timeout=900)
+    except FileNotFoundError:
+        logger.warning(
+            "ffmpeg is not available; falling back to source video for transcription"
+        )
+        return video_path
+
+    if result.returncode != 0 or not audio_path.exists() or audio_path.stat().st_size == 0:
+        audio_path.unlink(missing_ok=True)
+        logger.warning(
+            "Failed to extract transcription audio with ffmpeg; falling back to source video"
+        )
+        return video_path
+
+    logger.info(
+        "Prepared transcription audio: %s (%.2f MB)",
+        audio_path,
+        audio_path.stat().st_size / (1024 * 1024),
+    )
+    return audio_path
+
+
+def _submit_and_wait_for_assemblyai_transcript(
+    transcriber,
+    media_path: Path,
+    config_obj,
+    timeout_seconds: int,
+):
+    """Submit a transcript job and poll with a total timeout."""
+    import assemblyai as aai
+    import httpx
+
+    # Uploads are safe to retry: they do not create a paid transcript. Keep the
+    # transcript POST outside this loop because a timeout may hide its success.
+    for attempt in range(1, 4):
+        try:
+            audio_url = transcriber.upload_file(str(media_path))
+            break
+        except (httpx.TransportError, aai.AssemblyAIError) as error:
+            status = getattr(error, "status_code", None)
+            retryable = isinstance(error, httpx.TransportError) or status in {408, 429, 500, 502, 503, 504}
+            if not retryable:
+                raise
+            if attempt == 3:
+                raise RuntimeError(
+                    "AssemblyAI audio upload unavailable after 3 attempts"
+                    + (f" (HTTP {status})." if status else ".")
+                ) from None
+            logger.warning("AssemblyAI audio upload failed (HTTP %s); retrying upload (%s/3)", status, attempt)
+            time.sleep(2.0 ** attempt)
+    submitted = transcriber.submit(audio_url, config=config_obj)
+    if not submitted.id:
+        raise RuntimeError("AssemblyAI did not return a transcript ID")
+
+    logger.info("AssemblyAI transcript submitted: %s", submitted.id)
+    deadline = time.monotonic() + timeout_seconds
+    next_log_at = 0.0
+    consecutive_failures = 0
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                f"AssemblyAI transcript {submitted.id} did not complete within {timeout_seconds}s"
+            )
+        # The SDK poller uses the upload timeout (often 900s) for every GET.
+        # Bound each poll without changing the shared client's timeout.
+        try:
+            response = submitted._client.http_client.get(  # noqa: SLF001
+                f"{aai.api.ENDPOINT_TRANSCRIPT}/{submitted.id}",
+                timeout=min(30.0, remaining),
+            )
+            response.raise_for_status()
+            response = aai.types.TranscriptResponse(**response.json())
+            consecutive_failures = 0
+        except (httpx.TransportError, httpx.HTTPStatusError) as error:
+            if isinstance(error, httpx.HTTPStatusError) and error.response.status_code not in {408, 429, 500, 502, 503, 504}:
+                raise
+            consecutive_failures += 1
+            logger.warning("AssemblyAI status polling unavailable; retrying the existing transcript")
+            time.sleep(min(30.0, 2.0 ** min(consecutive_failures, 4),
+                           max(0.0, deadline - time.monotonic())))
+            continue
+        transcript = aai.Transcript.from_response(
+            client=submitted._client,  # noqa: SLF001
+            response=response,
+        )
+
+        if transcript.status in (
+            aai.TranscriptStatus.completed,
+            aai.TranscriptStatus.error,
+        ):
+            return transcript
+
+        now = time.monotonic()
+        if now >= deadline:
+            raise TimeoutError(
+                f"AssemblyAI transcript {submitted.id} did not complete within {timeout_seconds}s"
+            )
+
+        if now >= next_log_at:
+            logger.info(
+                "AssemblyAI transcript %s still %s",
+                submitted.id,
+                transcript.status,
+            )
+            next_log_at = now + 30
+
+        time.sleep(min(aai.settings.polling_interval, max(0.0, deadline - now)))
+
+
+def _assemblyai_speech_models_value(speech_model: str) -> List[str]:
+    """Prefer Universal-3.5 Pro; retain Universal-2 for unsupported languages.
+
+    Explicit low-cost aliases remain available for self-hosted configurations.
+    Legacy quality aliases upgrade to the current Pro model.
+    """
+    normalized = (speech_model or "universal-3-5-pro").strip().lower()
+    if normalized in {"nano", "universal-2"}:
+        return ["universal-2"]
+    return ["universal-3-5-pro", "universal-2"]
+
+
+def _get_transcript_with_assemblyai(
+    video_path: Path, speech_model: str, runtime_config
+) -> str:
+    """Get transcript using AssemblyAI with word-level timing for precise subtitles."""
+    import assemblyai as aai
+
+    # A job owns its client: concurrent jobs must not mutate shared SDK settings.
+    client = aai.Client(settings=aai.Settings(
+        api_key=runtime_config.assembly_ai_api_key,
+        base_url=aai.settings.base_url,
+        http_timeout=getattr(runtime_config, "assembly_ai_request_timeout_seconds", 60),
+    ))
+    transcriber = aai.Transcriber(client=client)
+
+    # AssemblyAI now requires the plural `speech_models` list; the singular
+    # `best`/`nano`/`universal` values were deprecated server-side.
+    speech_models_value = _assemblyai_speech_models_value(speech_model)
+
+    # Without a language, AssemblyAI assumes US English and garbles everything
+    # else; detection also routes to the first listed model that supports it.
+    language = runtime_config.transcription_language
+    config_obj = aai.TranscriptionConfig(
+        speaker_labels=True,
+        punctuate=True,
+        format_text=True,
+        speech_models=speech_models_value,
+        language_code=language or None,
+        language_detection=None if language else True,
+    )
+
+    transcription_media_path = video_path
+    try:
+        logger.info("Starting AssemblyAI transcription")
+        transcription_media_path = _prepare_audio_for_transcription(video_path)
+        # Once submitted, a polling timeout must not submit another paid job or
+        # restart the full transcription budget. Retry status GETs above instead.
+        transcript = _submit_and_wait_for_assemblyai_transcript(
+            transcriber,
+            transcription_media_path,
+            config_obj,
+            runtime_config.assembly_ai_http_timeout_seconds,
+        )
+
+        if transcript is None:
+            raise RuntimeError("AssemblyAI transcription did not return a transcript")
+
+        if transcript.status == aai.TranscriptStatus.error:
+            logger.error(f"AssemblyAI transcription failed: {transcript.error}")
+            raise Exception(f"Transcription failed: {transcript.error}")
+
+        response = getattr(transcript, "json_response", None) or {}
+        logger.info(
+            "AssemblyAI transcript language: %s (confidence: %s)",
+            response.get("language_code") or language or "unknown",
+            response.get("language_confidence"),
+        )
+
+        formatted_lines = format_transcript_for_analysis(transcript)
+        cache_transcript_data(video_path, transcript)
+
+        result = "\n".join(formatted_lines)
+        logger.info(
+            f"Transcript formatted: {len(formatted_lines)} segments, {len(result)} chars"
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in AssemblyAI transcription: {e}")
+        raise
+    finally:
+        client.http_client.close()
+        if transcription_media_path != video_path:
+            with contextlib.suppress(OSError):
+                transcription_media_path.unlink(missing_ok=True)
+
+
+def cache_transcript_data(video_path: Path, transcript) -> None:
+    """Write the AssemblyAI word timings to the v2 sidecar beside the video.
+
+    The sidecar is published with a rename: a cancelled job must never leave a
+    truncated file that reads as "no words" and pays for transcription again.
+    """
+    cache_path = transcript_cache_path(video_path)
+
+    words_data = []
+    if transcript.words:
+        words_data = [_serialize_transcript_word(word) for word in transcript.words]
+
+    utterances_data = []
+    if getattr(transcript, "utterances", None):
+        utterances_data = [
+            {
+                "text": utterance.text,
+                "start": utterance.start,
+                "end": utterance.end,
+                "speaker": getattr(utterance, "speaker", None),
+                "words": [
+                    _serialize_transcript_word(word)
+                    for word in getattr(utterance, "words", []) or []
+                ],
+            }
+            for utterance in transcript.utterances
+        ]
+
+    response = getattr(transcript, "json_response", None)
+    language_code = response.get("language_code") if isinstance(response, dict) else None
+    if not language_code:
+        language_code = getattr(getattr(transcript, "config", None), "language_code", None)
+
+    cache_data = {
+        "version": TRANSCRIPT_CACHE_SCHEMA_VERSION,
+        "words": words_data,
+        "utterances": utterances_data,
+        "text": transcript.text,
+        # Lets language-specific cleanup (e.g. default filler words) avoid
+        # cutting ordinary words in other languages.
+        "language_code": language_code if isinstance(language_code, str) else None,
+    }
+
+    temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(cache_data), encoding="utf-8")
+        os.replace(temporary, cache_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+    logger.info(f"Cached {len(words_data)} words to {cache_path}")
+
+
+def load_cached_transcript_data(video_path: Path) -> Optional[Dict]:
+    """Load cached AssemblyAI transcript data."""
+    cache_path = transcript_cache_path(video_path)
+
+    if not cache_path.exists():
+        return None
+
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            if "version" not in payload:
+                payload["version"] = TRANSCRIPT_CACHE_SCHEMA_VERSION
+                payload.setdefault("utterances", [])
+            return payload
+    except Exception as e:
+        logger.warning(f"Failed to load transcript cache: {e}")
+        return None
+
+
+def _serialize_transcript_word(word) -> Dict[str, Any]:
+    return {
+        "text": word.text,
+        "start": word.start,
+        "end": word.end,
+        "confidence": word.confidence if hasattr(word, "confidence") else 1.0,
+        "speaker": getattr(word, "speaker", None),
+    }
+
+
+def _join_transcript_tokens(tokens: List[str]) -> str:
+    text = " ".join(token.strip() for token in tokens if token and token.strip())
+    for before, after in (
+        (" ,", ","),
+        (" .", "."),
+        (" !", "!"),
+        (" ?", "?"),
+        (" ;", ";"),
+        (" :", ":"),
+        (" n't", "n't"),
+        (" 're", "'re"),
+        (" 've", "'ve"),
+        (" 'll", "'ll"),
+        (" 'd", "'d"),
+        (" 'm", "'m"),
+        (" 's", "'s"),
+    ):
+        text = text.replace(before, after)
+    return text.strip()
+
+
+def _format_words_for_analysis(
+    words: List[Any],
+    speaker: Optional[str] = None,
+    *,
+    min_words_per_segment: int = ANALYSIS_SEGMENT_MIN_WORDS,
+    max_words_per_segment: int = ANALYSIS_SEGMENT_MAX_WORDS,
+    max_duration_ms: int = ANALYSIS_SEGMENT_MAX_DURATION_MS,
+) -> List[str]:
+    if not words:
+        return []
+
+    formatted_lines: List[str] = []
+    current_words: List[Any] = []
+    current_start: Optional[int] = None
+
+    def flush_segment() -> None:
+        nonlocal current_words, current_start
+        if not current_words:
+            return
+        start_time = format_ms_to_timestamp(current_words[0].start)
+        end_time = format_ms_to_timestamp(current_words[-1].end)
+        text = _join_transcript_tokens([word.text for word in current_words])
+        if text:
+            speaker_prefix = f"Speaker {speaker}: " if speaker else ""
+            formatted_lines.append(f"[{start_time} - {end_time}] {speaker_prefix}{text}")
+        current_words = []
+        current_start = None
+
+    for word in words:
+        if current_start is None:
+            current_start = word.start
+
+        current_words.append(word)
+        duration_ms = word.end - current_start
+        segment_word_count = len(current_words)
+        ends_sentence = str(word.text).endswith((".", "!", "?"))
+
+        should_flush = False
+        if segment_word_count >= max_words_per_segment:
+            should_flush = True
+        elif (
+            ends_sentence
+            and segment_word_count >= min_words_per_segment
+        ):
+            should_flush = True
+        elif (
+            duration_ms >= max_duration_ms
+            and segment_word_count >= min_words_per_segment
+        ):
+            should_flush = True
+
+        if should_flush:
+            flush_segment()
+
+    flush_segment()
+    return formatted_lines
+
+
+def _sidecar_as_transcript(sidecar: Dict[str, Any]) -> SimpleNamespace:
+    """View a v2 sidecar through the SDK's attribute names (same ms timings)."""
+    def words(items):
+        return [SimpleNamespace(**word) for word in items or []]
+
+    return SimpleNamespace(
+        utterances=[
+            SimpleNamespace(**{**utterance, "words": words(utterance.get("words"))})
+            for utterance in sidecar.get("utterances") or []
+        ],
+        words=words(sidecar.get("words")),
+    )
+
+
+def format_transcript_for_analysis(transcript) -> List[str]:
+    """Format transcripts into readable timestamped segments for AI analysis.
+
+    Takes an AssemblyAI transcript object or the v2 sidecar dict written from
+    one; both give the same lines.
+    """
+    if isinstance(transcript, dict):
+        transcript = _sidecar_as_transcript(transcript)
+
+    utterances = getattr(transcript, "utterances", None) or []
+    if utterances:
+        formatted_lines = []
+        for utterance in utterances:
+            utterance_words = list(getattr(utterance, "words", []) or [])
+            utterance_duration = max(0, int(utterance.end) - int(utterance.start))
+            if utterance_words and (
+                utterance_duration > ANALYSIS_UTTERANCE_SPLIT_THRESHOLD_MS
+                or len(utterance_words) > ANALYSIS_UTTERANCE_SPLIT_THRESHOLD_WORDS
+            ):
+                formatted_lines.extend(
+                    _format_words_for_analysis(
+                        utterance_words,
+                        getattr(utterance, "speaker", None),
+                        max_words_per_segment=ANALYSIS_LONG_UTTERANCE_MAX_WORDS,
+                        max_duration_ms=ANALYSIS_LONG_UTTERANCE_MAX_DURATION_MS,
+                    )
+                )
+                continue
+
+            start_time = format_ms_to_timestamp(utterance.start)
+            end_time = format_ms_to_timestamp(utterance.end)
+            speaker = getattr(utterance, "speaker", None)
+            speaker_prefix = f"Speaker {speaker}: " if speaker else ""
+            formatted_lines.append(
+                f"[{start_time} - {end_time}] {speaker_prefix}{utterance.text}"
+            )
+        return formatted_lines
+
+    formatted_lines = []
+    words = getattr(transcript, "words", None) or []
+    if not words:
+        return formatted_lines
+
+    logger.info(f"Processing {len(words)} words with precise timing")
+    return _format_words_for_analysis(words)
+
+
+def format_ms_to_timestamp(ms: int) -> str:
+    """Format milliseconds to MM:SS format."""
+    seconds = ms // 1000
+    minutes = seconds // 60
+    seconds = seconds % 60
+    return f"{minutes:02d}:{seconds:02d}"

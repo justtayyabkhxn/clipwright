@@ -75,7 +75,7 @@ async function setup(page: Page, failSave = false) {
     r.fulfill({
       body: readFileSync(
         path.resolve(
-          "../backend/fonts",
+          "fonts",
           path.basename(new URL(r.request().url()).pathname) + ".ttf",
         ),
       ),

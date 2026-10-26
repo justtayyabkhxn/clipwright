@@ -1,7 +1,7 @@
 export type ApiErrorInfo = {
   message: string;
   traceId: string | null;
-  /** Machine-readable `detail.code` from the backend, e.g. SUBSCRIPTION_REQUIRED. */
+  /** Machine-readable `detail.code` from the server, when it sends one. */
   code?: string | null;
   /** The full `detail` object, for codes that carry extra fields. */
   detail?: Record<string, unknown> | null;
@@ -18,10 +18,6 @@ export class ApiRequestError extends Error {
     this.code = info.code ?? null;
     this.detail = info.detail ?? null;
   }
-}
-
-export function isUpgradeErrorCode(code: string | null | undefined): boolean {
-  return code === "SUBSCRIPTION_REQUIRED" || code === "VIDEO_TOO_LONG";
 }
 
 type ErrorPayload = {

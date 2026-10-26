@@ -2,14 +2,14 @@
 
 import { CaptionSizeControl } from "@/components/caption-size-control";
 
-import { useState, useEffect, useCallback } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useTaskProgress } from "@/hooks/use-task-progress";
-import { StatusBadge, ACTIVE_TASK_STATUSES } from "@/components/app/status-badge";
+import { StatusBadge, ACTIVE_TASK_STATUSES, RESTYLE_RUNNING_MESSAGE, isRestyleRun } from "@/components/app/status-badge";
 import { getClipUrl, requestAction, EXPORT_PRESETS } from "@/lib/clip-actions";
 import { clipExportFilePath, pollClipExport, triggerFileDownload } from "@/lib/clip-export";
-import { trackClipExport } from "@/lib/clip-export-tracking";
+import { warnIfWorkerOffline, warnIfWorkerOfflineResponse } from "@/lib/worker-notice";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PageLoading, PageError } from "@/components/app/page-state";
@@ -34,10 +34,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { useSession } from "@/lib/auth-client";
-import { ApiRequestError, formatSupportMessage, parseApiError } from "@/lib/api-error";
-import { useCopyText } from "@/lib/copy-text";
-import { useBillingSummary } from "@/hooks/use-billing-summary";
-import { UpgradeDialog, upgradeReasonForError, type UpgradeReason } from "@/components/billing/upgrade-prompt";
+import { formatSupportMessage, parseApiError } from "@/lib/api-error";
 import { buildFontOptionsPayload, FONT_TEMPLATE_DEFAULT_VALUE } from "@/lib/font-options";
 import {
   AlertCircle,
@@ -47,35 +44,27 @@ import {
   Clock,
   Edit2,
   ExternalLink,
-  Link2Off,
   Loader2,
   PauseCircle,
   RotateCcw,
   Settings2,
-  Share2,
   Trash2,
   X,
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { ClipTile, ClipFocus, ProcessingPanel, EmptyState } from "@/components/app/clip-wall";
-import { intlLocale } from "@/i18n/config";
 import { timeAgo } from "@/lib/generations";
 import { VIDEO_SOURCE_LABELS, VideoSourceIcon, videoSourceKind, type VideoSourceKind } from "@/components/video-source-icon";
 import { cn } from "@/lib/utils";
 import { FontSelectOption, type FontOption } from "@/components/font-select-option";
-import { ClipPostList, ClipPublishButton, useSocialPostToasts } from "@/components/clip-publisher";
-import {
-  ACTIVE_POST_STATUSES,
-  type SocialConnection,
-  type SocialPost,
-  type SocialProviderStatus,
-} from "@/lib/social";
+
+/** Set by the restyle job when no clip re-rendered; the old clips stay in place. */
+const RESTYLE_FAILED_MESSAGE = "Restyle failed. Your existing clips are unchanged.";
 
 interface Clip {
   id: string;
   filename: string;
-  file_path: string;
   start_time: string;
   end_time: string;
   duration: number;
@@ -103,6 +92,7 @@ interface TaskDetails {
   source_type: string;
   source_url?: string | null;
   status: string;
+  run_type?: string | null;
   progress?: number;
   progress_message?: string;
   clips_count: number;
@@ -116,14 +106,13 @@ interface TaskDetails {
   pause_threshold_ms?: number;
   remove_filler_words?: boolean;
   filtered_words?: string[];
-  share_enabled?: boolean;
 }
 
 function sourceLabel(source: VideoSourceKind, uploadLabel: string) {
   return source === "upload" ? uploadLabel : VIDEO_SOURCE_LABELS[source];
 }
 
-/** Link back to the YouTube/Twitch/Kick video a task was cut from, when its URL is stored. */
+/** Link back to the YouTube video a task was cut from, when its URL is stored. */
 function originalVideoUrl(task: Pick<TaskDetails, "source_type" | "source_url">): string | null {
   if (videoSourceKind(task.source_type) === "upload" || !task.source_url) return null;
   try {
@@ -137,8 +126,6 @@ function originalVideoUrl(task: Pick<TaskDetails, "source_type" | "source_url">)
 export default function TaskPage() {
   const t = useTranslations("task");
   const tLibrary = useTranslations("library");
-  const copyText = useCopyText();
-  const locale = useLocale();
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
@@ -154,11 +141,6 @@ export default function TaskPage() {
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [exportPreset, setExportPreset] = useState("original");
-  const [shareState, setShareState] = useState<"idle" | "copying" | "copied">("idle");
-  const [isRevokingShare, setIsRevokingShare] = useState(false);
-  const [socialConnections, setSocialConnections] = useState<SocialConnection[]>([]);
-  const [socialProviders, setSocialProviders] = useState<SocialProviderStatus[]>([]);
-  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
 
   // null means "use the caption template's own value" — mirrors the create form's contract.
   const [projectFontFamily, setProjectFontFamily] = useState<string | null>(null);
@@ -178,63 +160,13 @@ export default function TaskPage() {
   >([]);
   const [fontToDelete, setFontToDelete] = useState<FontOption | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [billingSummary] = useBillingSummary(Boolean(session?.user?.id));
-  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null);
   const [sortBy, setSortBy] = useState<"score" | "timeline">("score");
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
 
   const taskApiUrl = "/api/tasks";
-
-  const loadSocialPosts = useCallback(async () => {
-    if (!params.id) return;
-    try {
-      const response = await fetch(`/api/social/posts?task_id=${params.id}`, { cache: "no-store" });
-      if (!response.ok) return;
-      const data = (await response.json()) as { posts?: SocialPost[] };
-      setSocialPosts(data.posts ?? []);
-    } catch {
-      // Publishing is optional; never block the task page on it.
-    }
-  }, [params.id]);
-
-  const loadSocialContext = useCallback(async () => {
-    try {
-      const [connectionsResponse, providersResponse] = await Promise.all([
-        fetch("/api/social/connections", { cache: "no-store" }),
-        fetch("/api/social/providers", { cache: "no-store" }),
-      ]);
-      if (connectionsResponse.ok) {
-        const data = (await connectionsResponse.json()) as { connections?: SocialConnection[] };
-        setSocialConnections(data.connections ?? []);
-      }
-      if (providersResponse.ok) {
-        const data = (await providersResponse.json()) as { providers?: SocialProviderStatus[] };
-        setSocialProviders(data.providers ?? []);
-      }
-    } catch {
-      // Publishing is optional; never block the task page on it.
-    }
-    await loadSocialPosts();
-  }, [loadSocialPosts]);
-
-  // Load publishing context once the task is done, then poll while a post is in flight.
-  useEffect(() => {
-    if (!session?.user?.id || task?.status !== "completed") return;
-    void loadSocialContext();
-  }, [session?.user?.id, task?.status, loadSocialContext]);
-
-  // Poll quickly while an upload is in flight so its progress and outcome show
-  // up promptly, and slowly while something is scheduled.
-  useSocialPostToasts(socialPosts);
-  useEffect(() => {
-    const inFlight = socialPosts.some((post) => ACTIVE_POST_STATUSES.includes(post.status));
-    const scheduled = socialPosts.some((post) => post.status === "scheduled");
-    if (!inFlight && !scheduled) return;
-    const interval = window.setInterval(() => {
-      void loadSocialPosts();
-    }, inFlight ? 4000 : 30000);
-    return () => window.clearInterval(interval);
-  }, [socialPosts, loadSocialPosts]);
+  // The last status this page saw, and whether it started a restyle, so a finished job is announced once.
+  const lastStatusRef = useRef<string | null>(null);
+  const restyleStartedRef = useRef(false);
 
   const buildSupportError = useCallback(async (response: Response, fallbackMessage: string) => {
     const parsed = await parseApiError(response, fallbackMessage);
@@ -264,6 +196,15 @@ export default function TaskPage() {
         }
 
         const taskData = await taskResponse.json();
+        const previousStatus = lastStatusRef.current;
+        lastStatusRef.current = taskData.status;
+        if (previousStatus && ACTIVE_TASK_STATUSES.includes(previousStatus) && !ACTIVE_TASK_STATUSES.includes(taskData.status)) {
+          if (taskData.status === "completed") {
+            if (taskData.progress_message === RESTYLE_FAILED_MESSAGE) toast.error(RESTYLE_FAILED_MESSAGE);
+            else if (restyleStartedRef.current) toast.success(t("toasts.settingsApplied"));
+          }
+          restyleStartedRef.current = false;
+        }
         setProgress(taskData.progress ?? 0);
         setProgressMessage(taskData.progress_message ?? "");
         setError(null);
@@ -279,7 +220,7 @@ export default function TaskPage() {
 
         }
 
-        // Fetch clips if task is completed or processing (incremental clips)
+        // Clips arrive one by one while processing; a restyle swaps them all (with new ids) when it finishes.
         if (taskData.status !== "queued") {
           const clipsResponse = await fetch(`${taskApiUrl}/${params.id}/clips`, {
             cache: "no-store",
@@ -290,23 +231,7 @@ export default function TaskPage() {
           }
 
           const clipsData = await clipsResponse.json();
-          const nextClips = clipsData.clips || [];
-          setClips((prev) => {
-            if (taskData.status === "completed") {
-              return nextClips;
-            }
-
-            const merged = new Map<string, Clip>();
-            for (const clip of prev) {
-              merged.set(clip.id, clip);
-            }
-            for (const clip of nextClips) {
-              merged.set(clip.id, clip);
-            }
-            return Array.from(merged.values()).sort(
-              (a, b) => (a.clip_order ?? 0) - (b.clip_order ?? 0),
-            );
-          });
+          setClips(clipsData.clips || []);
         }
 
         setTask(taskData);
@@ -366,16 +291,10 @@ export default function TaskPage() {
     void loadTemplates();
   }, []);
 
-  const { reconnecting } = useTaskProgress<Clip>({
+  const { reconnecting } = useTaskProgress({
     taskId: String(params.id || ""),
     active: ACTIVE_TASK_STATUSES.includes(task?.status || ""),
     refresh: () => fetchTaskStatus(0, 0, true),
-    onProgress: (data) => {
-      if (typeof data.progress === "number") setProgress(data.progress);
-      if (typeof data.message === "string") setProgressMessage(data.message);
-    },
-    onClip: (clip) => setClips((current) =>
-      [...current.filter((item) => item.id !== clip.id), clip].sort((a, b) => a.clip_order - b.clip_order)),
   });
 
   const runAction = async (name: string, action: () => Promise<void>) => {
@@ -504,9 +423,18 @@ export default function TaskPage() {
         toast.error(await buildSupportError(response, t("errors.applySettings")));
         return;
       }
-      await fetchTaskStatus();
+      // The restyle runs as a background job. Take the processing task from this response, so
+      // polling starts without depending on a follow-up GET.
+      const body = (await response.json().catch(() => null)) as { task?: Partial<TaskDetails> } | null;
+      warnIfWorkerOffline(body);
+      const running = { status: "processing", progress: 0, progress_message: RESTYLE_RUNNING_MESSAGE, ...body?.task };
+      restyleStartedRef.current = true;
+      lastStatusRef.current = running.status;
+      setTask((current) => current && { ...current, ...running });
+      setProgress(running.progress ?? 0);
+      setProgressMessage(running.progress_message ?? "");
       setSettingsSheetOpen(false);
-      toast.success(t("toasts.settingsApplied"));
+      setFocusIndex(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("errors.applySettings"));
     } finally {
@@ -541,16 +469,20 @@ export default function TaskPage() {
   };
 
   const handleExportClip = async (clipId: string, fallbackFilename: string) => {
-    if (!session?.user?.id || !task?.id) return;
+    if (!task?.id) return;
 
     const taskId = task.id;
     const job = await pollClipExport({
-      start: () => fetch(`${taskApiUrl}/${taskId}/clips/${clipId}/exports`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preset: exportPreset }),
-        cache: "no-store",
-      }),
+      start: async () => {
+        const response = await fetch(`${taskApiUrl}/${taskId}/clips/${clipId}/exports`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preset: exportPreset }),
+          cache: "no-store",
+        });
+        if (response.ok) await warnIfWorkerOfflineResponse(response);
+        return response;
+      },
       status: (exportId) => fetch(`${taskApiUrl}/${taskId}/clips/${clipId}/exports/${exportId}`, {
         cache: "no-store",
       }),
@@ -562,7 +494,6 @@ export default function TaskPage() {
       clipExportFilePath(taskApiUrl, taskId, clipId, job.id),
       `${fallbackFilename.replace(/\.mp4$/i, "")}_${exportPreset}.mp4`,
     );
-    void trackClipExport({ userId: session.user.id, surface: "task", format: exportPreset });
   };
 
   const handleDownloadClip = (clip: Clip) => {
@@ -574,73 +505,21 @@ export default function TaskPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      if (session?.user?.id) void trackClipExport({ userId: session.user.id, surface: "task", format: "original" });
       return;
     }
     void runAction(clip.id, () => handleExportClip(clip.id, clip.filename));
   };
 
-  const handleCopyShareLink = async () => {
-    if (!task?.id || shareState === "copying") return;
-
-    setShareState("copying");
-    try {
-      const response = await fetch(`${taskApiUrl}/${task.id}/share`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error(await buildSupportError(response, t("errors.share")));
-      }
-
-      const data = (await response.json()) as { share_path: string };
-      const shareUrl = new URL(data.share_path, window.location.origin).toString();
-      setTask((currentTask) =>
-        currentTask ? { ...currentTask, share_enabled: true } : currentTask,
-      );
-      const outcome = await copyText(shareUrl);
-      if (outcome !== "copied") {
-        setShareState("idle");
-        return;
-      }
-      setShareState("copied");
-      window.setTimeout(() => setShareState("idle"), 2500);
-    } catch (shareError) {
-      setShareState("idle");
-      toast.error(shareError instanceof Error ? shareError.message : t("errors.share"));
-    }
-  };
-
-  const handleRevokeShareLink = async () => {
-    if (!task?.id || isRevokingShare) return;
-
-    setIsRevokingShare(true);
-    try {
-      const response = await fetch(`${taskApiUrl}/${task.id}/share`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        throw new Error(await buildSupportError(response, t("errors.disableShare")));
-      }
-      setTask((currentTask) =>
-        currentTask ? { ...currentTask, share_enabled: false } : currentTask,
-      );
-    } catch (revokeError) {
-      toast.error(revokeError instanceof Error ? revokeError.message : t("errors.disableShare"));
-    } finally {
-      setIsRevokingShare(false);
-    }
-  };
-
   if (isLoading) return <PageLoading />;
   if (error) return <PageError message={error} retry={() => void fetchTaskStatus()} />;
 
-  const readOnly = Boolean(session?.user?.id && task?.user_id && session.user.id !== task.user_id);
   const sourceVideoUrl = task ? originalVideoUrl(task) : null;
   const isActive = task?.status === "processing" || task?.status === "queued";
+  const restyling = task ? isRestyleRun(task) : false;
   const sortedClips = sortBy === "score"
     ? [...clips].sort((a, b) => (b.virality_score ?? 0) - (a.virality_score ?? 0) || a.clip_order - b.clip_order)
     : clips;
-  const focusedClip = focusIndex !== null ? sortedClips[focusIndex] : null;
+  const focusedClip = focusIndex !== null ? sortedClips[focusIndex] ?? null : null;
   const bestScore = clips.reduce((best, clip) => Math.max(best, clip.virality_score || 0), 0);
   const totalSeconds = clips.reduce((sum, clip) => sum + (clip.duration || 0), 0);
 
@@ -653,8 +532,8 @@ export default function TaskPage() {
       best={bestScore > 0 && clip.virality_score === bestScore}
       onOpen={() => setFocusIndex(index)}
       onDownload={() => handleDownloadClip(clip)}
-      onDelete={readOnly ? undefined : () => setDeletingClipId(clip.id)}
-      editable={task?.status === "completed" && !readOnly}
+      onDelete={() => setDeletingClipId(clip.id)}
+      editable={task?.status === "completed"}
     />
   );
 
@@ -683,12 +562,10 @@ export default function TaskPage() {
             ) : (
               <div className="group flex items-start gap-2">
                 <h1 className={cn("min-w-0 break-words font-display text-2xl font-bold tracking-tight md:text-3xl", isActive && "shimmer")}>{task.source_title}</h1>
-                {!readOnly && (
-                  <Button size="icon-sm" variant="ghost" aria-label={t("editTitle")} className="mt-0.5 shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                    onClick={() => { setIsEditing(true); setEditedTitle(task.source_title); }}>
-                    <Edit2 className="size-4" />
-                  </Button>
-                )}
+                <Button size="icon-sm" variant="ghost" aria-label={t("editTitle")} className="mt-0.5 shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  onClick={() => { setIsEditing(true); setEditedTitle(task.source_title); }}>
+                  <Edit2 className="size-4" />
+                </Button>
               </div>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
@@ -696,18 +573,16 @@ export default function TaskPage() {
               <span className="flex items-center gap-1.5"><VideoSourceIcon source={videoSourceKind(task.source_type)} className="size-3.5" aria-hidden />{sourceLabel(videoSourceKind(task.source_type), tLibrary("card.upload"))}</span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="flex cursor-default items-center gap-1.5"><Clock className="size-3.5" />{timeAgo(task.created_at, locale)}</span>
+                  <span className="flex cursor-default items-center gap-1.5"><Clock className="size-3.5" />{timeAgo(task.created_at)}</span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {new Date(task.created_at).toLocaleString(intlLocale(locale), { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}
+                  {new Date(task.created_at).toLocaleString("en", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}
                 </TooltipContent>
               </Tooltip>
               {clips.length > 0 && <span className="tabular-nums">{t("clipsTotal", { count: clips.length, duration: formatDuration(totalSeconds) })}</span>}
-              {readOnly && <span>{t("readOnly")}</span>}
             </div>
           </div>
 
-          {!readOnly && (
           <div className="flex flex-wrap items-center gap-2">
             {sourceVideoUrl && (
               <Button size="sm" variant="outline" asChild>
@@ -716,7 +591,7 @@ export default function TaskPage() {
                 </a>
               </Button>
             )}
-            {isActive && (
+            {isActive && !restyling && (
               <Button size="sm" variant="outline" disabled={pendingAction !== null}
                 onClick={() => void runAction("cancel", async () => {
                   await requestAction(`${taskApiUrl}/${task.id}/cancel`, "POST");
@@ -729,14 +604,7 @@ export default function TaskPage() {
             {(task.status === "cancelled" || task.status === "error") && (
               <Button size="sm" disabled={pendingAction !== null}
                 onClick={() => void runAction("resume", async () => {
-                  try {
-                    await requestAction(`${taskApiUrl}/${task.id}/resume`, "POST");
-                  } catch (err) {
-                    const reason = err instanceof ApiRequestError ? upgradeReasonForError(err.code, err.detail, undefined) : null;
-                    if (!reason) throw err;
-                    setUpgradeReason(reason);
-                    return;
-                  }
+                  await warnIfWorkerOfflineResponse(await requestAction(`${taskApiUrl}/${task.id}/resume`, "POST"));
                   await fetchTaskStatus();
                   toast.success(t("toasts.resumed"));
                 })}>
@@ -748,22 +616,6 @@ export default function TaskPage() {
                 <Button size="sm" variant="outline" onClick={() => setSettingsSheetOpen(true)}>
                   <Settings2 className="size-4" /><span className="hidden sm:inline">{t("restyle")}</span>
                 </Button>
-                <div className="inline-flex items-center rounded-md border shadow-xs">
-                  <Button size="sm" variant="ghost" className="rounded-r-none" onClick={handleCopyShareLink} disabled={shareState === "copying"} aria-live="polite">
-                    {shareState === "copied" ? <Check className="size-4" /> : <Share2 className="size-4" />}
-                    <span className="max-sm:sr-only">{shareState === "copying" ? t("creatingLink") : shareState === "copied" ? t("linkCopied") : t("copyShare")}</span>
-                  </Button>
-                  {task.share_enabled && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="icon-sm" variant="ghost" className="rounded-l-none border-l" onClick={handleRevokeShareLink} disabled={isRevokingShare} aria-label={isRevokingShare ? t("disabling") : t("disableShare")}>
-                          <Link2Off className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("disableShare")}</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
                 <Button size="sm" asChild>
                   <Link href={`/tasks/${task.id}/edit`}><Clapperboard className="size-4" />{t("openEditor")}</Link>
                 </Button>
@@ -778,16 +630,15 @@ export default function TaskPage() {
               <TooltipContent>{t("deleteGeneration")}</TooltipContent>
             </Tooltip>
           </div>
-          )}
         </header>
       )}
 
       <div className="mt-8">
-        {reconnecting && <p role="status" className="mb-4 text-sm text-muted-foreground">{readOnly ? t("reconnectingOther") : t("reconnectingOwn")}</p>}
+        {reconnecting && <p role="status" className="mb-4 text-sm text-muted-foreground">{t("reconnecting")}</p>}
 
         {isActive && task ? (
           <div className="space-y-8">
-            <ProcessingPanel status={task.status} progress={progress} message={progressMessage} readyCount={clips.length} />
+            <ProcessingPanel status={task.status} progress={progress} message={progressMessage} readyCount={clips.length} restyling={restyling} />
             {clips.length > 0 && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {sortedClips.map(renderTile)}
@@ -841,29 +692,13 @@ export default function TaskPage() {
         index={focusIndex ?? 0}
         total={sortedClips.length}
         busy={focusedClip ? pendingAction === focusedClip.id : false}
-        editable={task?.status === "completed" && !readOnly}
+        editable={task?.status === "completed"}
         onNavigate={(delta) => setFocusIndex((i) => (i === null ? i : (i + delta + sortedClips.length) % sortedClips.length))}
         onClose={() => setFocusIndex(null)}
         onDownload={() => focusedClip && handleDownloadClip(focusedClip)}
-        onDelete={readOnly ? undefined : () => { if (focusedClip) { setDeletingClipId(focusedClip.id); setFocusIndex(null); } }}
+        onDelete={() => { if (focusedClip) { setDeletingClipId(focusedClip.id); setFocusIndex(null); } }}
         hookTypeLabel={getHookTypeLabel}
-        actions={focusedClip && task?.status === "completed" ? (
-          <ClipPublishButton
-            taskId={task.id}
-            clip={focusedClip}
-            connections={socialConnections}
-            providers={socialProviders}
-            onChanged={loadSocialPosts}
-          />
-        ) : null}
-      >
-        {focusedClip && (
-          <ClipPostList
-            posts={socialPosts.filter((post) => post.clip_id === focusedClip.id)}
-            onChanged={loadSocialPosts}
-          />
-        )}
-      </ClipFocus>
+      />
 
       <Sheet open={settingsSheetOpen} onOpenChange={setSettingsSheetOpen}>
         <SheetContent side="right" className="overflow-y-auto sm:max-w-md">
@@ -1060,13 +895,6 @@ export default function TaskPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <UpgradeDialog
-        open={upgradeReason !== null}
-        onOpenChange={(open) => { if (!open) setUpgradeReason(null); }}
-        reason={upgradeReason ?? { kind: "limit" }}
-        billing={billingSummary}
-        source="task_resume"
-      />
     </main>
   );
 }
