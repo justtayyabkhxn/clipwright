@@ -85,3 +85,17 @@ uploads every clip of a finished video to the user's channel as a public Short.
   5000-byte budget only when measured in bytes (not JS `.length`), `fitTags`, and hashtag dedup.
   `npx vitest run` 661/662 passing (1 pre-existing slow-test skip); `tsc --noEmit` 0 errors;
   `pnpm lint` clean.
+
+### 2026-10-27 18:48 — Task 4: Google HTTP client
+- Added `server/youtube/google.ts` (plain `fetch`, every call takes an injectable `fetchImpl`):
+  OAuth code exchange/refresh/revoke, `channels.list?mine=true`, `videos.list?part=status` in
+  batches of 50, and the resumable upload (session start, `bytes */size` status query, one streamed
+  `PUT` with `duplex:"half"` and `Content-Range` on resume). `GOOGLE_BASE_URL_OVERRIDE` replaces
+  every Google origin.
+- `GoogleApiError` carries only the operation, status and reason code (`error.errors[0].reason`, or
+  the token endpoint's `error`); JSON parse errors are wrapped so V8 never quotes a body.
+  `classify` implements the §4.5 table (401 maps to `reauth`; callers refresh once first).
+  `nextMidnightPacific` uses `Intl` with `America/Los_Angeles`.
+- Tests (TDD): `google.test.ts` written first, RED (module missing), then 10/10 passing; full suite 670/671 (1 slow-test skip). Also checked
+  against a local HTTP server with real Node `fetch` (308 without `Location`, explicit
+  `Content-Length` on a streamed body). `tsc --noEmit` 0 errors; `pnpm lint` clean.
