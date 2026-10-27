@@ -222,6 +222,7 @@ describe("combine_editor", () => {
       relevanceScore: 0,
       reasoning: "Combined in the clip editor",
       sourceRanges: [{ start: 5, end: 25 }, { start: 40, end: 50 }],
+      lineageId: created.id,
     });
     const fileKey = storageKeys.editorExport(job._id);
     expect(outcome).toMatchObject({ status: "succeeded", result: { clip_id: created.id, fileKey } });

@@ -15,6 +15,7 @@ import {
   secondsToMmss,
 } from "../../server/tasks";
 import type { ClipDoc } from "../../server/types";
+import { lineageOf } from "../../server/youtube/posts";
 import {
   cancelledOutcome,
   clipDocFrom,
@@ -90,17 +91,20 @@ export async function restyleTask(ctx: JobContext): Promise<JobOutcome> {
           const file = event.clip as EngineClip;
           rendered.push({
             file: file.path,
-            clip: clipDocFrom(taskId, file, {
-              relevanceScore: old.relevanceScore ?? 0.5,
-              reasoning: old.reasoning || "Regenerated with updated settings",
-              viralityScore: old.viralityScore ?? 0,
-              hookScore: old.hookScore ?? 0,
-              engagementScore: old.engagementScore ?? 0,
-              valueScore: old.valueScore ?? 0,
-              shareabilityScore: old.shareabilityScore ?? 0,
-              hookType: old.hookType ?? null,
-              hookTitle: old.hookTitle ?? null,
-            }),
+            clip: {
+              ...clipDocFrom(taskId, file, {
+                relevanceScore: old.relevanceScore ?? 0.5,
+                reasoning: old.reasoning || "Regenerated with updated settings",
+                viralityScore: old.viralityScore ?? 0,
+                hookScore: old.hookScore ?? 0,
+                engagementScore: old.engagementScore ?? 0,
+                valueScore: old.valueScore ?? 0,
+                shareabilityScore: old.shareabilityScore ?? 0,
+                hookType: old.hookType ?? null,
+                hookTitle: old.hookTitle ?? null,
+              }),
+              lineageId: lineageOf(old),
+            },
           });
         } else {
           console.warn(`[worker] Restyle of task ${taskId}: clip ${event.index + 1} failed: ${event.message}`);

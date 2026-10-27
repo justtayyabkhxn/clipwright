@@ -235,8 +235,9 @@ export function renderOptions(settings: TaskSettings, maxClipSeconds: number) {
 
 export function clipDocFrom(taskId: string, rendered: EngineClip, scores: ClipScores): ClipDoc {
   const now = new Date();
+  const id = randomUUID();
   return {
-    id: randomUUID(),
+    id,
     filename: rendered.filename,
     storageKey: storageKeys.clip(taskId, rendered.filename),
     startTime: rendered.start_time,
@@ -247,6 +248,7 @@ export function clipDocFrom(taskId: string, rendered: EngineClip, scores: ClipSc
     sourceRanges: rendered.source_ranges,
     keepRanges: rendered.keep_ranges,
     ...(rendered.caption_settings && { captionSettings: rendered.caption_settings }),
+    lineageId: id,
     createdAt: now,
     updatedAt: now,
   };

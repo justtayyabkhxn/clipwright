@@ -51,3 +51,16 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - Tests: `npx vitest run` 641/648 passing (6 pre-existing timeouts/flakes in `fonts`, `cron` and
   `editor` tests under full-suite load on this box, unrelated to this change — all 4 files pass
   cleanly in isolation); `tsc --noEmit` 0 errors; `pnpm lint` clean.
+
+### 2026-10-27 18:01 — Task 2: clip lineage
+- Added `lineageOf(clip)` (`server/youtube/posts.ts`, its first export): `clip.lineageId ?? clip.id`.
+- `clipDocFrom` now sets `lineageId: id` on every clip it builds, so `process_task`'s rendered and
+  fallback clips, and `combine_editor`'s new clip (set directly, since it builds its `ClipDoc` by
+  hand), all start with `lineageId === id`.
+- `restyle_task` now maps each re-rendered clip's `lineageId` to `lineageOf(old)` before the
+  `replaceClips` swap, so a restyled clip keeps posting under its original lineage instead of
+  starting a new one.
+- Tests (TDD): added failing assertions first in `process-task.test.ts`, `editor.test.ts` and a new
+  `restyle-task.test.ts` case (seeded clips `{id:"a"}` and `{id:"b", lineageId:"L"}`; after restyle,
+  `lineageId` is `["a","L"]` and the ids changed), confirmed RED, then implemented. `npx vitest run`
+  648/649 passing (1 pre-existing slow-test skip); `tsc --noEmit` 0 errors; `pnpm lint` clean.

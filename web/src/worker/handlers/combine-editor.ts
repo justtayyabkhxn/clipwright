@@ -106,6 +106,7 @@ export async function combineEditor(ctx: JobContext): Promise<JobOutcome> {
       hookType: null,
       hookTitle: null,
       sourceRanges: result.source_ranges,
+      lineageId: newId,
       createdAt: now,
       updatedAt: now,
     };

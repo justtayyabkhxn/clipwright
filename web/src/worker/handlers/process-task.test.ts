@@ -182,6 +182,7 @@ describe("process_task", () => {
       captionSettings: { font_size: 32, position_y: 0.7 },
     });
     for (const clip of done.clips) expect(await getStorage().stat(clip.storageKey)).not.toBeNull();
+    for (const clip of done.clips) expect(clip.lineageId).toBe(clip.id);
     expect((await jobDoc(job._id))!).toMatchObject({ status: "succeeded", progress: 100 });
     expect(await exists(path.join(paths.workRoot, job._id))).toBe(false);
 

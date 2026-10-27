@@ -82,6 +82,21 @@ describe("restyle_task", () => {
     expect(await getStorage().stat("editor/old-1/abc/clean.mp4")).toBeNull();
   });
 
+  it("keeps each clip's lineage through a restyle", async () => {
+    const jobId = "c".repeat(32);
+    const id = `task-restyle-${++seq}`;
+    const clips = [clipFixture("a", id), clipFixture("b", id, { lineageId: "L" })];
+    await writeFile(await getStorage().localPath(VIDEO_KEY), "video");
+    const task = await seedTask({ _id: id, status: "processing", clips, run: { jobId } });
+    const job = await claimed({ id: jobId, type: "restyle_task", taskId: id, userId: task.userId, payload: { cleanupChanged: false }, activeKey: `task:${id}` });
+
+    expect(await runJob(job, { runEngine: fakeEngine({ "render-clips": fakeRender() }).runEngine })).toEqual({ status: "succeeded", result: { clips: 2 } });
+
+    const after = (await load(id))!;
+    expect(after.clips.map((clip) => clip.lineageId)).toEqual(["a", "L"]);
+    expect(after.clips.map((clip) => clip.id)).not.toEqual(["a", "b"]);
+  });
+
   it("cleans the source ranges again when the cleanup settings changed", async () => {
     const { job } = await restyling({ cleanupChanged: true });
     const engine = fakeEngine({ "render-clips": fakeRender() });
