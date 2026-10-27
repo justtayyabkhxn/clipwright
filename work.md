@@ -91,8 +91,8 @@ docs/      user docs; docs/port/ holds the design spec and the maps of the origi
 ## Left to do
 
 ### Phase 5: real end-to-end run (needs the user's credentials)
-- [ ] The user puts a `MONGODB_URI` (Atlas M0) and `BETTER_AUTH_SECRET` (32+ characters) in `web/.env.local`.
-- [ ] Run `npx -y pnpm@10 dev` in `web/`. Sign up (the first user becomes admin). In Settings → AI, paste the Anthropic key, Test connection, pick a model and save, then paste the AssemblyAI key and save.
+- [x] `web/.env.local` created (git-ignored): `MONGODB_URI` for the user Atlas cluster `cluster0.u0eg3eq` (DB user `tayyabk2002_db_user`), a generated `BETTER_AUTH_SECRET`; the user added `ANTHROPIC_API_KEY`, `ASSEMBLY_AI_API_KEY` and `CLAUDE_MODEL=claude-opus-5` themselves. 2026-10-27: Atlas connection OK (replica set, MongoDB 8.0, read/write), both keys verified with free checks (Anthropic Models API: connected, claude-opus-5 available; AssemblyAI transcript list: HTTP 200). `pnpm dev` runs: `/api/health` reports ok, db true, worker online; collections and indexes created; sign-in page loads.
+- [ ] Sign up at http://localhost:3000 (the first user becomes admin). The keys already come from `.env.local`, so Settings shows them as set by the environment.
 - [ ] Generate from a short YouTube video and from an uploaded file. Check progress, clips and scores; then the editor (edit, autosave), exports (server and browser) and downloads.
 - [ ] Record the results in `docs/testing.md`. Fix what breaks.
 
