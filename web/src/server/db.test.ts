@@ -1,8 +1,8 @@
 /** @vitest-environment node */
 import net from "node:net";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { afterAll, expect, it, vi } from "vitest";
-import { closeDb, collections } from "./db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { closeDb, collections, ensureIndexes, getDb } from "./db";
 import { resetEnv } from "./env";
 
 const baseEnv = { ...process.env };
@@ -39,3 +39,40 @@ it("serves operations again once the database is back after a failed first conne
     error.mockRestore();
   }
 }, 60_000);
+
+describe("YouTube indexes", () => {
+  let mongod: MongoMemoryServer;
+
+  beforeAll(async () => {
+    mongod = await MongoMemoryServer.create();
+    process.env = { ...baseEnv, MONGODB_URI: mongod.getUri(), MONGODB_DB: "db_test_youtube", BETTER_AUTH_SECRET: "s".repeat(32) };
+    resetEnv();
+  });
+
+  afterAll(async () => {
+    await closeDb();
+    await mongod.stop();
+    process.env = baseEnv;
+    resetEnv();
+  });
+
+  it("creates the YouTube indexes", async () => {
+    await ensureIndexes();
+    const db = getDb();
+
+    const postIndexes = await db.collection("youtube_posts").indexes();
+    const lineageIdIndex = postIndexes.find((index) => JSON.stringify(index.key) === JSON.stringify({ lineageId: 1 }));
+    expect(lineageIdIndex?.unique).toBe(true);
+    expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ taskId: 1 }))).toBe(true);
+    expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ userId: 1 }))).toBe(true);
+    expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ state: 1, notBefore: 1 }))).toBe(true);
+
+    const oauthStateIndexes = await db.collection("oauth_states").indexes();
+    const ttlIndex = oauthStateIndexes.find((index) => JSON.stringify(index.key) === JSON.stringify({ expiresAt: 1 }));
+    expect(ttlIndex?.expireAfterSeconds).toBe(0);
+
+    const taskIndexes = await db.collection("tasks").indexes();
+    const autopostIndex = taskIndexes.find((index) => JSON.stringify(index.key) === JSON.stringify({ autopost: 1 }));
+    expect(autopostIndex?.partialFilterExpression).toEqual({ autopost: "pending" });
+  });
+});

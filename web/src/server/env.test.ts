@@ -82,6 +82,16 @@ describe("env", () => {
     expect(() => loadEnv()).toThrow(/ASSEMBLYAI_BASE_URL/);
   });
 
+  it("reads the YouTube settings", () => {
+    useEnv({});
+    expect(env.CLAUDE_METADATA_MODEL).toBe("claude-sonnet-5");
+    expect(env.GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
+    useEnv({ GOOGLE_OAUTH_CLIENT_ID: "  " });
+    expect(env.GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
+    useEnv({ GOOGLE_BASE_URL_OVERRIDE: "not-a-url" });
+    expect(() => loadEnv()).toThrow(/GOOGLE_BASE_URL_OVERRIDE/);
+  });
+
   it("resolves paths from the repository root", () => {
     useEnv({});
     const repoRoot = path.dirname(process.cwd());

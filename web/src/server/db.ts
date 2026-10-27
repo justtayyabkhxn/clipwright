@@ -4,10 +4,13 @@ import type {
   AppSettingDoc,
   DraftDoc,
   JobDoc,
+  OAuthStateDoc,
   ProcessingCacheDoc,
   TaskDoc,
   UserDoc,
   WorkerStatusDoc,
+  YoutubeAccountDoc,
+  YoutubePostDoc,
 } from "./types";
 
 // One client per process, kept across Next dev hot reloads.
@@ -51,6 +54,9 @@ export function collections() {
     appSettings: db.collection<AppSettingDoc>("app_settings"),
     workerStatus: db.collection<WorkerStatusDoc>("worker_status"),
     users: db.collection<UserDoc>("user"),
+    youtubeAccounts: db.collection<YoutubeAccountDoc>("youtube_accounts"),
+    oauthStates: db.collection<OAuthStateDoc>("oauth_states"),
+    youtubePosts: db.collection<YoutubePostDoc>("youtube_posts"),
   };
 }
 
@@ -69,6 +75,7 @@ async function createIndexes() {
     db.collection("verification").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     db.collection("tasks").createIndex({ userId: 1, createdAt: -1 }),
     db.collection("tasks").createIndex({ status: 1, updatedAt: 1 }),
+    db.collection("tasks").createIndex({ autopost: 1 }, { partialFilterExpression: { autopost: "pending" } }),
     db.collection("clip_drafts").createIndex({ taskId: 1 }),
     db.collection("jobs").createIndex({ status: 1, runAt: 1 }),
     db.collection("jobs").createIndex({ status: 1, lockedUntil: 1 }),
@@ -78,6 +85,11 @@ async function createIndexes() {
     db.collection("jobs").createIndex({ taskId: 1 }),
     // Not a TTL: expired export docs must outlive their files until the cron deletes both.
     db.collection("jobs").createIndex({ status: 1, expiresAt: 1 }),
+    db.collection("youtube_posts").createIndex({ lineageId: 1 }, { unique: true }),
+    db.collection("youtube_posts").createIndex({ taskId: 1 }),
+    db.collection("youtube_posts").createIndex({ userId: 1 }),
+    db.collection("youtube_posts").createIndex({ state: 1, notBefore: 1 }),
+    db.collection("oauth_states").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
 }
 

@@ -49,6 +49,8 @@ export type ClipDoc = {
   sourceRanges: SourceRange[];
   keepRanges?: [number, number][];
   captionSettings?: CaptionSettings;
+  /** Set to `id` when the clip is first created; `restyle_task` carries it onto the re-render. A post belongs to a lineage, not a clip id. */
+  lineageId?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -78,6 +80,8 @@ export type TaskDoc = {
     errorCode?: string;
   };
   editLock?: { jobId: string; until: Date } | null;
+  /** Set alongside the completion CAS when an auto-post account is active; cleared once posts are created. */
+  autopost?: "pending" | "done";
   createdAt: Date;
   updatedAt: Date;
 };
@@ -114,7 +118,8 @@ export type JobType =
   | "prepare_editor"
   | "export_editor"
   | "combine_editor"
-  | "export_clip";
+  | "export_clip"
+  | "publish_youtube";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
@@ -173,6 +178,88 @@ export type WorkerStatusDoc = {
   heartbeatAt: Date;
   startedAt: Date;
   version: string;
+};
+
+// --- YouTube auto-post (design §4.2) ---
+
+/** `_id` is the userId: one connected channel per user. */
+export type YoutubeAccountDoc = {
+  _id: string;
+  channelId: string;
+  channelTitle: string;
+  channelHandle?: string;
+  thumbnailUrl?: string;
+  refreshToken: string; // encryptSetting
+  accessToken?: string; // encryptSetting
+  accessTokenExpiresAt?: Date;
+  scopes: string[];
+  status: "active" | "reauth_required" | "paused";
+  lastError?: string;
+  warning?: string;
+  autoPost: boolean;
+  privacy: "public" | "unlisted" | "private";
+  madeForKids: boolean;
+  connectedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** `_id` is the OAuth state; consumed with `findOneAndDelete`. TTL-indexed on `expiresAt`. */
+export type OAuthStateDoc = {
+  _id: string;
+  userId: string;
+  codeVerifier: string;
+  expiresAt: Date;
+};
+
+export type YoutubePostState = "queued" | "working" | "uploaded" | "blocked" | "failed" | "cancelled";
+
+export type YoutubeWaitReason = "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock";
+
+export type YoutubePostDoc = {
+  _id: string;
+  userId: string;
+  taskId: string;
+  /** Unique: one post per clip lineage, ever. */
+  lineageId: string;
+  /** Snapshotted from the account when the post is created. */
+  channelId: string;
+  state: YoutubePostState;
+  phase?: "writing" | "uploading";
+  progress?: number;
+  /** The job currently holding this post's `working` claim. */
+  claimedBy?: string;
+  notBefore?: Date;
+  waitReason?: YoutubeWaitReason;
+  attempts: number;
+  insertCalls: number;
+  /** `videos.insert` session-start budget for this post; default 3, raised by 1 per manual retry. */
+  insertCap: number;
+  // Snapshotted at creation from the account's settings:
+  privacy: "public" | "unlisted" | "private";
+  madeForKids: boolean;
+  notifySubscribers: boolean;
+  metadata?: {
+    title: string;
+    description: string;
+    tags: string[];
+    hashtags: string[];
+    language?: string;
+    model: string;
+  };
+  /** Never serialized to API responses or logged: carries the resumable-upload session. */
+  upload?: { sessionUri: string; storageKey: string; size: number; startedAt: Date };
+  videoId?: string;
+  videoUrl?: string;
+  privacyStatus?: string;
+  uploadStatus?: string;
+  verifiedAt?: Date;
+  uploadedAt?: Date;
+  warning?: string;
+  error?: string;
+  errorReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 /** Better Auth's `user` collection plus the fields only the app writes. */

@@ -59,6 +59,12 @@ const schema = z.object({
   SPEAKER_FRAMING: flag(true),
   HOOK_FIRST_TEASER: flag(false),
   YOUTUBE_MAX_HEIGHT: int(1080, 144),
+  // YouTube auto-post (docs/youtube.md): unset disables the feature.
+  GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
+  CLAUDE_METADATA_MODEL: z.string().default("claude-sonnet-5"),
+  // Overrides the Google API base URL; tests and e2e only.
+  GOOGLE_BASE_URL_OVERRIDE: z.url().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

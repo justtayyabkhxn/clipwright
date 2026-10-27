@@ -14,6 +14,7 @@ export const MAX_ATTEMPTS: Record<JobType, number> = {
   export_editor: 1,
   combine_editor: 1,
   export_clip: 1,
+  publish_youtube: 3,
 };
 
 export const EDITOR_JOB_TYPES: JobType[] = ["export_editor", "combine_editor"];

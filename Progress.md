@@ -36,3 +36,18 @@ uploads every clip of a finished video to the user's channel as a public Short.
   - midnight Pacific at DST changes
   - a refused scope or an account with no channel
 - Execution: subagent-driven. Each task gets an implementer and an independent reviewer, then the whole branch is reviewed.
+
+### 2026-10-27 17:41 — Task 1: data model, config and job type
+- Added `YoutubeAccountDoc`, `OAuthStateDoc`, `YoutubePostDoc`/`YoutubePostState`/`YoutubeWaitReason`
+  (§4.2), `ClipDoc.lineageId`, `TaskDoc.autopost` and the `publish_youtube` `JobType` to
+  `server/types.ts`; the three new `collections()` entries and their indexes (unique `lineageId`,
+  `taskId`/`userId`/`{state,notBefore}` on `youtube_posts`, a TTL on `oauth_states.expiresAt`, a
+  partial index on `tasks.autopost`) to `server/db.ts`.
+- Added `GOOGLE_OAUTH_CLIENT_ID`/`SECRET`, `CLAUDE_METADATA_MODEL` (default `claude-sonnet-5`) and
+  `GOOGLE_BASE_URL_OVERRIDE` to `env.ts`, `.env.example` and the worker test-utils env-clearing list;
+  `MAX_ATTEMPTS.publish_youtube = 3` in `jobs.ts`.
+- Added a `publish_youtube` placeholder (throws "not implemented") to `run-job.ts`'s `HANDLERS` and
+  `FAILURE_HOOKS` so `Record<JobType, ...>` still type-checks; Task 8 replaces it.
+- Tests: `npx vitest run` 641/648 passing (6 pre-existing timeouts/flakes in `fonts`, `cron` and
+  `editor` tests under full-suite load on this box, unrelated to this change — all 4 files pass
+  cleanly in isolation); `tsc --noEmit` 0 errors; `pnpm lint` clean.

@@ -14,7 +14,16 @@ import { settingsFromCreateRequest } from "../server/tasks";
 import type { ClipDoc, JobDoc, TaskDoc } from "../server/types";
 import type { EngineClip, EngineRunner } from "./context";
 
-const KEY_VARS = ["ANTHROPIC_API_KEY", "ASSEMBLY_AI_API_KEY", "CLAUDE_MODEL", "CLAUDE_RERANK_MODEL", "APP_SETTINGS_ENCRYPTION_KEY"];
+const KEY_VARS = [
+  "ANTHROPIC_API_KEY",
+  "ASSEMBLY_AI_API_KEY",
+  "CLAUDE_MODEL",
+  "CLAUDE_RERANK_MODEL",
+  "APP_SETTINGS_ENCRYPTION_KEY",
+  "GOOGLE_OAUTH_CLIENT_ID",
+  "GOOGLE_OAUTH_CLIENT_SECRET",
+  "CLAUDE_METADATA_MODEL",
+];
 
 /** One memory server (a replica set when `replSet`) and temp DATA_DIR for the test file. */
 export function setupWorkerTestEnv(name: string, options: { env?: Record<string, string>; replSet?: boolean } = {}) {
