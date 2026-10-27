@@ -44,7 +44,8 @@ uploads every clip of a finished video to the user's channel as a public Short.
   `taskId`/`userId`/`{state,notBefore}` on `youtube_posts`, a TTL on `oauth_states.expiresAt`, a
   partial index on `tasks.autopost`) to `server/db.ts`.
 - Added `GOOGLE_OAUTH_CLIENT_ID`/`SECRET`, `CLAUDE_METADATA_MODEL` (default `claude-sonnet-5`) and
-  `GOOGLE_BASE_URL_OVERRIDE` to `env.ts`, `.env.example` and the worker test-utils env-clearing list;
+  `GOOGLE_BASE_URL_OVERRIDE` to `env.ts` (the first three also to `.env.example` and the worker
+  test-utils env-clearing list; the test-only override is in `env.ts` only);
   `MAX_ATTEMPTS.publish_youtube = 3` in `jobs.ts`.
 - Added a `publish_youtube` placeholder (throws "not implemented") to `run-job.ts`'s `HANDLERS` and
   `FAILURE_HOOKS` so `Record<JobType, ...>` still type-checks; Task 8 replaces it.
