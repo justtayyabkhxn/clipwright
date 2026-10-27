@@ -99,3 +99,11 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - Tests (TDD): `google.test.ts` written first, RED (module missing), then 10/10 passing; full suite 670/671 (1 slow-test skip). Also checked
   against a local HTTP server with real Node `fetch` (308 without `Location`, explicit
   `Content-Length` on a streamed body). `tsc --noEmit` 0 errors; `pnpm lint` clean.
+
+### 2026-10-27 19:01 — Paused (stopped by the user; resume tomorrow)
+- Done and reviewed: Tasks 1–4 (data model, clip lineage, Claude-written metadata, Google client).
+- In progress: four fixes to the Google client that review turned up (a 308 "resume incomplete" response must
+  retry rather than fail; a bad client secret must not force reconnects; drop an unsupported
+  `maxResults`; tests for the secret-free error and the no-channel case). The partial edit is stashed,
+  nothing half-done is committed.
+- Next: redo those fixes, then Task 5 (accounts, tokens and OAuth state), then Tasks 6–14.
