@@ -77,8 +77,9 @@ These surface during "Generating transcript...".
 | Message | Fix |
 |---|---|
 | "An AssemblyAI API key is required to transcribe this video." | Save the AssemblyAI key (see "Missing keys"). |
-| "AssemblyAI audio upload unavailable after 3 attempts (HTTP 401)." | The key is wrong or revoked. Copy it again from the AssemblyAI dashboard. |
-| "... (HTTP 5xx)." or connection errors | AssemblyAI or the network is having trouble. Resume the task later. |
+| "AssemblyAI audio upload unavailable after 5 attempts (network error: ConnectError)." (or another `...Error`) | The worker could not reach AssemblyAI for about 30 seconds: Wi-Fi, VPN or DNS dropped, or a firewall or antivirus blocked Python. The worker log shows each failed attempt with the full reason (`AssemblyAI audio upload failed (...)`). Check your connection and click **Resume**: the downloaded video is cached, so only the transcription is redone. |
+| "AssemblyAI audio upload unavailable after 5 attempts (HTTP 5xx)." | AssemblyAI is having trouble. Resume the task later. |
+| An authentication error from AssemblyAI (HTTP 401) | The key is wrong or revoked; it is not retried. Copy it again from the AssemblyAI dashboard. |
 | "AssemblyAI transcript ... did not complete within 900s" | Long video or a slow queue. Raise `ASSEMBLY_AI_HTTP_TIMEOUT_SECONDS`, then resume. |
 | "Transcription failed: ..." | AssemblyAI rejected the audio (for example no speech, unsupported language, or an account limit). Check the message and your AssemblyAI account. Set `TRANSCRIPTION_LANGUAGE` if detection picks the wrong language. |
 | Keys from an EU AssemblyAI project fail | Set `ASSEMBLYAI_BASE_URL=https://api.eu.assemblyai.com`. |

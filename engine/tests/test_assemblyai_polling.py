@@ -108,12 +108,30 @@ def test_exhausted_upload_retries_do_not_submit_transcript(monkeypatch):
     transcriber, client = polling_job(monkeypatch, lambda _: response("completed"))
     transcriber.upload_file.side_effect = httpx.ConnectError("upload unavailable")
     try:
-        with pytest.raises(RuntimeError, match="upload unavailable after 3 attempts"):
+        with pytest.raises(RuntimeError, match=r"upload unavailable after 5 attempts \(network error: ConnectError\)"):
             transcription._submit_and_wait_for_assemblyai_transcript(transcriber, Path("audio.mp3"), None, 900)
     finally:
         client.close()
-    assert transcriber.upload_file.call_count == 3
+    assert transcriber.upload_file.call_count == 5
     transcriber.submit.assert_not_called()
+
+
+def test_upload_retries_ride_out_a_short_network_outage(monkeypatch, caplog):
+    # A few seconds without network (Wi-Fi or DNS drop) must not fail the job: uploads are free to retry.
+    transcriber, client = polling_job(monkeypatch, lambda _: response("completed"))
+    sleeps = []
+    monkeypatch.setattr(transcription.time, "sleep", sleeps.append)
+    outage = httpx.ConnectError("[Errno 11001] getaddrinfo failed")
+    transcriber.upload_file.side_effect = [outage, outage, outage, outage, "https://cdn.assemblyai.com/audio"]
+    try:
+        with caplog.at_level("WARNING"):
+            transcription._submit_and_wait_for_assemblyai_transcript(transcriber, Path("audio.mp3"), None, 900)
+    finally:
+        client.close()
+    assert transcriber.upload_file.call_count == 5
+    assert sleeps[:4] == [2.0, 4.0, 8.0, 16.0]
+    transcriber.submit.assert_called_once()
+    assert "ConnectError" in caplog.text and "getaddrinfo failed" in caplog.text
 
 
 def test_submission_timeout_is_not_retried(monkeypatch):
@@ -180,12 +198,12 @@ def test_exhausted_gateway_errors_are_safe_to_display_and_do_not_submit(monkeypa
     transcriber, client = polling_job(monkeypatch, lambda _: response("completed"))
     transcriber.upload_file.side_effect = aai.types.TranscriptError("<html>private upstream details</html>", 502)
     try:
-        with pytest.raises(RuntimeError, match=r"after 3 attempts \(HTTP 502\)") as error:
+        with pytest.raises(RuntimeError, match=r"after 5 attempts \(HTTP 502\)") as error:
             transcription._submit_and_wait_for_assemblyai_transcript(transcriber, Path("audio.mp3"), None, 900)
     finally:
         client.close()
     assert "private" not in str(error.value)
-    assert transcriber.upload_file.call_count == 3
+    assert transcriber.upload_file.call_count == 5
     transcriber.submit.assert_not_called()
 
 

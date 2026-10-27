@@ -98,21 +98,24 @@ def _submit_and_wait_for_assemblyai_transcript(
 
     # Uploads are safe to retry: they do not create a paid transcript. Keep the
     # transcript POST outside this loop because a timeout may hide its success.
-    for attempt in range(1, 4):
+    # Five attempts back off 2+4+8+16 s, enough to ride out a short network drop.
+    attempts = 5
+    for attempt in range(1, attempts + 1):
         try:
             audio_url = transcriber.upload_file(str(media_path))
             break
         except (httpx.TransportError, aai.AssemblyAIError) as error:
             status = getattr(error, "status_code", None)
-            retryable = isinstance(error, httpx.TransportError) or status in {408, 429, 500, 502, 503, 504}
-            if not retryable:
+            network = isinstance(error, httpx.TransportError)
+            if not network and status not in {408, 429, 500, 502, 503, 504}:
                 raise
-            if attempt == 3:
-                raise RuntimeError(
-                    "AssemblyAI audio upload unavailable after 3 attempts"
-                    + (f" (HTTP {status})." if status else ".")
-                ) from None
-            logger.warning("AssemblyAI audio upload failed (HTTP %s); retrying upload (%s/3)", status, attempt)
+            # Transport errors carry no secrets (no headers); SDK errors may carry upstream HTML, so log only the status.
+            reason = f"{type(error).__name__}: {error}"[:300] if network else f"HTTP {status}"
+            if attempt == attempts:
+                logger.error("AssemblyAI audio upload failed (%s); giving up after %s attempts", reason, attempts)
+                cause = f"network error: {type(error).__name__}" if network else f"HTTP {status}"
+                raise RuntimeError(f"AssemblyAI audio upload unavailable after {attempts} attempts ({cause}).") from None
+            logger.warning("AssemblyAI audio upload failed (%s); retrying upload (%s/%s)", reason, attempt, attempts)
             time.sleep(2.0 ** attempt)
     submitted = transcriber.submit(audio_url, config=config_obj)
     if not submitted.id:
