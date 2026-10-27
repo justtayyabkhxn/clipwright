@@ -34,6 +34,8 @@ const schema = z.object({
   DISABLE_SIGN_UP: flag(false),
   ANTHROPIC_API_KEY: z.string().optional(),
   ASSEMBLY_AI_API_KEY: z.string().optional(),
+  // AssemblyAI API host, e.g. https://api.eu.assemblyai.com for the EU region. Unset uses the SDK default.
+  ASSEMBLYAI_BASE_URL: z.url().optional(),
   // Unset stays undefined: settings precedence needs to know whether the env set it.
   CLAUDE_MODEL: z.string().optional(),
   CLAUDE_RERANK_MODEL: z.string().optional(),

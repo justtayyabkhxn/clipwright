@@ -25,6 +25,8 @@ class EngineConfig:
     youtube_max_height: int = 1080
     assembly_ai_http_timeout_seconds: int = 900
     assembly_ai_request_timeout_seconds: int = 60
+    # AssemblyAI API host (e.g. https://api.eu.assemblyai.com). Empty uses the SDK default.
+    assemblyai_base_url: str = ""
     # Bundled fonts first, then the user's upload dir. Lookup searches in order.
     fonts_dirs: list[Path] = field(default_factory=lambda: [BUNDLED_FONTS_DIR])
 
@@ -43,6 +45,10 @@ class EngineConfig:
         for name in ("max_video_duration", "youtube_max_height", "assembly_ai_http_timeout_seconds"):
             if raw.get(name) is not None:
                 setattr(config, name, int(raw[name]))
+        base_url = raw.get("assemblyai_base_url")
+        if base_url is not None and not isinstance(base_url, str):
+            raise ValueError("assemblyai_base_url must be a string")
+        config.assemblyai_base_url = (base_url or "").strip().rstrip("/")
         config.youtube_max_height = max(144, min(1080, config.youtube_max_height))
         fonts_dirs = request.get("fonts_dirs")
         if fonts_dirs:

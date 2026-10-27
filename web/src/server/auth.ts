@@ -34,10 +34,17 @@ function createAuth() {
     databaseHooks: {
       user: {
         create: {
-          // The first account, and any ADMIN_EMAILS address, becomes an admin.
-          // ponytail: two simultaneous first sign-ups can both become admin.
+          // The first account, and any ADMIN_EMAILS address, becomes an admin. Concurrent first
+          // sign-ups race on a one-time marker, so only the one that creates it wins.
           before: async (user) => {
-            const first = (await collections().users.countDocuments({}, { limit: 1 })) === 0;
+            const empty = (await collections().users.countDocuments({}, { limit: 1 })) === 0;
+            const first =
+              empty &&
+              (
+                await getDb()
+                  .collection<{ _id: string; at: Date }>("meta")
+                  .updateOne({ _id: "admin_bootstrap" }, { $setOnInsert: { at: new Date() } }, { upsert: true })
+              ).upsertedCount === 1;
             const listed = adminEmails().has(user.email.toLowerCase());
             return { data: { ...user, is_admin: first || listed } };
           },

@@ -1,6 +1,7 @@
 """transcribe: AssemblyAI over a mocked HTTP layer, and the sidecar-only path."""
 
 import json
+from types import SimpleNamespace
 import shutil
 import subprocess
 import tempfile
@@ -143,3 +144,47 @@ def test_missing_key_without_words_is_a_transcription_error(tmp_path, monkeypatc
     with pytest.raises(cli.EngineError) as error:
         cli.cmd_transcribe(request, _Events())
     assert error.value.code == "transcription_failed"
+
+
+def test_config_assemblyai_base_url_reaches_the_sdk_client(tmp_path, monkeypatch):
+    from clipwright_engine.config import EngineConfig
+
+    assert EngineConfig.from_request({}).assemblyai_base_url == ""
+    with pytest.raises(ValueError):
+        EngineConfig.from_request({"config": {"assemblyai_base_url": 5}})
+
+    video = tmp_path / "video.mp4"
+    video.write_bytes(b"x")
+    seen = []
+
+    def fake_transcribe(video_path, speech_model, runtime):
+        seen.append(runtime.assemblyai_base_url)
+        return ""
+
+    monkeypatch.setattr(transcription, "_get_transcript_with_assemblyai", fake_transcribe)
+    request = {
+        "work_dir": str(tmp_path / "work"),
+        "video_path": str(video),
+        "assemblyai_api_key": "k",
+        "config": {"assemblyai_base_url": "https://api.eu.assemblyai.com/"},
+    }
+    _start(monkeypatch, request)
+    cli.cmd_transcribe(request, _Events())
+    assert seen == ["https://api.eu.assemblyai.com"]
+
+
+def test_assemblyai_client_uses_the_runtime_base_url(tmp_path, monkeypatch):
+    built = []
+
+    def capture(**kwargs):
+        built.append(kwargs["settings"].base_url)
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(aai, "Client", capture)
+    runtime = SimpleNamespace(assembly_ai_api_key="k", assemblyai_base_url="http://127.0.0.1:9", transcription_language="")
+    with pytest.raises(RuntimeError):
+        transcription._get_transcript_with_assemblyai(tmp_path / "v.mp4", "universal-3-5-pro", runtime)
+    runtime.assemblyai_base_url = ""
+    with pytest.raises(RuntimeError):
+        transcription._get_transcript_with_assemblyai(tmp_path / "v.mp4", "universal-3-5-pro", runtime)
+    assert built == ["http://127.0.0.1:9", aai.settings.base_url]

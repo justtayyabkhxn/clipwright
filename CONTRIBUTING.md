@@ -1,43 +1,61 @@
-# Contributing to SupoClip
+# Contributing to Clipwright
 
-Thanks for your interest in improving SupoClip. By submitting a pull request,
-patch, commit, issue attachment, or other contribution to this repository, you
-agree to the terms below.
+Thanks for helping. Clipwright is licensed under AGPL-3.0 (see [LICENSE](LICENSE) and
+[NOTICE.md](NOTICE.md)). By submitting a contribution you agree that it is licensed under the same
+AGPL-3.0 terms, and you confirm you have the right to submit it.
 
-## Contribution License
+## Set up
 
-You represent that you have the right to submit your contribution and that it
-does not knowingly violate any third-party rights.
+Follow [docs/setup.md](docs/setup.md): Node 22+, pnpm 10 (or `npx -y pnpm@10`), uv, and ffmpeg with
+libass and libx264. Then:
 
-Unless a separate written agreement says otherwise, you grant the SupoClip
-project owner a perpetual, worldwide, non-exclusive, royalty-free, irrevocable
-license to use, reproduce, modify, distribute, publicly perform, publicly
-display, sublicense, and relicense your contribution as part of SupoClip or
-related products and services.
+```bash
+cd web && npx -y pnpm@10 install
+cd ../engine && uv sync
+```
 
-This grant includes the right to distribute your contribution under the
-AGPL-3.0 license, under future open-source licenses used by SupoClip, and under
-commercial or proprietary licenses offered by the project owner.
+For day-to-day development you need a `web/.env.local` with `MONGODB_URI` and
+`BETTER_AUTH_SECRET`. The tests themselves need no database or API keys.
 
-To the maximum extent permitted by law, you waive any moral rights, neighboring
-rights, or similar rights that would prevent the project owner from exercising
-the license granted above.
+## Checks before a pull request
 
-Submitting a contribution does not give you ownership of SupoClip, any SupoClip
-trademarks, or any commercial license rights beyond the public license that
-applies to the repository.
+```bash
+cd web
+npx -y pnpm@10 exec tsc --noEmit -p .
+npx -y pnpm@10 run lint
+npx -y pnpm@10 exec vitest run
 
-## Development
+cd ../engine
+uv run python -X utf8 -m pytest -q
+```
 
-See [README.md](README.md) and [CLAUDE.md](CLAUDE.md) for local development
-instructions.
+Also run these when they apply:
+
+- Changes to the worker, the engine runner or the engine CLI:
+  `CLIPWRIGHT_SLOW_TESTS=1 npx -y pnpm@10 exec vitest run src/worker/integration.slow.test.ts`
+  (in `web/`).
+- Changes to pages or end-to-end flows: `npx -y pnpm@10 exec playwright test` (in `web/`).
+- Changes to build config or server/client boundaries: `npx -y pnpm@10 run build`.
+
+[docs/testing.md](docs/testing.md) explains every suite and has a manual checklist for changes that
+need real keys.
+
+## Style
+
+- Read [CLAUDE.md](CLAUDE.md) for the conventions. In short: route handlers stay thin and never run
+  Python or ffmpeg; heavy work is a job; multi-step writes are single-document compare-and-set
+  updates; server modules the worker imports must not import `server-only` or `next/*`.
+- If you change a route, collection, job payload, storage key or engine command, update
+  [docs/port/DESIGN.md](docs/port/DESIGN.md) in the same pull request.
+- New environment variables go in `web/src/server/env.ts`, `web/.env.example` and
+  [docs/configuration.md](docs/configuration.md).
+- TypeScript is strict and lint runs with `--max-warnings 0`. Keep the existing formatting.
+- Python targets 3.11; keep the engine free of database access, LLM calls and env-var keys.
+- UI copy goes in `web/messages/en/*.json`. The product name is Clipwright.
+- Add or update tests with every behaviour change. Tests must not call paid APIs; use the fakes.
+- Keep pull requests focused, and explain the user-visible effect in the description.
 
 ## Changelog
 
-If a pull request changes something a person using SupoClip can see, add a line
-to [CHANGELOG.md](CHANGELOG.md) at the repository root. Put it under today's
-date (`## YYYY-MM-DD`, newest dates first). Write what changed for users, tag
-it **New**, **Improved**, **Fixed**, or **Under the hood**, and link the pull
-request. Skip internal-only or CI-only changes, or fold several of them into
-one **Under the hood** line. Do not include customer names, email addresses,
-user IDs, or other private details. This repository is public.
+If a change is visible to people using Clipwright, add a line under "Unreleased" in
+[CHANGELOG.md](CHANGELOG.md), tagged **New**, **Improved**, **Fixed** or **Under the hood**.

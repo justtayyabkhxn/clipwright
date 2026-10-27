@@ -1,366 +1,125 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (and other coding agents) working in this repository.
 
-## Project Overview
+## Project overview
 
-SupoClip is an open-source alternative to OpusClip — an AI-powered video clipping tool that transforms long-form content into viral short clips. AGPL-3.0 licensed.
+Clipwright turns long videos (YouTube URLs or uploads) into short 9:16 clips: AssemblyAI transcribes,
+Claude picks and scores segments, a Python engine renders them with face-aware crops and burned
+captions, and a clip editor refines them. It is a rebrand and re-platform of SupoClip (AGPL-3.0):
+one Next.js app plus a Node worker, MongoDB as the only database, and the original Python renderer
+reused as a CLI. It runs locally on Windows, macOS and Linux without Docker and is meant to move to
+Vercel later (see `docs/deploying-to-vercel.md`).
 
-## Development Commands
+**`docs/port/DESIGN.md` is the authoritative spec** (env, storage keys, collections, jobs, engine
+CLI, API routes). Keep it in sync when you change a contract. `docs/port/map-*.md` describe the
+original SupoClip system; the original code is in git history at commit `1dbb178`
+(`git show 1dbb178:backend/src/...`). `work.md` is the progress log.
 
-### Docker (recommended)
+## Layout
 
-```bash
-docker-compose up -d              # Start all 5 services
-docker-compose up -d --build      # Rebuild after changes
-docker-compose logs -f backend    # Debug backend
-docker-compose logs -f worker     # Debug video processing
-docker-compose down               # Stop all services
+```
+web/                 Next.js 15 app, package "clipwright"
+  src/app/           pages and API route handlers (src/app/api/**/route.ts)
+  src/server/        server modules shared by routes and the worker: env, db, auth, session, http,
+                     storage, settings, jobs, tasks, drafts, engine, fonts, caption-templates, ai/
+  src/server/ai/     Claude clip selection (TypeScript port of SupoClip's ai.py)
+  src/worker/        worker entry (main.ts), run-job, cron, handlers/ (one per job type)
+  src/components, src/hooks, src/lib   client code (shadcn/Radix UI, Tailwind v4)
+  messages/en/       UI copy (next-intl, English only)
+  fonts/             bundled caption fonts
+  e2e/               Playwright tests and fake Claude/AssemblyAI servers
+engine/              Python 3.11 render engine (uv), package clipwright_engine, tests/
+data/                git-ignored runtime data: storage/ and work/
+docs/                user docs; docs/port/ holds the design spec and maps
 ```
 
-Services: Frontend (:3107), Backend API (:8000, docs at /docs), Worker (ARQ), PostgreSQL (:5432), Redis (:6379)
+## Commands
 
-### Backend (local)
-
-Uses `uv` (not pip/poetry). Requires Python 3.11+, ffmpeg, running PostgreSQL and Redis.
+pnpm may not be on PATH; `npx -y pnpm@10 <args>` always works (the repo pins pnpm 10.27.0).
 
 ```bash
-cd backend
-uv venv .venv && source .venv/bin/activate
+# web/
+npx -y pnpm@10 install
+npx -y pnpm@10 dev                    # Next on :3000 + worker (tsx watch)
+npx -y pnpm@10 run dev:web            # Next only
+npx -y pnpm@10 run worker             # worker only
+npx -y pnpm@10 exec vitest run        # unit/integration tests (in-memory MongoDB)
+npx -y pnpm@10 exec vitest run src/server/settings.test.ts   # one file
+CLIPWRIGHT_SLOW_TESTS=1 npx -y pnpm@10 exec vitest run src/worker/integration.slow.test.ts
+npx -y pnpm@10 exec tsc --noEmit -p .
+npx -y pnpm@10 run lint               # eslint, --max-warnings 0
+npx -y pnpm@10 exec playwright test   # e2e (fake AI servers, in-memory MongoDB)
+npx -y pnpm@10 run build
+
+# engine/
 uv sync
-
-# API server (uses refactored entry point)
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-
-# Worker process (required for video processing)
-arq src.workers.tasks.WorkerSettings
+uv run python -X utf8 -m pytest -q
+echo '<json request>' | uv run python -X utf8 -m clipwright_engine <command>
 ```
 
-### Frontend (local)
+The root `Makefile` wraps these (`setup dev worker test test-web test-engine check build`).
+Before finishing a change, run tsc, lint and the relevant vitest/pytest files.
 
-```bash
-cd frontend
-pnpm install
-pnpm run dev          # Dev server with Turbopack
-pnpm run build        # Prisma generate + Next.js build
-pnpm run lint
-```
+## Architecture in one paragraph
 
-### No tests
+Route handlers (`runtime = "nodejs"`, `dynamic = "force-dynamic"`) authenticate with Better Auth,
+read/write MongoDB and storage, and enqueue jobs; they never run Python or ffmpeg. The worker claims
+jobs from the `jobs` collection (60 s lease, 15 s heartbeat, reaper, failure hooks), runs the
+handler, and calls the engine as a subprocess per step (`runEngine` in `src/server/engine.ts`: JSON on
+stdin, NDJSON events on stdout, cancel file, tree kill). Claude is called from the worker in
+TypeScript (`src/server/ai`). The browser polls every 2 s. Files go through the `Storage` interface
+(`LocalStorage` under `DATA_DIR/storage`).
 
-The project currently has no test files.
+## Key contracts (details in DESIGN.md)
 
-## Architecture
+- **Jobs:** `process_task`, `restyle_task`, `prepare_editor`, `export_editor`, `combine_editor`,
+  `export_clip`. Job ids are 32 lowercase hex. `activeKey` (`task:{id}`, `prepare:{clipId}`) and
+  `liveKey` are unique partial indexes; E11000 means "already queued or running".
+- **Task run:** `task.run = {jobId, type}` is set when a run starts; the worker's CAS writes are
+  fenced by `run.jobId`. Task JSON exposes `run_type` while the task is active.
+- **Restyle cancel/failure** returns the task to `completed` with the old clips and rolls the
+  settings back from the job's `payload.previousSettings`.
+- **Enqueue responses** include `worker_online` (heartbeat under 30 s old).
+- **Progress messages** ("Downloading video...", "Creating clip i/N...", "Complete!" ...) are a UI
+  contract; keep them exact.
+- **YouTube URLs** are host-checked and stored as `https://www.youtube.com/watch?v={id}`; uploads are
+  `upload://{uuid}{ext}` and map to `uploads/{uuid}{ext}`.
+- **Settings:** `ANTHROPIC_API_KEY`, `ASSEMBLY_AI_API_KEY`, `CLAUDE_MODEL` from env or `app_settings`
+  (AES-256-GCM, `v1:` format, byte-compatible with SupoClip's Python). Env wins unless the admin set
+  `preferAdminValue`. `/api/ai/provider` returns `llm_configured` and `transcription_configured`.
+- **API shapes** match SupoClip's so the client barely changed; errors are `{detail}`.
+- **The engine** never touches MongoDB, never calls an LLM, and gets keys only in its request.
 
-### System Overview
+## Conventions
 
-```
-User → Frontend (Next.js 15) → Backend API (FastAPI) → Redis Queue → ARQ Worker
-                                      ↓                                  ↓
-                               PostgreSQL ←───────────────────────────────┘
-```
+- Server modules the worker imports must **not** import `server-only` or `next/*` (the worker runs
+  under `tsx`, outside Next). Keep client code from importing `src/server`.
+- No multi-document transactions in app code: every multi-step write is a single-document atomic
+  update or compare-and-set (`casStatus`, `pushClip`, `replaceClips`, draft revision CAS).
+- Wrap route handlers in `handle()` and throw `ApiError(status, detail)` for expected errors.
+- Read configuration only through `env` / `paths` from `src/server/env.ts`; add new variables there,
+  to `web/.env.example` and to `docs/configuration.md`.
+- Validate storage keys (no `..`, backslashes or leading `/`); never build paths from user input.
+- The AI prompts in `src/server/ai/prompts.ts` are byte-identical to the Python originals and covered
+  by golden tests; change them deliberately and update the fixtures.
+- `web/src/lib/caption-templates.json` is generated from `engine/clipwright_engine/caption_templates.py`;
+  an engine test asserts they match.
+- Tests: vitest with `mongodb-memory-server`, fake `runEngine`, fake Anthropic `fetch`; no paid calls.
+- UI copy goes in `messages/en/*.json`. Product name is **Clipwright**; "SupoClip" appears only in
+  the credit ("Based on SupoClip", NOTICE.md, license text).
+- Deliberate shortcuts are marked with a `ponytail:` comment naming the limit and the upgrade path.
+- Never create `docs/claude.md`: on Windows it collides with `CLAUDE.md`.
 
-Task creation returns immediately (<100ms). Video processing happens asynchronously in the worker. Frontend connects via SSE for real-time progress updates.
+## Machine quirks (Windows dev box)
 
-### Backend: Layered Architecture
-
-The backend uses the layered application in `main.py`; `main_refactored.py` is a compatibility import:
-
-```
-api/routes/          → HTTP handlers (tasks.py, media.py)
-services/            → Business logic (task_service.py, video_service.py)
-repositories/        → Raw SQL via asyncpg (task_repository.py, clip_repository.py, source_repository.py)
-workers/             → ARQ job queue (tasks.py, job_queue.py, progress.py)
-utils/               → Thread pool helpers for blocking operations (async_helpers.py)
-```
-
-**Key patterns:**
-- All DB access goes through repository classes using raw SQL (`text()` queries), not SQLAlchemy ORM
-- Blocking operations (video processing, downloads, transcription) wrapped in `run_in_thread()` to avoid blocking the async event loop
-- Progress tracking uses Redis pub/sub → SSE to frontend
-- Task status flow: `queued → processing → completed/error/cancelled`
-
-### Video Processing Pipeline
-
-1. **Input** → YouTube URL (yt-dlp) or uploaded file
-2. **Transcription** → AssemblyAI word-level timestamps (cached as `.transcript_cache.json`)
-3. **AI Analysis** → Pydantic AI selects viral segments (15-60s each) with virality scoring. Transcripts over 15 min are analysed in 12-min windows (2-min overlap, 3 concurrent), deduplicated, then reranked together in one comparative call (`RERANK_LLM`, default `LLM`); final count scales ~1 clip per 5 min, capped by `MAX_CLIPS` (default 10)
-4. **Clip Generation** → MoviePy creates 9:16 clips with:
-   - Face-centered cropping: MediaPipe → OpenCV DNN → Haar cascade (fallback chain)
-   - Word-synced subtitles from AssemblyAI
-   - Custom fonts (TTF files in `backend/fonts/`)
-   - Optional transition effects (`backend/transitions/`)
-   - Optional B-roll overlays (Pexels API)
-   - Caption templates with animation styles
-5. **Storage** → Clips to `{TEMP_DIR}/clips/`, metadata to PostgreSQL
-
-### Frontend Architecture
-
-- **Next.js 15** with App Router, React 19, TailwindCSS v4
-- **ShadCN UI** (New York style, stone base color, Radix primitives)
-- **Better Auth** with Prisma adapter for email/password auth
-- **No global state library** — React hooks only (`useState`, `useEffect`, `useSession`)
-- All pages use `"use client"` — SSR is minimal
-- Prisma client generated to `frontend/src/generated/prisma/` (custom output path)
-- Build: `prisma generate && next build` (Prisma generate runs on both build and postinstall)
-
-**Auth flow:** Frontend calls Better Auth → session cookie → passes `user_id` header to backend API
-
-### Database
-
-PostgreSQL 15. Schema in `init.sql`. Mixed naming conventions:
-- `tasks`, `sources`, `generated_clips` → snake_case
-- `session`, `account`, `verification`, `users` → camelCase (Better Auth)
-- UUIDs stored as VARCHAR(36)
-- Auto-update triggers on `updated_at`/`updatedAt` columns
-
-## Key Backend Files
-
-| File | Purpose |
-|------|---------|
-| `src/main_refactored.py` | Compatibility import for existing deployments |
-| `src/main.py` | Canonical FastAPI application factory |
-| `src/api/routes/tasks.py` | Task CRUD, SSE progress, clip editing endpoints (711 lines) |
-| `src/api/routes/media.py` | Fonts, transitions, uploads, templates |
-| `src/services/task_service.py` | Task orchestration, clip editing logic (574 lines) |
-| `src/services/video_service.py` | Video download, transcription, AI analysis, clip generation |
-| `src/workers/tasks.py` | ARQ worker task definitions |
-| `src/workers/job_queue.py` | Job queue management |
-| `src/workers/progress.py` | Real-time progress via Redis |
-| `src/ai.py` | Pydantic AI agents, system prompt, segment validation |
-| `src/video_utils.py` | Video processing, cropping, subtitles (~820 lines) |
-| `src/clip_editor.py` | Clip trim, split, merge, export presets |
-| `src/broll.py` | Pexels API B-roll integration |
-| `src/caption_templates.py` | Caption template system |
-| `src/config.py` | Environment variable configuration |
-| `src/social/` | Social publishing providers (YouTube, TikTok, Instagram): OAuth, upload, metrics |
-| `src/services/social_service.py` | Account connections, publish/schedule, metrics refresh, AI performance context |
-| `src/repositories/social_repository.py` | `social_accounts`, `social_posts`, `social_post_metrics` SQL |
-| `src/api/routes/social.py` | `/social/*` routes |
-
-## API Endpoints (routes in `api/routes/`)
-
-**Task lifecycle:**
-- `POST /start-with-progress` — Create task, enqueue to worker (returns task_id)
-- `GET /tasks/` — List user tasks
-- `GET /tasks/{id}` — Get task with clips
-- `GET /tasks/{id}/progress` — SSE real-time progress stream
-- `POST /tasks/{id}/cancel` — Cancel processing
-- `POST /tasks/{id}/resume` — Resume cancelled/errored task
-- `DELETE /tasks/{id}` — Delete task
-
-**Clip editing:**
-- `PATCH /tasks/{id}/clips/{clip_id}` — Trim clip
-- `POST /tasks/{id}/clips/{clip_id}/split` — Split at timestamp
-- `POST /tasks/{id}/clips/merge` — Merge selected clips
-- `PATCH /tasks/{id}/clips/{clip_id}/captions` — Update captions
-- `GET /tasks/{id}/clips/{clip_id}/export?preset=tiktok` — Export with platform preset
-
-**Media:**
-- `GET /fonts`, `GET /transitions`, `GET /caption-templates`, `GET /broll/status`
-- `POST /upload` — Upload video file
-- `GET /clips/{filename}` — Serve generated clips
-
-**Social publishing:**
-- `GET /social/providers`, `GET /social/connections` — configured platforms and connected accounts
-- `POST /social/connections/{provider}/authorize` + `/callback` — OAuth handshake (session auth only)
-- `POST /social/posts` — publish or schedule a clip; `GET /social/posts?task_id=` — list with metrics
-- `POST /social/posts/{id}/cancel|retry|refresh-metrics`, `DELETE /social/posts/{id}`
-- `GET /social/performance` — metrics by hook type / platform / clip length (also fed into the AI prompt)
-- `GET /social/performance/timeseries?days=30` — daily new views from metrics snapshots (Analytics chart)
-- `GET /social/media/{token}` — public token-gated clip stream for Instagram
-
-Worker crons (`workers/tasks.py`): every minute `dispatch_scheduled_social_posts`, hourly `refresh_social_metrics`.
-Post status flow: `scheduled → queued → publishing → published/failed/cancelled`.
-
-**API keys (programmatic access):**
-- `GET /api-keys/` — List the user's API keys (metadata only)
-- `POST /api-keys/` — Create a key (plaintext `sk_...` returned exactly once)
-- `DELETE /api-keys/{key_id}` — Revoke a key
-
-API keys authenticate `/tasks/*`, `/fonts` and `/upload` directly via
-`Authorization: Bearer sk_...` or `x-api-key`. Resolution lives in
-`auth_headers.resolve_authenticated_user_id` (API key → DB lookup, else falls
-back to the frontend's HMAC-signed session headers). Only the SHA-256 hash is
-stored (`api_keys` table). The frontend manages keys at `/settings/api-keys`.
-
-## Plans & billing
-
-Hosted plans are **Pro** ($9.99/mo, $99.90/yr) and **Creator** ($24.99/mo, $249.90/yr).
-Creator's internal plan id is still `scale` (DB `users.plan`, Stripe metadata,
-RevenueCat `...scale.monthly/annual` product IDs); only the display name changed.
-
-- **Metered in minutes of source video** per month (`PRO_/SCALE_PLAN_MINUTE_LIMIT`,
-  600/1500). `tasks.source_duration_seconds` is recorded at task creation (YouTube
-  preflight, ffprobe for uploads) and `BillingService` sums started minutes.
-  Yearly subscriptions still reset monthly (`_usage_window`).
-- **Resolution:** Pro gets 720p via a final `cap_video_short_side` pass on generated
-  clips and editor renders; Creator gets 1080p. Pro subscribers from before the
-  change have `users.legacy_hd` (backfilled once) and keep 1080p until they cancel.
-  Admins can grant or remove it per user in the `/admin` Users panel (searchable by
-  email/name; `PATCH /api/admin/users/{id}/legacy-hd`).
-  720p plans also *download* YouTube at 720p (`reduced_media_limits` → Apify quality /
-  yt-dlp height cap), and their `processing_cache` key gets a `|q720` suffix so a 1080p
-  request never reuses a 720p source. Full-quality keys are unchanged.
-- **Scheduling** social posts requires Creator (`can_schedule_posts`); publishing
-  immediately works on Pro.
-- **Annual** checkout: `interval: "year"` uses `STRIPE_PRO_/SCALE_ANNUAL_PRICE_ID`.
-- **Stripe prices (2026-10):** new subscribers get new prices (lookup keys `pro_monthly_2026_10`,
-  `pro_yearly_2026_10`, `creator_monthly_2026_10`, `creator_yearly_2026_10`). The earlier Pro price stays
-  for existing subscribers via `STRIPE_PRO_LEGACY_PRICE_IDS`; the webhook maps it to Pro and sets
-  `legacy_hd`, so dropping it from that list would downgrade those subscribers on their next renewal.
-
-## Creator (affiliate) program
-
-Creators apply at `/settings/creator-program` (public pitch page: `/affiliate`).
-Admins approve/decline/revoke in the `/admin` "Creator Program" panel. Logic
-lives in `frontend/src/server/affiliates.ts`; applications are the `affiliates`
-table (one per user, `slug` cleared on decline).
-
-- **Approve** creates Stripe promotion code `SLUG` on the shared coupon
-  `STRIPE_CREATOR_COUPON_ID` (default `creator-20-3mo`, 20% off for 3 months) and
-  grants Pro with `subscription_provider = "affiliate"` (Stripe/Apple webhooks
-  never clobber it with a non-paid state).
-- **Checkout** applies the coupon from a typed/remembered code (`body.code`) or the
-  signup `user_acquisition.ref`. The browser remembers validated `?ref=` codes
-  (`lib/creator-code.ts`).
-- **Emails** go through the backend `POST /account/affiliate-email` (SES): new
-  applications to every `is_admin` user, decisions to the applicant.
-- **iOS:** creators' free Pro reaches the app through the billing summary
-  (`subscription_provider: "affiliate"`). The audience discount on iPhone is an
-  App Store offer code: custom codes on the Pro subscription's "Creator offer"
-  (20% off for 3 months), added by hand in App Store Connect; admins then mark
-  "App Store code added" and the creator page shows `appStoreRedeemUrl(code)`.
-  The app's paywall opens Apple's redeem sheet ("Have a creator code?").
-
-## Environment Variables
-
-Required in `.env` (root) or `backend/.env`:
-
-```bash
-ASSEMBLY_AI_API_KEY=...              # Required: video transcription
-TRANSCRIPTION_LANGUAGE=              # Optional: empty = auto-detect; e.g. es, de, en_us forces it
-LLM=google-gla:gemini-3-flash-preview # Format: provider:model-name
-GOOGLE_API_KEY=...                   # Or OPENAI_API_KEY / ANTHROPIC_API_KEY
-OLLAMA_BASE_URL=http://localhost:11434/v1  # Optional for ollama:* models
-OLLAMA_API_KEY=...                   # Optional; required for Ollama Cloud
-RERANK_LLM=                          # Optional; model for the long-video candidate rerank (default: LLM)
-YOUTUBE_DOWNLOAD_PROVIDER=yt_dlp     # yt_dlp | apify
-YOUTUBE_PROXY_URL=                   # Optional residential proxy template; empty = off
-YOUTUBE_POT_PROVIDER_URL=            # Optional bgutil base URL (http://bgutil:4416)
-YOUTUBE_DOWNLOAD_MAX_BYTES=2000000000
-YOUTUBE_MAX_HEIGHT=1080              # Hard cap; lower values are honored
-APIFY_EXPENSIVE_FALLBACKS=false      # Skip high-cap Apify fallback actors
-
-# Optional
-PEXELS_API_KEY=...                   # B-roll stock footage
-YOUTUBE_OAUTH_CLIENT_ID=...          # Social publishing: Google OAuth client (+ _SECRET)
-TIKTOK_CLIENT_KEY=...                # Social publishing: TikTok app (+ TIKTOK_CLIENT_SECRET)
-INSTAGRAM_APP_ID=...                 # Social publishing: Meta app with Instagram Login (+ _SECRET)
-SOCIAL_PERFORMANCE_MIN_POSTS=3       # Measured posts before AI selection is personalized
-SOCIAL_PUBLISHING_ACCESS=off         # Rollout gate: off (default) | admins (admins + allowlist) | all
-SOCIAL_PUBLISHING_ALLOWED_EMAILS=    # Comma-separated beta emails when access=admins
-REDIS_HOST=localhost                 # Default: localhost
-REDIS_PORT=6379                      # Default: 6379
-QUEUED_TASK_TIMEOUT_SECONDS=180      # Fail-safe for stuck tasks
-TEMP_DIR=/tmp                        # Temp file storage
-DATABASE_URL=postgresql+asyncpg://...
-BETTER_AUTH_SECRET=...               # Frontend auth secret
-```
-
-## Common Workflows
-
-### Adding fonts/transitions
-
-Drop `.ttf` files into `backend/fonts/` or `.mp4` files into `backend/transitions/`. They auto-appear via their respective `GET` endpoints.
-
-### Social publishing & the performance loop
-
-Users connect accounts at `/settings/social` (OAuth via `/api/social/connect/{provider}` →
-`/api/social/callback/{provider}` → backend `/social/connections/{provider}/callback`).
-Publishing runs in the ARQ worker (`publish_social_post`). Metrics are pulled back hourly into
-`social_post_metrics` and summarized by `SocialService.build_performance_context()`, which
-`TaskService.process_task` injects into `build_transcript_analysis_prompt(performance_context=...)`.
-Personalized analyses skip the shared `processing_cache` analysis entry.
-
-- **Pages:** `/settings/social` (accounts + every scheduled post) and `/analytics` (totals, daily
-  views chart, top clips, breakdowns), both in the sidebar. Clips publish from the task page.
-- **Rollout gate:** `SOCIAL_PUBLISHING_ACCESS` defaults to `off`. Social and Analytics stay out of
-  the nav, command palette, and settings until it is `admins` or `all`. Outside the gate every
-  `/social/*` route returns 403 except `GET /social/providers`, which reports `enabled: false` with
-  all platforms unconfigured (clients hide publishing unless `enabled` is exactly true) and the
-  disconnect routes (account deletion revokes tokens).
-- **iOS app:** `POST .../authorize` with `{"client": "ios"}` prefixes the OAuth state with `m.`; the
-  web callback then redirects to `supoclip://social-callback?provider&code&state` and the app
-  completes `/callback` with its own session (the state stays bound to the starting user).
-- **Platform approvals gate real users:** TikTok only allows sandbox target users until its audit,
-  Instagram only app testers until Meta review, and YouTube uploads from an unaudited project stay
-  private. Provider app IDs and setup notes are in `docs/configuration.md`.
-
-### Modifying AI clip selection
-
-Edit `backend/src/ai.py`: `simplified_system_prompt` controls selection criteria, `TranscriptSegment` defines the output model, `get_most_relevant_parts_by_transcript()` runs analysis with validation.
-
-### Video processing constraints
-
-- Output: 9:16 vertical format, H.264, even pixel dimensions (`round_to_even()`)
-- Subtitles positioned at 75% down the frame
-- Virality scoring: `hook_score`, `engagement_score`, `value_score`, `shareability_score` (0-25 each, summed to `virality_score` 0-100)
-- Each segment gets an AI-written `hook_title` (3-9 words) burned into the top safe area for the first ~4s (`build_hook_title_ass` in `video_utils.py`), persisted on `generated_clips.hook_title`
-- Static talking-head crops get a slow ~5% Ken Burns punch-in (`kenburns_zoom_fragment`); tracked pans and split screens keep their own motion
-
-## Observability
-
-Errors and analytics go to PostHog (project "SupoClip", EU, id `314504`); logs go to
-Axiom (dataset `supoclip-prod`). Everything is off unless tokens are set. Details in
-`docs/observability.md`.
-
-- **Backend/worker:** `src/observability.py` sends every log record with a traceback to
-  PostHog (`POSTHOG_PROJECT_TOKEN`) and stamps logs with `service`, `trace_id`, `user_id`.
-  The auth helpers bind the user (`bind_request_user`).
-- **Web:** `posthog-js` in `instrumentation-client.ts` (analytics, replay, exceptions) via the
-  `/ingest` rewrite; `instrumentation.ts` reports server errors. `lib/trace-fetch.ts` tags
-  every `/api/*` call with `x-trace-id`, which the proxies forward to the backend.
-- **Correlation:** an exception's `trace_id` property matches `trace_id` in Axiom logs
-  (worker jobs: `task-<id>`); the PostHog distinct id is the Better Auth user id everywhere.
-- **Logs:** the `vector` service (`observability/vector.yaml`, compose profile `axiom`)
-  ships `supoclip-*` container logs and the host nginx's SupoClip logs.
-
-## iOS App
-
-A native iOS app ships on the App Store
-(https://apps.apple.com/us/app/supoclip/id6784760040, app id `6784760040`). Its
-source lives outside this repo. It talks to the hosted API and bills through
-RevenueCat, which is what `frontend/src/app/api/billing/revenuecat-webhook/`
-serves; App Store subscribers are blocked from Stripe checkout/portal by the
-"managed through the App Store" guard in the billing routes. The www references
-the app via `APP_STORE_ID`/`APP_STORE_URL` in `frontend/src/lib/site.ts`
-(Smart App Banner meta, JSON-LD `MobileApplication`, hero badge, footer link).
-
-## YouTube Downloads
-
-`YOUTUBE_DOWNLOAD_PROVIDER` accepts `yt_dlp` (free default) or `apify`.
-Apify requires `APIFY_API_TOKEN` and explicit worker configuration. Each provider
-falls back to the other when available. Paid worker identities belong in private
-environment configuration. See `backend/README.md` for setup.
-
-`YOUTUBE_PROXY_URL` (empty by default) puts yt-dlp through a residential proxy
-first: sticky `{session}` per job, IPv4, optional bgutil PO tokens, audio first,
-then only the padded clip ranges at or below 1080p. Cached audio and sections
-are reused by later edits. `APIFY_EXPENSIVE_FALLBACKS` defaults to off so
-high-cap fallback actors are not called. Runbook: `docs/youtube-download.md`.
-
-## MCP Server
-
-`mcp/` is a standalone [MCP](https://modelcontextprotocol.io) server
-(`supoclip-mcp`, Python/FastMCP, stdio) that exposes SupoClip to MCP clients
-(Claude Desktop/Code, Cursor, …). It is a thin client over the REST API.
-
-- **Default target:** the hosted API `https://api.supoclip.com`. Override with
-  `SUPOCLIP_API_URL` for self-hosting (e.g. `http://localhost:8000`).
-- **Auth:** a per-user API key in `SUPOCLIP_API_KEY` (see API keys above).
-  Self-hosters may instead use `SUPOCLIP_USER_ID` (+ `SUPOCLIP_AUTH_SECRET` when
-  signing is enforced).
-- **Tools:** create/list/get/wait/cancel/resume/delete tasks, list/download/
-  export clips, and public discovery (templates, transitions, fonts, B-roll).
-- Run with `cd mcp && uv run supoclip-mcp`. Details in `mcp/README.md`.
+- Every git command needs `git -c safe.directory=C:/other-projects/supoclip ...` (the folder is owned
+  by another Windows account). Do not change the global git config.
+- `pnpm` is not on PATH: use `npx -y pnpm@10`.
+- `python` on PATH is the Microsoft Store stub. Use `engine/.venv/Scripts/python.exe` or `uv run`.
+  For one-off scripts that need extra packages: `uv run --no-project --with <pkg> python ...`.
+- `next build` fails with "Failed to load native binding" unless
+  `SWC_NATIVE_BINDING_CACHE='C:\swc-cache-claude'` is exported (that folder has working ACLs).
+- ffmpeg 8 (gyan.dev essentials, with libass and libx264) is in `C:\ffmpeg\bin`.
+- No local MongoDB, Redis or Docker. Tests use the in-memory server; real runs use Atlas.
+- GNU make is not installed; run the underlying commands.

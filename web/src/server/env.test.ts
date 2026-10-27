@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { engineConfig } from "@/worker/context";
 import { env, loadEnv, paths, resetEnv } from "./env";
 
 const baseEnv = { ...process.env };
@@ -70,6 +71,15 @@ describe("env", () => {
     expect(() => loadEnv()).toThrow(/BETTER_AUTH_SECRET must be at least 32 characters/);
     useEnv({ MAX_CLIPS: "lots" });
     expect(() => loadEnv()).toThrow(/MAX_CLIPS/);
+  });
+
+  it("passes ASSEMBLYAI_BASE_URL to the engine config and rejects a non-URL", () => {
+    useEnv({});
+    expect(engineConfig().assemblyai_base_url).toBeNull();
+    useEnv({ ASSEMBLYAI_BASE_URL: "https://api.eu.assemblyai.com" });
+    expect(engineConfig().assemblyai_base_url).toBe("https://api.eu.assemblyai.com");
+    useEnv({ ASSEMBLYAI_BASE_URL: "eu" });
+    expect(() => loadEnv()).toThrow(/ASSEMBLYAI_BASE_URL/);
   });
 
   it("resolves paths from the repository root", () => {

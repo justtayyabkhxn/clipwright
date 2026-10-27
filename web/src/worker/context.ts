@@ -63,6 +63,7 @@ export function engineConfig() {
     max_video_duration: env.MAX_VIDEO_DURATION,
     youtube_max_height: env.YOUTUBE_MAX_HEIGHT,
     assembly_ai_http_timeout_seconds: env.ASSEMBLY_AI_HTTP_TIMEOUT_SECONDS,
+    assemblyai_base_url: env.ASSEMBLYAI_BASE_URL ?? null,
   };
 }
 

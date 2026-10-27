@@ -22,7 +22,7 @@ export const MAX_JSON_BODY_BYTES = 8 * 1024 * 1024;
 const BODY_TOO_LARGE = "Request body is too large";
 
 /** The body as text, 413 past MAX_JSON_BODY_BYTES (declared or streamed); route handlers have no limit of their own. */
-async function readLimitedText(request: Request): Promise<string> {
+export async function readLimitedText(request: Request): Promise<string> {
   if (Number(request.headers.get("content-length")) > MAX_JSON_BODY_BYTES) throw new ApiError(413, BODY_TOO_LARGE);
   if (!request.body) return "";
   const reader = request.body.getReader();
@@ -144,5 +144,31 @@ export async function serveStorageFile(
   if (request.method === "HEAD" || info.size === 0) return new Response(null, { status, headers });
 
   const stream = storage.createReadStream(key, { start, end }) as Readable;
-  return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, { status, headers });
+  return new Response(pullStream(stream), { status, headers });
+}
+
+/**
+ * A web stream that reads from `stream` only when the consumer pulls. Readable.toWeb pushes data
+ * events into the controller, which throws "Controller is already closed" (uncaught) when a browser
+ * cancels a video Range request mid-flight.
+ */
+export function pullStream(stream: Readable): ReadableStream<Uint8Array> {
+  const chunks = stream[Symbol.asyncIterator]();
+  let cancelled = false;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await chunks.next();
+        if (cancelled) return;
+        if (done) controller.close();
+        else controller.enqueue(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+      } catch (error) {
+        if (!cancelled) controller.error(error);
+      }
+    },
+    cancel() {
+      cancelled = true;
+      stream.destroy();
+    },
+  });
 }

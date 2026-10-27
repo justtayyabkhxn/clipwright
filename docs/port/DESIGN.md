@@ -53,8 +53,10 @@ Read in `web/src/server/env.ts` (server-only, parsed with zod, with the defaults
 |---|---|---|
 | `MONGODB_URI` | required | Atlas connection string |
 | `MONGODB_DB` | `clipwright` | Database name |
+| `MONGODB_TRANSACTIONS` | true | Passed to Better Auth's `mongodbAdapter` (`transaction`). Set false for a standalone `mongod`. App code never needs transactions |
 | `BETTER_AUTH_SECRET` | required (at least 32 characters) | Auth secret. Also the fallback encryption secret |
 | `BETTER_AUTH_URL` | `http://localhost:3000` | Public base URL |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | "" | Extra comma-separated trusted origins (`BETTER_AUTH_URL`, `http://localhost:3000` and `http://127.0.0.1:3000` are always trusted) |
 | `APP_SETTINGS_ENCRYPTION_KEY` | falls back to `BETTER_AUTH_SECRET` | At least 16 characters; AES-256-GCM key = sha256(secret) |
 | `ADMIN_EMAILS` | "" | Comma-separated emails that become admin at sign-up |
 | `DISABLE_SIGN_UP` | false | |
@@ -75,8 +77,12 @@ Read in `web/src/server/env.ts` (server-only, parsed with zod, with the defaults
 | `SPEAKER_FRAMING` | true | |
 | `HOOK_FIRST_TEASER` | false | |
 | `YOUTUBE_MAX_HEIGHT` | 1080 | |
+| `ASSEMBLYAI_BASE_URL` | unset (SDK default) | AssemblyAI host (e.g. the EU region); passed to the engine as `config.assemblyai_base_url`. The e2e tests point it at a fake server |
+| `NEXT_PUBLIC_SOURCE_CODE_URL` | the SupoClip repo | Client-side, not parsed by `env.ts`. Target of the "Source" link (AGPL-3.0 §13): a modified deployment must point it at its own source |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Client-side. `metadataBase` origin |
 
-`web/.env.example` documents all of them, with placeholders only.
+`web/.env.example` documents all of them, with placeholders only. `docs/configuration.md` is the
+user-facing reference.
 
 ## 3. Server modules (`web/src/server`)
 
@@ -123,7 +129,7 @@ Keys never contain `..`, backslashes or a leading `/` (validate them). Layout:
 
 | Key | Content |
 |---|---|
-| `uploads/{uuid}{ext}` | Uploaded source. `ext` is lowercase, from the allowed set (.mp4 .mov .avi .mkv .webm .m4v) |
+| `uploads/{uuid}{ext}` | Uploaded source. `ext` is lowercase, from the allowed set (.mp4 .mov .avi .mkv .webm .m4v). Deleted with its task; the cron sweeps it (and its sidecar) once it is over 24 h old and no task references it |
 | `uploads/{uuid}.transcript_cache.json` | Its word timings (written by the engine next to the file) |
 | `sources/youtube/{videoId}/source.mp4` | Downloaded YouTube source (normalized) |
 | `sources/youtube/{videoId}/source.transcript_cache.json` | Its word timings. **Durable, never TTL-deleted** |
@@ -157,7 +163,9 @@ type TaskDoc = {
     cutLongPauses: boolean; pauseThresholdMs: number; removeFillerWords: boolean; filteredWords: string[];
   };
   clips: ClipDoc[];                       // array position + 1 = clip_order
-  run?: { jobId: string; startedAt?: Date; completedAt?: Date; cacheHit?: boolean; errorCode?: string };
+  // Set with the job by startTaskRun: {jobId, type} first, the worker adds the rest. Worker CAS writes
+  // are fenced by run.jobId. The task JSON exposes `run_type` (= run.type while queued/processing, else null).
+  run?: { jobId: string; type?: "process_task" | "restyle_task"; startedAt?: Date; completedAt?: Date; cacheHit?: boolean; errorCode?: string };
   editLock?: { jobId: string; until: Date } | null;
   createdAt: Date; updatedAt: Date;
 };
@@ -211,10 +219,10 @@ Indexes: `{status:1, runAt:1}`, `{status:1, lockedUntil:1}`, `{activeKey:1}` uni
 ### 6.1 Queue primitives (`jobs.ts`)
 Implement exactly the pattern in `map-data.md` §7.5: lease 60 s, heartbeat every 15 s (and on every progress update, throttled to 1/s), reaper on every poll (requeue when attempts < maxAttempts, otherwise fail it and run the job type's failure hook), claim with `findOneAndUpdate` sorted by `runAt`, and finish guarded by `lockedBy`. `maxAttempts`: process/restyle 2, prepare 2, exports 1, combine 1. An E11000 on `activeKey` means "already queued or running".
 
-Enqueue routes call `workerHealthy()`. If no heartbeat, the job is still inserted, but the response includes `worker_online: false`, and the UI shows "The Clipwright worker isn't running. Start it with `pnpm dev` (or `pnpm worker`)." Queued jobs then wait until the worker starts.
+Enqueue routes call `workerHealthy()` and **every enqueue response carries `worker_online: boolean`**: create, resume, settings with `apply_to_existing`, editor prepare, editor export, combine and preset export. If no heartbeat, the job is still inserted, but the response includes `worker_online: false`, and the UI shows "The Clipwright worker isn't running. Start it with `pnpm dev` (or `pnpm worker`)." Queued jobs then wait until the worker starts.
 
 **Failure hooks** (used by the reaper when a job dies):
-- process/restyle: CAS the task from queued/processing to error (`progressMessage` "The worker stopped while processing this video. Resume to try again."). For restyle, restore status `completed` with "Restyle failed. Your existing clips are unchanged."
+- process/restyle: CAS the task from queued/processing to error (`progressMessage` "The worker stopped while processing this video. Resume to try again."). For restyle, restore status `completed` with "Restyle failed. Your existing clips are unchanged." and roll the settings back (`restyleRollback`, below).
 - prepare: draft status `failed`.
 - exports and combine: job status `failed`.
 
@@ -241,7 +249,9 @@ Enqueue routes call `workerHealthy()`. If no heartbeat, the job is still inserte
 - **Errors:** task → `error`, progress 0, message = the error text (engine messages pass through; unknown errors become "Processing failed: <message>"), and `run.errorCode` from the Python rules.
 
 **`restyle_task`** (port of `regenerate_all_clips_for_task`, `clip_service.py:99-286`):
-- The route has already validated, saved the new `settings`, and set the task to `processing` with "Applying new style...". The old clips stay visible.
+- The route has already validated, saved the new `settings`, and set the task to `processing` with "Applying new style...". The old clips stay visible. Payload: `{cleanupChanged, previousSettings}`, where `previousSettings` is the task's settings before the save.
+- **Rollback** (`restyleRollback` in `tasks.ts`): whenever a restyle ends without replacing the clips (user cancel, nothing rendered, worker died), the task goes back to `completed`, 100, with the old clips **and** `settings = payload.previousSettings`. Messages: "Restyle cancelled. Your existing clips are unchanged." (cancel; set by the cancel route, which then flags the job) or "Restyle failed. Your existing clips are unchanged." (failure/failure hook). A restyle cancel never sets the task `cancelled`.
+- The source comes from `sourceVideoPath`: the cached YouTube file (re-fetched with `fetch-youtube` if it was swept) or the upload file.
 - The handler rebuilds one segment per clip: `keep_ranges` when the cleanup settings are unchanged (`payload.cleanupChanged === false`), otherwise `source_ranges`. It gets the source path (YouTube cached file, or re-fetch; upload file), and runs `render-clips`.
 - Every survivor replaces the old clips in one `replaceClips` CAS. Clip ids are new; delete the old clip files and the old clips' drafts.
 - The task returns to `completed`, 100, "Complete!".
@@ -261,6 +271,8 @@ Enqueue routes call `workerHealthy()`. If no heartbeat, the job is still inserte
 - Expire `export_clip` and editor-export jobs past `expiresAt`: delete the file, unset `liveKey`, status `failed` with "expired" (keep the doc 7 days, then delete it).
 - Delete finished job docs older than 7 days.
 - Orphan sweep of `DATA_DIR/work/*` directories older than 24 h.
+- Delete `sources/youtube/{id}/source.mp4` files older than 24 h that no task references (by `source.videoId` or URL). Their `.transcript_cache.json` sidecars stay.
+- Delete `uploads/{uuid}{ext}` files older than 24 h that no task references (`source.url`), together with their `.transcript_cache.json` sidecar.
 
 ### 6.3 Status vocabularies at the API
 - Tasks: as stored.
@@ -285,7 +297,7 @@ Enqueue routes call `workerHealthy()`. If no heartbeat, the job is still inserte
 **Common request fields:**
 - `work_dir`: absolute; created if missing. The engine's temp files go here, never the OS temp.
 - `cancel_file?`: absolute path, polled at least every 0.5 s inside render loops and between clips. When it appears, the engine terminates its ffmpeg children and exits 2.
-- `config?: {speaker_framing?, hook_first_teaser?, transcription_language?, max_video_duration?, youtube_max_height?, assembly_ai_http_timeout_seconds?}`
+- `config?: {speaker_framing?, hook_first_teaser?, transcription_language?, max_video_duration?, youtube_max_height?, assembly_ai_http_timeout_seconds?, assemblyai_base_url?}`
 - `fonts_dirs: string[]`: absolute; the bundled dir first, then the user's font dir. Font lookup searches them in order.
 
 | Command | Request (extra fields) | Result `data` |
@@ -334,22 +346,22 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | Route | Notes |
 |---|---|
 | `GET /api/tasks` | List of up to 50 `GenerationSummary` (`id, user_id, source_id (= task id), source_title, source_type ("youtube" \| "video_url" for uploads), source_url, status, clips_count, top_virality_score, cover_clip_id, created_at, updated_at`), newest first |
-| `POST /api/tasks/create` | Body as SupoClip's. The route validates and normalises (port `tasks.py:186-207,419-470`, `clip_cleanup.py`). It checks the YouTube URL with a regex (no network), and requires an upload url that is in storage (stat). It inserts a task (`queued`, title = the given title or "YouTube Video"/"Uploaded Video") and enqueues `process_task`. Returns `{task_id, job_id, message, worker_online}` |
-| `GET /api/tasks/[id]` | Task fields per the critique §3 list, plus the settings fields `output_format, add_subtitles, clip_length, cut_long_pauses, pause_threshold_ms, remove_filler_words, filtered_words`, `clips_count`. No `clips` array |
+| `POST /api/tasks/create` | Body as SupoClip's. The route validates and normalises (port `tasks.py:186-207,419-470`, `clip_cleanup.py`). A YouTube URL must be http(s) on `youtube.com`, `m.youtube.com`, `music.youtube.com` or `youtu.be` (`www.` stripped; a scheme-less URL counts as https) with an 11-character id; no network. It is **stored as `https://www.youtube.com/watch?v={id}`** with `source.videoId`, so yt-dlp and the shared cache only ever see YouTube's own URL (closes an SSRF and cache-poisoning path). Other http(s) URLs → 422, anything else → 404. An `upload://` url must be in storage (stat), else 422 `{code: "VIDEO_METADATA_UNAVAILABLE"}`. It inserts a task (`queued`, title = the given title or "YouTube Video"/"Uploaded Video") and enqueues `process_task`. Returns `{task_id, job_id, message, worker_online}` |
+| `GET /api/tasks/[id]` | Task fields per the critique §3 list, plus the settings fields `output_format, add_subtitles, clip_length, cut_long_pauses, pause_threshold_ms, remove_filler_words, filtered_words`, `clips_count`, and `run_type` (`"process_task" \| "restyle_task"` while queued or processing, else null; the UI uses it for restyle-safe cancel). No `clips` array |
 | `PATCH /api/tasks/[id]` | `{title}` |
 | `DELETE /api/tasks/[id]` | 400 "Wait for processing to finish before editing this task" while queued or processing. Otherwise delete the task, its drafts, its jobs and all files (clips, editor media, exports; the upload source and its sidecar for uploads). YouTube sources are shared and are swept by the cron when unreferenced for 24 h |
 | `GET /api/tasks/[id]/clips` | `{task_id, clips, total_clips}`. Clip shape per the critique §3 list; `video_url` = `/api/tasks/{id}/clips/{clipId}/file` |
 | `DELETE /api/tasks/[id]/clips/[clipId]` | Same lock rule; deletes the file and the draft |
 | `GET /api/tasks/[id]/clips/[clipId]/file` | `?download=true` → attachment. Range support |
-| `POST /api/tasks/[id]/cancel`, `POST /api/tasks/[id]/resume` | Semantics per `map-task-api.md` §3. Resume re-enqueues `process_task` (409 if the activeKey is taken by a running job) |
-| `POST /api/tasks/[id]/settings` | Normalise, save `settings`. With `apply_to_existing`, set processing and enqueue `restyle_task`. Returns `{task, message}` |
+| `POST /api/tasks/[id]/cancel`, `POST /api/tasks/[id]/resume` | Semantics per `map-task-api.md` §3. Cancel of a pipeline run → `cancelled` "Cancelled by user"; cancel of a restyle (the run's job type is `restyle_task`) → `completed` with the old clips and `previousSettings` (§6.2 rollback), then flags the job. Resume re-enqueues `process_task` (409 if the activeKey is taken by a running job) and returns `{message, job_id, worker_online}` |
+| `POST /api/tasks/[id]/settings` | Normalise, save `settings`. With `apply_to_existing`, set processing and enqueue `restyle_task` with `{cleanupChanged, previousSettings}`. Returns `{task, message}`, plus `worker_online` when a restyle was enqueued |
 | `POST /api/tasks/[id]/clips/[clipId]/exports`, `GET .../exports/[exportId]`, `GET .../exports/[exportId]/file` | `export_clip` jobs. Idempotent per `liveKey = {clipId}:{sha256({preset, filename})}` |
 | `GET`/`PATCH /api/tasks/[id]/clips/[clipId]/editor`, `POST .../editor/prepare`, `GET .../editor/media/[asset]` (clean.mp4 \| thumbnails.jpg, Range), `POST .../editor/exports`, `GET`/`DELETE .../editor/exports/[jobId]`, `GET .../editor/exports/[jobId]/file`, `POST /api/tasks/[id]/editor/combine` | Per `map-editor.md` §8 |
 | `GET /api/fonts`, `GET`/`DELETE /api/fonts/[fontName]`, `POST /api/fonts/upload` | Bundled fonts plus the user's (`fonts/{userId}/`). Upload: multipart field `file`, .ttf/.otf, ≤10 MB, no paid gate |
 | `GET /api/caption-templates` | `{templates:[{id,name,description,animation,font_family,font_size,font_color,highlight_color}]}` |
-| `GET /api/ai/provider` | `{provider:"anthropic", model, configured, transcription_configured}`. `configured` = Claude key present AND AssemblyAI key present |
+| `GET /api/ai/provider` | `{provider:"anthropic", model, configured, llm_configured, transcription_configured}`. `llm_configured` = Claude key present, `transcription_configured` = AssemblyAI key present, `configured` = both. Public, never a secret |
 | `GET`/`PATCH /api/admin/runtime-settings`, `POST /api/admin/ai/test-connection` | Same contracts as SupoClip, keys limited to the three in section 5 |
-| `GET`/`PATCH /api/preferences` | `{fontFamily, fontSize, fontColor, clipLength}` (no `notifyOnCompletion`) |
+| `GET`/`PATCH /api/preferences` | `{fontFamily, fontSize, fontColor, clipLength, saved}` (no `notifyOnCompletion`). A font field never saved is `null` (the caption template's own value applies); `clipLength` defaults to `"auto"`; `saved` = the user has ever saved preferences. PATCH is a partial update of the four fields |
 | `POST /api/upload` | **Streams** multipart field `video` to `uploads/{uuid}{ext}` (busboy; never buffers). Size cap → 413. Returns `{message, video_path}` |
 | `POST /api/upload/authorization` | Returns `{directUpload: false}` (the local driver). Never `{storage:"local"}` |
 | `GET /api/health` | `{ok, db: boolean, worker: {online, heartbeatAt}}` |
@@ -371,4 +383,4 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 ## 11. Testing
 - `web`: vitest. Mongo-backed tests use `mongodb-memory-server` (dev dependency), with one in-memory server per test file. Storage tests use a temp `DATA_DIR`. Engine-dependent worker code is tested with a fake `runEngine`.
 - `engine`: pytest; port the media unit tests from `backend/tests/unit` that cover kept modules, and make them pass on Windows. Add CLI tests (stdin/stdout protocol) using a synthetic ffmpeg-generated video.
-- End to end: a manual run with real keys, documented in `docs/testing.md`.
+- End to end: Playwright (`web/e2e`, `npx -y pnpm@10 exec playwright test`) against an in-memory MongoDB replica set with fake Anthropic and AssemblyAI servers and the real worker and engine; plus a manual run with real keys. Both are documented in `docs/testing.md`.

@@ -514,6 +514,12 @@ describe("preset exports", () => {
     expect((await start(task, "zzz")).status).toBe(404);
   });
 
+  it("refuses an oversized JSON body", async () => {
+    const task = await completedTask();
+    const huge = await start(task, "a", { preset: "tiktok", padding: "x".repeat(9 * 1024 * 1024) });
+    expect([huge.status, await huge.json()]).toEqual([413, { detail: "Request body is too large" }]);
+  });
+
   it("reports status in the preset vocabulary and serves the finished file", async () => {
     const task = await completedTask();
     const { id } = await (await start(task, "a")).json();

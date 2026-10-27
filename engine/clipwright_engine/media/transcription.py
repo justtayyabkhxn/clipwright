@@ -196,7 +196,7 @@ def _get_transcript_with_assemblyai(
     # A job owns its client: concurrent jobs must not mutate shared SDK settings.
     client = aai.Client(settings=aai.Settings(
         api_key=runtime_config.assembly_ai_api_key,
-        base_url=aai.settings.base_url,
+        base_url=getattr(runtime_config, "assemblyai_base_url", "") or aai.settings.base_url,
         http_timeout=getattr(runtime_config, "assembly_ai_request_timeout_seconds", 60),
     ))
     transcriber = aai.Transcriber(client=client)

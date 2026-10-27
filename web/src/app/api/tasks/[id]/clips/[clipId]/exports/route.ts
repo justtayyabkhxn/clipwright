@@ -1,4 +1,4 @@
-import { ApiError, handle, json } from "@/server/http";
+import { ApiError, handle, json, readLimitedText } from "@/server/http";
 import { workerHealthy } from "@/server/jobs";
 import { requireUser } from "@/server/session";
 import { exportPreset, findClip, getTaskForUser, serializePresetExport, startPresetExport } from "@/server/tasks";
@@ -12,7 +12,7 @@ type Params = { params: Promise<{ id: string; clipId: string }> };
 async function requestedPreset(request: Request) {
   let selected: unknown = new URL(request.url).searchParams.get("preset") ?? "tiktok";
   if ((request.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) {
-    const raw = await request.text();
+    const raw = await readLimitedText(request);
     if (raw.trim()) {
       let payload: unknown;
       try {

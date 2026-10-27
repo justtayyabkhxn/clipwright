@@ -1,7 +1,4 @@
 /** @vitest-environment node */
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, collections } from "./db";
@@ -16,24 +13,9 @@ import {
 } from "./settings";
 
 const SECRET = "interop-secret-0123456789";
-const repoRoot = path.resolve(process.cwd(), "..");
-const python = path.join(repoRoot, "backend", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
-const pythonModule = path.join(repoRoot, "backend", "src", "runtime_settings.py");
-const hasPython = existsSync(python) && existsSync(pythonModule);
-
-function runPython(code: string): string {
-  const loader = [
-    "import importlib.util, sys",
-    `spec = importlib.util.spec_from_file_location("rs", ${JSON.stringify(pythonModule)})`,
-    "rs = importlib.util.module_from_spec(spec); spec.loader.exec_module(rs)",
-  ].join("\n");
-  const run = spawnSync(python, ["-c", `${loader}\n${code}`], {
-    env: { ...process.env, APP_SETTINGS_ENCRYPTION_KEY: SECRET, PYTHONIOENCODING: "utf-8" },
-    encoding: "utf8",
-  });
-  if (run.status !== 0) throw new Error(run.stderr);
-  return run.stdout.trim();
-}
+// Encrypted once with SECRET by the original Python implementation
+// (`git show 1dbb178:backend/src/runtime_settings.py`, encrypt_setting_value).
+const PYTHON_CIPHERTEXT = "v1:1xF1bgRWT4Y7alFy:VfjlpSYXT9aklcGxMMd8EQ:golRAh3ugbMoLguxbxXQP5ZT96o3";
 
 let mongod: MongoMemoryServer;
 const baseEnv = { ...process.env };
@@ -85,15 +67,9 @@ describe("encryption", () => {
     expect(() => encryptSetting("x")).toThrow(/APP_SETTINGS_ENCRYPTION_KEY must be set/);
   });
 
-  it.skipIf(!hasPython)("decrypts values written by the Python backend", () => {
-    const encrypted = runPython(`print(rs.encrypt_setting_value("sk-ant-from-python-ü"))`);
-    expect(decryptSetting(encrypted)).toBe("sk-ant-from-python-ü");
-  }, 30_000);
-
-  it.skipIf(!hasPython)("writes values the Python backend decrypts", () => {
-    const encrypted = encryptSetting("sk-ant-from-node-ü");
-    expect(runPython(`print(rs.decrypt_setting_value(${JSON.stringify(encrypted)}))`)).toBe("sk-ant-from-node-ü");
-  }, 30_000);
+  it("decrypts a value written by the Python backend", () => {
+    expect(decryptSetting(PYTHON_CIPHERTEXT)).toBe("sk-ant-from-python-ü");
+  });
 });
 
 describe("maskSecret", () => {

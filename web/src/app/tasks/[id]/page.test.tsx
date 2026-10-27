@@ -126,3 +126,12 @@ it("does not announce a restyle that ended without completing", async () => {
   expect(await screen.findByRole("button", { name: "Restyle" })).toBeInTheDocument();
   expect(toast.success).not.toHaveBeenCalledWith("New style applied to every clip");
 });
+
+it("shows why a generation failed", async () => {
+  const reason = "Add your Anthropic API key in Settings → AI before generating clips.";
+  task = { ...task, status: "error", progress: 0, progress_message: reason, clips_count: 0 };
+  clips = [];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+  expect(await screen.findByText("Processing Failed")).toBeInTheDocument();
+  expect(screen.getByText(reason)).toBeInTheDocument();
+});

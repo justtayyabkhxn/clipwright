@@ -1,6 +1,6 @@
 # Clipwright: work log and resume guide
 
-Last updated: 2026-10-26. **PAUSED by the user during Phase 3/4.** Phase 2 is complete and verified; see "PAUSED" below.
+Last updated: 2026-10-27. Phases 1 to 4 are done and verified. Next: Phase 5, a real run with the user's MongoDB Atlas URI and API keys.
 
 **Goal:** rebrand the SupoClip + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
 
@@ -32,8 +32,8 @@ The authoritative spec is [`docs/port/DESIGN.md`](docs/port/DESIGN.md). Detailed
 web/       Next.js app: UI, API routes (src/app/api), server modules (src/server), worker (src/worker), fonts (web/fonts)
 engine/    Python render engine (uv project, package clipwright_engine, CLI: python -X utf8 -m clipwright_engine <cmd>)
 data/      git-ignored runtime data: storage/ (durable files) and work/ (job temp dirs)
-docs/port/ design and maps
-(backend/ deleted in the WIP checkpoint; read the original with git show 1dbb178:backend/...)
+docs/      user docs; docs/port/ holds the design spec and the maps of the original system
+(backend/ is deleted; read the original with git show 1dbb178:backend/...)
 ```
 
 ---
@@ -67,60 +67,43 @@ docs/port/ design and maps
 
 ---
 
-## PAUSED (user stopped work on 2026-10-26, during Phase 3/4)
+## Phases 3 and 4: done (2026-10-27, commit "Clipwright phases 3-4")
 
-**State when paused**
-- Workflow `wf_5ffbb665-4a6` was paused right after it started. 6 agents had begun (docs-cleanup, e2e, and 4 of the 5 reviewers); **none finished**, so the workflow has no cached results.
-- The only work that reached the files came from the docs-cleanup agent, and it is saved in the **WIP checkpoint commit** (see the git log, "WIP (paused)"):
-  - **Deleted** (`git rm`): `backend/` (entire old FastAPI backend), `mcp/`, `observability/`, `docker-compose.yml`, `init.sql`, `start.sh`, `install_cron.sh`, the root `.env.example`, `.dockerignore`, `DEPLOY_NOTES.md`, `IMPLEMENTATION_PLAN.md`, `QUICKSTART.md`, `assets/banner.jpg`, and all of the old `docs/*.md`, `docs/images` and `docs/screenshots`. `docs/` now holds only `docs/port/`.
-  - **Rewritten:** `Makefile` (targets setup, dev, worker, test, test-web, test-engine, check, build) and `.gitignore` (tidied).
-- **Not done yet:**
-  - `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` and `CHANGELOG.md` still describe the **old SupoClip and Docker system**. They are stale until rewritten.
-  - None of the new docs exist yet.
-  - `NOTICE.md` has not been written.
-  - DESIGN.md has not been updated with the Phase 2 contract additions.
-  - The E2E suite, the 5-lens review and its fixes have not run.
-- `docs/claude.md` was deleted along with the old docs. Its content is still in git: `git show b8131fd:docs/claude.md`. Use it for the new `docs/claude-integration.md`.
-- The checks were not re-run after the partial cleanup. Only files outside `web/` and `engine/` changed, so the Phase 2 results still apply.
-- One test is now skipped instead of run: the Python↔Node settings-interop test in `web/src/server/settings.test.ts` (`skipIf` when `backend/.venv` or `backend/src` is missing). Either drop it, or turn it into a fixture-based test that uses a value encrypted once by the Python code (from `git show 1dbb178:backend/src/runtime_settings.py`).
-
-**How to resume Phase 3/4**
-- **Same session:** `resumeFromRunId` gives no benefit, because no agent finished; just re-run the script. `Workflow({scriptPath: "C:\Users\wefor\.claude\projects\C--other-projects-supoclip\4ac2f41d-0bf2-456a-819d-126608c4e66c\workflows\scripts\clipwright-phase3-4-wf_5ffbb665-4a6.js"})`. The docs agent handles files that are already deleted.
-- **New session:** the script file above can be re-run directly. Or ask Claude to "continue Clipwright Phase 3/4 from work.md"; the checklist below is the source of truth.
+- **Docs:** `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, a fresh `CHANGELOG.md`, and a new `NOTICE.md` crediting SupoClip under AGPL-3.0.
+  - New `docs/`: setup, configuration, architecture, claude-integration, testing, troubleshooting, deploying-to-vercel.
+  - `docs/port/DESIGN.md` updated with every Phase 2 contract addition plus the env vars it was missing.
+- **Settings interop test:** now uses a fixed ciphertext produced by the original Python `encrypt_setting_value`, so it no longer skips.
+- **Full-stack E2E:** `web/e2e/full-flow.spec.ts` with fakes in `web/e2e/fakes/` (Anthropic Messages and Models, AssemblyAI) and `global-setup.ts`.
+  - The setup starts an in-memory MongoDB replica set, the fakes, a synthetic 45 s video, `next dev` and the real worker plus engine.
+  - The test covers: sign up → save keys and Test connection → upload → generate → 2 clips → play and download → preset export → editor edit, autosave and reload → server export → library → delete clip → delete task.
+  - It passed twice in a row (about 8 minutes each). Old SupoClip specs deleted.
+  - New optional env var `ASSEMBLYAI_BASE_URL` (regional endpoint, or a fake in tests), passed to the engine.
+- **Whole-system review (read-only):** 3 confirmed defects, all fixed with regression tests:
+  1. Concurrent first sign-ups could all become admin. Now a one-time `meta.admin_bootstrap` upsert picks a single winner.
+  2. The preset-export route read the body with no size limit. It now uses `readLimitedText` (8 MiB, else 413).
+  3. A failed task never showed its reason. The error screen now shows `progress_message`.
+  The review judged the core sound. Fencing task writes by `run.jobId` alone is acceptable at `WORKER_CONCURRENCY=1` with a single worker process.
+- **Stream bug found by the E2E:** `next dev` logged an uncaught "Controller is already closed" when a browser cancelled a video Range request. Cause: `Readable.toWeb` keeps pushing data after the browser has cancelled the stream. Fix: a pull-based `pullStream` in `server/http.ts`, with tests. In the E2E rerun the error no longer appears.
+- **Verified:** `tsc` 0 errors; lint clean; vitest 645 passed and 1 skipped (the slow opt-in test); `next build` OK; engine pytest 360 passed and 1 skipped (network, opt-in).
 
 ---
 
 ## Left to do
 
-### Phase 3: cleanup and docs
-- [x] Deleted `backend/`, `mcp/`, `observability/`, `docker-compose.yml`, `init.sql`, `start.sh`, `install_cron.sh`, Docker files, `assets/banner.jpg`, `DEPLOY_NOTES.md`, `IMPLEMENTATION_PLAN.md`, `QUICKSTART.md`, the root `.env.example`, and the old docs (WIP checkpoint).
-- [ ] Delete or rewrite the old e2e specs in `web/e2e/` that target dropped features (`app`, `editor-studio`, `generation-status`, `library-groups`, `local-workflow` specs plus `global-setup.ts`), and reset `CHANGELOG.md`.
-- [ ] Rewrite `README.md`, `CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md` for Clipwright: prerequisites, setup, commands, architecture. `QUICKSTART.md` is deleted; the README covers it. Add `NOTICE.md` crediting SupoClip under AGPL-3.0.
-- [x] `docs/claude.md` deleted (it collided with `CLAUDE.md` on Windows). [ ] Write `docs/claude-integration.md` from `git show b8131fd:docs/claude.md`, updated for Clipwright.
-- [ ] New docs:
-  - `docs/setup.md`: Windows/macOS/Linux setup with no Docker. Node 22, `npx pnpm@10` or corepack, `uv`, ffmpeg (a gyan.dev **full** build so libass is included), and an Atlas URI.
-  - `docs/configuration.md`: env vars.
-  - `docs/architecture.md`
-  - `docs/testing.md`
-  - `docs/troubleshooting.md`: yt-dlp failures, worker offline, key errors, the Windows SWC cache issue, and Store `python` stub on PATH.
-  - A Vercel deployment notes section: what is still needed (Blob/R2 storage driver, direct uploads, the worker on an always-on machine).
-- [x] Root `Makefile` rewritten: setup, dev, worker, test, test-web, test-engine, check, build (WIP checkpoint; not yet run end to end).
-- [ ] Optional: bundle Noto Color Emoji or document the emoji fallback (caption emojis are disabled on Windows when no colour emoji font is found).
-
-### Phase 4: whole-system adversarial review
-- [ ] Run a review workflow with several lenses: correctness against the original, security (authz, path traversal, secrets), concurrency/CAS/jobs, Windows process handling, frontend contract parity, and the Vercel-readiness claims. Verify each finding, fix it, re-run all suites.
-
 ### Phase 5: real end-to-end run (needs the user's credentials)
-- [ ] The user provides a `MONGODB_URI` (Atlas M0) in `web/.env.local` and sets `BETTER_AUTH_SECRET` (32+ characters).
-- [ ] `pnpm dev`, then sign up (the first user becomes admin), then Settings → AI: paste the Anthropic and AssemblyAI keys, click Test connection, pick a model, save.
-- [ ] Create a generation from a short YouTube video and from an uploaded file. Watch the progress, check the clips and scores, open the editor, make an edit (autosave), export (server and browser), and download.
+- [ ] The user puts a `MONGODB_URI` (Atlas M0) and `BETTER_AUTH_SECRET` (32+ characters) in `web/.env.local`.
+- [ ] Run `npx -y pnpm@10 dev` in `web/`. Sign up (the first user becomes admin). In Settings → AI, paste the Anthropic key, Test connection, pick a model and save, then paste the AssemblyAI key and save.
+- [ ] Generate from a short YouTube video and from an uploaded file. Check progress, clips and scores; then the editor (edit, autosave), exports (server and browser) and downloads.
 - [ ] Record the results in `docs/testing.md`. Fix what breaks.
 
-### Known follow-ups / limitations
-- The storage driver is local only. Vercel needs a Blob/R2 driver plus direct-to-storage uploads (the client already supports the S3-style multipart flow).
-- The worker must run on an always-on machine; it cannot run on Vercel.
-- The optional in-app Claude assistant panel is not built.
-- The task CAS helpers are fenced by `run.jobId`, not by the claim token. There is at most a 15 s window where a stale handler could push a clip after losing its lease.
+### Known follow-ups and limitations
+- **Storage:** the driver is local only. Vercel needs a Blob/R2 driver plus direct-to-storage uploads. The client does NOT support those yet: `lib/video-upload.ts` always POSTs to `/api/upload`. See `docs/deploying-to-vercel.md`.
+- **Worker:** it must run on an always-on machine; it cannot run on Vercel.
+- **Assistant panel:** the optional in-app Claude assistant panel is not built.
+- **Claim fencing:** task writes are fenced by `run.jobId`, not by the claim token. That only matters with more than one worker process.
+- **Emoji captions:** need a colour emoji font that libass can use ("Noto Color Emoji"). Otherwise they are off; see troubleshooting.
+- **Source link:** `NEXT_PUBLIC_SOURCE_CODE_URL` defaults to the upstream SupoClip repo. Set it to your own repository before deploying (AGPL-3.0 §13).
+- **yt-dlp:** 2026.10.26 is available (the lock has 2026.10.21). Update with `cd engine && uv lock --upgrade-package yt-dlp && uv sync` if YouTube downloads fail.
 
 ---
 
@@ -130,9 +113,7 @@ docs/port/ design and maps
    `git -c safe.directory=C:/other-projects/supoclip log --oneline` (the branch is `clipwright`).
    - **Why the flag:** the folder is owned by another Windows account ("Tayyab Khan"), so every git command needs `-c safe.directory=...`. The global git config was intentionally left unchanged.
    - **Repo-local identity:** user.name `nakul`, user.email `nakul.volume@gmail.com`.
-2. **If Phase 2 was interrupted:** re-run it with
-   `Workflow({scriptPath: "C:\Users\wefor\.claude\projects\C--other-projects-supoclip-web-src\4ac2f41d-0bf2-456a-819d-126608c4e66c\workflows\scripts\clipwright-phase2-wf_b73b729a-195.js", resumeFromRunId: "wf_b73b729a-195"})`.
-   Completed agents replay from the cache. That only works in the same session; in a new session, inspect the working tree and the remaining checklist instead.
+2. **Next step:** Phase 5 (above). Everything before it is committed.
 3. **Install dependencies:**
    - `cd web && npx -y pnpm@10 install`
    - `cd engine && uv sync`

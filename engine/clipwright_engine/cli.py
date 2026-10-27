@@ -273,6 +273,7 @@ def cmd_transcribe(request: Dict[str, Any], events: Events) -> Dict[str, Any]:
             assembly_ai_http_timeout_seconds=config.assembly_ai_http_timeout_seconds,
             assembly_ai_request_timeout_seconds=config.assembly_ai_request_timeout_seconds,
             transcription_language=language,
+            assemblyai_base_url=config.assemblyai_base_url,
         )
         try:
             text = _get_transcript_with_assemblyai(video, "universal-3-5-pro", runtime)

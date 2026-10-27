@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { resetEnv } from "./env";
-import { ApiError, contentDisposition, handle, MAX_JSON_BODY_BYTES, readJsonObject, serveStorageFile } from "./http";
+import { ApiError, contentDisposition, handle, MAX_JSON_BODY_BYTES, pullStream, readJsonObject, serveStorageFile } from "./http";
 import { getStorage, MaxBytesExceededError } from "./storage";
 
 let dataDir: string;
@@ -170,5 +170,34 @@ describe("readJsonObject", () => {
     expect(pulled).toBeLessThan(12);
     const fits = `{"a":"${"x".repeat(MAX_JSON_BODY_BYTES - 16)}"}`;
     expect((await readJsonObject(post(fits))).a).toHaveLength(MAX_JSON_BODY_BYTES - 16);
+  });
+});
+
+describe("pullStream", () => {
+  const source = () => Readable.from((function* () {
+    for (let i = 0; i < 64; i += 1) yield Buffer.alloc(64 * 1024, i);
+  })());
+
+  it("delivers every byte", async () => {
+    const body = await new Response(pullStream(source())).arrayBuffer();
+    expect(body.byteLength).toBe(64 * 64 * 1024);
+  });
+
+  it("stops quietly when the consumer cancels mid-flight", async () => {
+    const uncaught = vi.fn();
+    process.on("uncaughtException", uncaught);
+    process.on("unhandledRejection", uncaught);
+    try {
+      const stream = source();
+      const reader = pullStream(stream).getReader();
+      await reader.read();
+      await reader.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(stream.destroyed).toBe(true);
+      expect(uncaught).not.toHaveBeenCalled();
+    } finally {
+      process.off("uncaughtException", uncaught);
+      process.off("unhandledRejection", uncaught);
+    }
   });
 });
