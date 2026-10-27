@@ -65,3 +65,23 @@ uploads every clip of a finished video to the user's channel as a public Short.
   `restyle-task.test.ts` case (seeded clips `{id:"a"}` and `{id:"b", lineageId:"L"}`; after restyle,
   `lineageId` is `["a","L"]` and the ids changed), confirmed RED, then implemented. `npx vitest run`
   648/649 passing (1 pre-existing slow-test skip); `tsc --noEmit` 0 errors; `pnpm lint` clean.
+
+### 2026-10-27 18:14 — Task 3: Claude-written metadata
+- Added `server/ai/youtube-metadata.ts`: `writeYoutubeMetadata` calls Claude via the existing
+  `createClaudeClient`/`requestStructured`/`runWithRetry` (120s budget), with its own system/user
+  prompt (kept out of the golden-tested `prompts.ts`) that treats the `{source_title, hook_title,
+  transcript}` JSON as data, never instructions.
+- `parseYoutubeMetadata` throws `OutputValidationError` (triggering a repair turn) for an empty or
+  over-100-character title, or a description whose UTF-8 byte count (with its hashtags appended)
+  exceeds 5000 — stripping `<`/`>` from every field first. `fitTags` clips tags to the 500-character
+  total (commas plus 2 quote chars per multi-word tag), dropping from the end; hashtags are
+  deduped case-insensitively, filtered to `[\p{L}\p{N}_]+`, and capped at 5. An unrecognizable
+  `language` is dropped. `youtubeDescription` joins the description and `#hashtags` exactly as
+  specified.
+- Tests (TDD): wrote `youtube-metadata.test.ts` first (fake Anthropic fetch, same pattern as
+  `claude-provider.test.ts`), confirmed RED (module did not exist), then implemented; all 12 passed
+  on the first run. Covers the request shape, a repaired-then-successful retry, exhausting the
+  retry budget, the angle-bracket/length title rule, a multibyte description that is under the
+  5000-byte budget only when measured in bytes (not JS `.length`), `fitTags`, and hashtag dedup.
+  `npx vitest run` 661/662 passing (1 pre-existing slow-test skip); `tsc --noEmit` 0 errors;
+  `pnpm lint` clean.
