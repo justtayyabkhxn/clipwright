@@ -187,4 +187,23 @@ def test_assemblyai_client_uses_the_runtime_base_url(tmp_path, monkeypatch):
     runtime.assemblyai_base_url = ""
     with pytest.raises(RuntimeError):
         transcription._get_transcript_with_assemblyai(tmp_path / "v.mp4", "universal-3-5-pro", runtime)
-    assert built == ["http://127.0.0.1:9", aai.settings.base_url]
+    assert built == ["http://127.0.0.1:9", "https://api.assemblyai.com"]
+
+
+def test_blank_assemblyai_env_var_does_not_empty_the_base_url(tmp_path, monkeypatch):
+    # The worker passes its environment to the engine, and a blank `ASSEMBLYAI_BASE_URL=` line in
+    # web/.env.local arrives as "". The SDK's settings read ASSEMBLYAI_* variables, so its global
+    # default becomes "" and every upload failed with httpx.UnsupportedProtocol.
+    built = []
+
+    def capture(**kwargs):
+        built.append(kwargs["settings"].base_url)
+        raise RuntimeError("stop")
+
+    monkeypatch.setenv("ASSEMBLYAI_BASE_URL", "")
+    monkeypatch.setattr(aai.settings, "base_url", "")
+    monkeypatch.setattr(aai, "Client", capture)
+    runtime = SimpleNamespace(assembly_ai_api_key="k", assemblyai_base_url="", transcription_language="")
+    with pytest.raises(RuntimeError):
+        transcription._get_transcript_with_assemblyai(tmp_path / "v.mp4", "universal-3-5-pro", runtime)
+    assert built == ["https://api.assemblyai.com"]

@@ -32,6 +32,8 @@ from .ffmpeg import (
     select_audio_stream_index,
 )
 
+DEFAULT_ASSEMBLYAI_BASE_URL = "https://api.assemblyai.com"
+
 
 def transcript_cache_path(video_path: Path) -> Path:
     return Path(video_path).with_suffix(".transcript_cache.json")
@@ -196,10 +198,12 @@ def _get_transcript_with_assemblyai(
     """Get transcript using AssemblyAI with word-level timing for precise subtitles."""
     import assemblyai as aai
 
-    # A job owns its client: concurrent jobs must not mutate shared SDK settings.
+    # A job owns its client: concurrent jobs must not mutate shared SDK settings. Never fall back
+    # to aai.settings: it reads ASSEMBLYAI_* env vars, and a blank ASSEMBLYAI_BASE_URL inherited
+    # from the worker makes its base_url "" (every upload then fails with UnsupportedProtocol).
     client = aai.Client(settings=aai.Settings(
         api_key=runtime_config.assembly_ai_api_key,
-        base_url=getattr(runtime_config, "assemblyai_base_url", "") or aai.settings.base_url,
+        base_url=getattr(runtime_config, "assemblyai_base_url", "") or DEFAULT_ASSEMBLYAI_BASE_URL,
         http_timeout=getattr(runtime_config, "assembly_ai_request_timeout_seconds", 60),
     ))
     transcriber = aai.Transcriber(client=client)

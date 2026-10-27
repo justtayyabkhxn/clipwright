@@ -25,7 +25,7 @@ class EngineConfig:
     youtube_max_height: int = 1080
     assembly_ai_http_timeout_seconds: int = 900
     assembly_ai_request_timeout_seconds: int = 60
-    # AssemblyAI API host (e.g. https://api.eu.assemblyai.com). Empty uses the SDK default.
+    # AssemblyAI API host (e.g. https://api.eu.assemblyai.com). Empty uses https://api.assemblyai.com.
     assemblyai_base_url: str = ""
     # Bundled fonts first, then the user's upload dir. Lookup searches in order.
     fonts_dirs: list[Path] = field(default_factory=lambda: [BUNDLED_FONTS_DIR])
