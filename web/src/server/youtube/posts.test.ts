@@ -319,6 +319,16 @@ describe("claim and cancel", () => {
     expect((await storedPost("other-w")).errorReason).toBe("backendError");
     expect(await cancelPostForLineage("t1", "u")).toBe("none");
   });
+
+  it("cancelPostsForUser with exceptChannelId spares posts already on that channel", async () => {
+    await seedPost({ _id: "old", lineageId: "old", userId: "u3", channelId: "UC-old", state: "queued" });
+    await seedPost({ _id: "new", lineageId: "new", userId: "u3", channelId: "UC-new", state: "queued" });
+
+    expect(await cancelPostsForUser("u3", "Not posted: a different channel was connected.", { exceptChannelId: "UC-new" })).toBe(1);
+
+    expect((await storedPost("old")).state).toBe("cancelled");
+    expect((await storedPost("new")).state).toBe("queued");
+  });
 });
 
 describe("transitions of a claimed post", () => {

@@ -21,13 +21,13 @@ export const PATCH = handle(async (request: Request) => {
   if (auto_post !== undefined && typeof auto_post !== "boolean") throw new ApiError(400, "Invalid auto_post");
   if (privacy !== undefined && !PRIVACIES.includes(privacy as never)) throw new ApiError(400, "Invalid privacy");
   if (made_for_kids !== undefined && typeof made_for_kids !== "boolean") throw new ApiError(400, "Invalid made_for_kids");
-  if (!(await getAccount(user.id))) throw new ApiError(404, "YouTube account is not connected.");
 
   const account = await updateAccountPrefs(user.id, {
     autoPost: auto_post as boolean | undefined,
     privacy: privacy as YoutubeAccountDoc["privacy"] | undefined,
     madeForKids: made_for_kids as boolean | undefined,
   });
+  if (!account) throw new ApiError(404, "YouTube account is not connected.");
   if (auto_post === false) await cancelPostsForUser(user.id, "Auto-post was turned off.");
   return json(serializeAccount(account));
 });

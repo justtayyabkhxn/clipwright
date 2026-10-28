@@ -217,9 +217,17 @@ const cancel = (error?: string): UpdateFilter<YoutubePostDoc> => ({
   $unset: { notBefore: "", waitReason: "", ...(error !== undefined && { errorReason: "" }) },
 });
 
-/** Disconnect, auto-post off, or a different channel: `reason` becomes the posts' error. */
-export async function cancelPostsForUser(userId: string, reason: string): Promise<number> {
-  const result = await collections().youtubePosts.updateMany({ userId, state: { $in: CANCELLABLE } }, cancel(reason));
+/**
+ * Disconnect, auto-post off, or a different channel: `reason` becomes the posts' error.
+ * `exceptChannelId` spares posts already queued for that channel — the callback passes the
+ * newly-connected channel so a post the autopost trigger creates for it between
+ * `saveConnectedAccount` and this call is never cancelled with the old channel's message (§4.3 step 6).
+ */
+export async function cancelPostsForUser(userId: string, reason: string, options?: { exceptChannelId?: string }): Promise<number> {
+  const result = await collections().youtubePosts.updateMany(
+    { userId, state: { $in: CANCELLABLE }, ...(options?.exceptChannelId !== undefined && { channelId: { $ne: options.exceptChannelId } }) },
+    cancel(reason),
+  );
   return result.modifiedCount;
 }
 

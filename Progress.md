@@ -206,3 +206,10 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - 2026-10-28 13:16 review fix round 1: DELETE now cancels posts before the best-effort revoke
   (`disconnectAccount` returns a revoke thunk instead of awaiting it internally), and the callback
   logs the sanitized Google error on exchange/channel-lookup failure instead of swallowing it.
+- 2026-10-28 13:35 review fix round 2: channel-change cancel now spares the new channel's own posts
+  (`cancelPostsForUser`'s new `exceptChannelId`), the callback redirects `not_configured` up front
+  and catches any other unexpected error as `exchange_failed` (logged, never thrown to a 500),
+  `BETTER_AUTH_URL`'s trailing slash is stripped in both the redirect URI and the callback's
+  redirect, PATCH 404s off `updateAccountPrefs`'s own null return, resume's response includes
+  `worker_online`, and the test gaps (no session, `MissingRefreshTokenError`, auto-post-off on a
+  blocked post, GET unconfigured, trailing slash) are covered.

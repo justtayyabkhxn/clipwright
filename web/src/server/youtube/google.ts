@@ -17,7 +17,9 @@ const CALL_TIMEOUT_MS = 60_000;
 
 /** The redirect URI registered with Google (design §4.3): one literal, shared by `/connect` and `/callback`. */
 export function callbackRedirectUri(): string {
-  return `${env.BETTER_AUTH_URL}/api/youtube/callback`;
+  // A trailing slash on BETTER_AUTH_URL (env.ts does not normalize it) would otherwise build
+  // `...//api/youtube/callback`, which Google rejects as not matching the registered URI.
+  return `${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/api/youtube/callback`;
 }
 
 /** Google's endpoints; GOOGLE_BASE_URL_OVERRIDE (tests, e2e) replaces every origin. */

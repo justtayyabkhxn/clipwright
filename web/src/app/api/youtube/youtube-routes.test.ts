@@ -11,6 +11,7 @@ import { closeDb, collections, ensureIndexes } from "@/server/db";
 import { resetEnv } from "@/server/env";
 import { decryptSetting } from "@/server/settings";
 import type { YoutubePostDoc } from "@/server/types";
+import * as posts from "@/server/youtube/posts";
 
 import * as connectRoute from "./connect/route";
 import * as callbackRoute from "./callback/route";
@@ -151,9 +152,45 @@ describe("POST /api/youtube/connect", () => {
       resetEnv();
     }
   });
+
+  it("strips a trailing slash from BETTER_AUTH_URL when building the redirect URI", async () => {
+    process.env.BETTER_AUTH_URL = "http://localhost:3000/";
+    resetEnv();
+    try {
+      const response = await call(connectRoute.POST, "/api/youtube/connect", { method: "POST" });
+      const { authorize_url } = (await response.json()) as { authorize_url: string };
+      expect(new URL(authorize_url).searchParams.get("redirect_uri")).toBe("http://localhost:3000/api/youtube/callback");
+
+      const deniedResponse = await call(callbackRoute.GET, "/api/youtube/callback?error=access_denied");
+      expect(deniedResponse.headers.get("location")).toBe("http://localhost:3000/settings?youtube_error=denied");
+    } finally {
+      process.env.BETTER_AUTH_URL = "http://localhost:3000";
+      resetEnv();
+    }
+  });
 });
 
 describe("GET /api/youtube/callback", () => {
+  it("redirects youtube_error=not_configured when client env vars are missing", async () => {
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "";
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "";
+    resetEnv();
+    try {
+      const response = await call(callbackRoute.GET, "/api/youtube/callback?code=abc&state=xyz");
+      expect(locationQuery(response).get("youtube_error")).toBe("not_configured");
+    } finally {
+      process.env.GOOGLE_OAUTH_CLIENT_ID = "client-id";
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET = "client-secret";
+      resetEnv();
+    }
+  });
+
+  it("redirects expired when there is no session", async () => {
+    const state = await startConnect("alice");
+    const response = await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`, { as: null });
+    expect(locationQuery(response).get("youtube_error")).toBe("expired");
+  });
+
   it("stores the channel and redirects to /settings?youtube=connected", async () => {
     const state = await startConnect("alice");
     mockTokenExchange();
@@ -252,6 +289,36 @@ describe("GET /api/youtube/callback", () => {
     warn.mockRestore();
   });
 
+  it("redirects exchange_failed when Google sends no refresh token on a first-time connect", async () => {
+    const state = await startConnect("alice");
+    mockServer.use(
+      http.post("https://oauth2.googleapis.com/token", () =>
+        HttpResponse.json({ access_token: "at-1", expires_in: 3600, scope: BOTH_SCOPES }), // no refresh_token
+      ),
+    );
+    mockChannel();
+
+    const response = await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`);
+
+    expect(locationQuery(response).get("youtube_error")).toBe("exchange_failed");
+    expect(await collections().youtubeAccounts.findOne({ _id: users.alice.id })).toBeNull();
+  });
+
+  it("falls back to exchange_failed and logs an unexpected error (e.g. a DB failure after a successful exchange)", async () => {
+    const state = await startConnect("alice");
+    mockTokenExchange();
+    mockChannel();
+    const unblock = vi.spyOn(posts, "unblockAfterReconnect").mockRejectedValueOnce(new Error("connection reset"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const response = await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`);
+
+    expect(locationQuery(response).get("youtube_error")).toBe("exchange_failed");
+    expect(warn).toHaveBeenCalledWith("[youtube] OAuth callback: unexpected error:", "connection reset");
+    unblock.mockRestore();
+    warn.mockRestore();
+  });
+
   it("on a channel change, cancels the user's queued and blocked posts with the channel-change error", async () => {
     // First connection: channel A.
     let state = await startConnect("alice");
@@ -259,23 +326,23 @@ describe("GET /api/youtube/callback", () => {
     mockChannel({ items: [{ id: "UC-A", snippet: { title: "Channel A" } }] });
     await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`);
 
-    const post: YoutubePostDoc = {
-      _id: "post-1",
+    const base = {
       userId: users.alice.id,
       taskId: "task-1",
-      lineageId: "clip-1",
-      channelId: "UC-A",
-      state: "queued",
+      state: "queued" as const,
       attempts: 0,
       insertCalls: 0,
       insertCap: 3,
-      privacy: "public",
+      privacy: "public" as const,
       madeForKids: false,
       notifySubscribers: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    await collections().youtubePosts.insertOne(post);
+    await collections().youtubePosts.insertOne({ ...base, _id: "post-1", lineageId: "clip-1", channelId: "UC-A" });
+    // A post the autopost trigger already created for the channel ABOUT TO BE connected (a race with
+    // saveConnectedAccount), inserted *before* the reconnect below: it must survive the cancel.
+    await collections().youtubePosts.insertOne({ ...base, _id: "post-new-channel", lineageId: "clip-new", channelId: "UC-B" });
 
     // Reconnect with a different channel B.
     state = await startConnect("alice");
@@ -287,6 +354,8 @@ describe("GET /api/youtube/callback", () => {
     const cancelled = await collections().youtubePosts.findOne({ _id: "post-1" });
     expect(cancelled?.state).toBe("cancelled");
     expect(cancelled?.error).toBe("Not posted: a different channel was connected.");
+    const survived = await collections().youtubePosts.findOne({ _id: "post-new-channel" });
+    expect(survived?.state).toBe("queued");
   });
 
   it("on a same-channel reconnect, unblocks posts (but not the private-lock ones)", async () => {
@@ -343,15 +412,30 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
     expect(text).not.toContain("at-1");
   });
 
-  it("PATCH updates prefs, and turning auto_post off cancels queued posts", async () => {
+  it("GET reports configured:false and a setup_hint when client env vars are missing", async () => {
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "";
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "";
+    resetEnv();
+    try {
+      const response = await call(accountRoute.GET, "/api/youtube/account");
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { configured: boolean; connected: boolean; setup_hint?: string };
+      expect(body.configured).toBe(false);
+      expect(body.connected).toBe(false);
+      expect(body.setup_hint).toBeTruthy();
+    } finally {
+      process.env.GOOGLE_OAUTH_CLIENT_ID = "client-id";
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET = "client-secret";
+      resetEnv();
+    }
+  });
+
+  it("PATCH updates prefs, and turning auto_post off cancels both a queued and a blocked post", async () => {
     await connectAlice();
-    const post: YoutubePostDoc = {
-      _id: "post-1",
+    const base: Omit<YoutubePostDoc, "_id" | "lineageId" | "state"> = {
       userId: users.alice.id,
       taskId: "task-1",
-      lineageId: "clip-1",
       channelId: "UC1",
-      state: "queued",
       attempts: 0,
       insertCalls: 0,
       insertCap: 3,
@@ -361,7 +445,10 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    await collections().youtubePosts.insertOne(post);
+    await collections().youtubePosts.insertMany([
+      { ...base, _id: "post-1", lineageId: "clip-1", state: "queued" },
+      { ...base, _id: "post-2", lineageId: "clip-2", state: "blocked" },
+    ]);
 
     const response = await call(accountRoute.PATCH, "/api/youtube/account", {
       method: "PATCH",
@@ -371,14 +458,19 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toMatchObject({ auto_post: false, privacy: "unlisted" });
-    const cancelled = await collections().youtubePosts.findOne({ _id: "post-1" });
-    expect(cancelled?.state).toBe("cancelled");
+    expect((await collections().youtubePosts.findOne({ _id: "post-1" }))?.state).toBe("cancelled");
+    expect((await collections().youtubePosts.findOne({ _id: "post-2" }))?.state).toBe("cancelled");
   });
 
   it("PATCH rejects an invalid privacy value", async () => {
     await connectAlice();
     const response = await call(accountRoute.PATCH, "/api/youtube/account", { method: "PATCH", body: { privacy: "secret" } });
     expect(response.status).toBe(400);
+  });
+
+  it("PATCH 404s when no account is connected", async () => {
+    const response = await call(accountRoute.PATCH, "/api/youtube/account", { method: "PATCH", body: { auto_post: false } });
+    expect(response.status).toBe(404);
   });
 
   it("DELETE disconnects and cancels queued and blocked posts, before revoking (design §4.3 order)", async () => {
@@ -450,7 +542,7 @@ describe("POST /api/youtube/account/resume", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toMatchObject({ status: "active", warning: null });
+    expect(body).toMatchObject({ status: "active", warning: null, worker_online: false });
     const requeued = await collections().youtubePosts.findOne({ _id: "post-1" });
     expect(requeued?.state).toBe("queued");
     const job = await collections().jobs.findOne({ type: "publish_youtube", "payload.postId": "post-1" });
