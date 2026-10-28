@@ -27,6 +27,10 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 export const INSERT_CAP = 3;
 export const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
 export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
+/** §4.7: clip delete and task delete 409 while the lineage's post is mid-upload. */
+export const POST_UPLOADING_MESSAGE = "This clip is uploading to YouTube. Try again in a minute.";
+/** §4.7: the restyle route's 409 while any of the task's posts is mid-upload. */
+export const RESTYLE_UPLOADING_MESSAGE = "A clip from this task is uploading to YouTube. Try again in a minute.";
 /** The §4.6 forced-private code: the UI maps it to copy in `messages/en` (never an English sentence in `post.warning`). */
 export const PRIVATE_LOCK = "private_lock";
 const CANCELLABLE: YoutubePostDoc["state"][] = ["queued", "blocked", "failed"];
@@ -281,6 +285,11 @@ export async function cancelPostForLineage(taskId: string, lineageId: string): P
   if (result.matchedCount) return "cancelled";
   const post = await youtubePosts.findOne({ taskId, lineageId }, { projection: { state: 1 } });
   return post?.state === "working" ? "working" : "none";
+}
+
+/** Restyle guard (§4.7): true while any of the task's posts is mid-upload. */
+export async function hasWorkingPost(taskId: string): Promise<boolean> {
+  return (await collections().youtubePosts.countDocuments({ taskId, state: "working" })) > 0;
 }
 
 // --- Account-wide transitions ---

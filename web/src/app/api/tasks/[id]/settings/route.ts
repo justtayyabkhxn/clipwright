@@ -16,6 +16,7 @@ import {
   truthy,
 } from "@/server/tasks";
 import type { TaskSettings } from "@/server/types";
+import { hasWorkingPost, RESTYLE_UPLOADING_MESSAGE } from "@/server/youtube/posts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export const POST = handle(async (request: Request, { params }: Params) => {
   const applyToExisting = truthy(body.apply_to_existing);
   // Like regenerate_all_clips_for_task, a task without clips only saves its settings.
   if (applyToExisting && task.clips.length) {
+    if (await hasWorkingPost(id)) throw new ApiError(409, RESTYLE_UPLOADING_MESSAGE);
     const upload = task.source.type === "upload" ? uploadKeys(task.source.url) : null;
     if (task.source.type === "upload" && !(upload && (await getStorage().stat(upload.video)))) {
       throw new ApiError(400, "Source video file no longer exists");

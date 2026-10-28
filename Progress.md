@@ -266,3 +266,20 @@ uploads every clip of a finished video to the user's channel as a public Short.
   `verifyUploads` now pushes onto its existing array instead of copying it per post; added 6 tests
   for the untested §4.6 branches (deleted/non-final/rejection-reason/window bounds/one user's fetch
   failure). Full `npx vitest run --maxWorkers=2`: 809 passed / 1 skipped.
+
+### 2026-10-28 15:39 — Task 10: Task routes and interactions
+- New `GET /api/tasks/[id]/youtube` (serialized posts, owner-only) and
+  `POST /api/tasks/[id]/youtube/[postId]/retry` ("Try again", `worker_online`, 409 for an uploaded
+  post), both built on the already-committed `serializePosts`/`retryPost`.
+- Clip delete and task delete now cancel the clip's (or task's) YouTube post(s) first and 409 with
+  "This clip is uploading to YouTube. Try again in a minute." while one is `working` (§4.7); the
+  edit-lock check still runs first, so a delete that was going to be refused anyway never cancels a
+  post as a side effect. Task delete then deletes its posts. Restyle 409s with "A clip from this
+  task is uploading to YouTube. Try again in a minute." while any of the task's posts is `working`
+  (our call on the wording — §4.7 didn't fix it).
+- Added `posts.ts`'s `hasWorkingPost` and the two message constants; no change to the already-tested
+  `cancelPostForLineage`/`cancelPostsForTask`/`retryPost`.
+- Tests (TDD): 6 cases in new `src/app/api/tasks/youtube.test.ts` (GET owner-only, retry + 409,
+  clip-delete cancel + 409, task-delete cancel/delete + 409, restyle 409); RED first (missing route
+  modules), then GREEN. Full `npx vitest run --maxWorkers=2`: 815 passed / 1 skipped, output
+  pristine; `tsc --noEmit` and `pnpm lint` clean.
