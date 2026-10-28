@@ -255,3 +255,8 @@ uploads every clip of a finished video to the user's channel as a public Short.
   first (missing exports / duplicate lineageId), then GREEN.
 - Full `npx vitest run --maxWorkers=2`: 802 passed / 1 skipped, output pristine; `tsc --noEmit` and
   `pnpm lint` clean.
+- 2026-10-28 14:59 review fix round 1: `verifyUploads` now trips the private lock only when the newly
+  fetched `privacyStatus` differs from the post's own previously stored value, and trips before the
+  post's `updateOne` so a failed trip leaves the post unwritten for a retry; a video already known to
+  be locked no longer re-blocks the posts "Resume posting" just released. 1 new test; full
+  `npx vitest run --maxWorkers=2`: 803 passed / 1 skipped.

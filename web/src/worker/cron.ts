@@ -194,21 +194,27 @@ async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchI
     const status = statuses.get(post.videoId!);
     const updatedAt = new Date();
     const set: Partial<YoutubePostDoc> = { updatedAt };
+    // §4.6 "the first time": a video already stored as locked must not re-trip the breaker on every
+    // later pass while it stays non-final, which would re-block posts "Resume posting" just released.
+    let trip = false;
     if (!status) {
       // Absent from the list: the video is gone from YouTube.
       set.uploadStatus = "deleted";
     } else {
       set.privacyStatus = status.privacyStatus;
       set.uploadStatus = status.uploadStatus;
-      if (status.privacyStatus !== post.privacy) set.warning = FORCED_PRIVATE_WARNING;
-      else if (status.rejectionReason) set.warning = status.rejectionReason;
+      if (status.privacyStatus !== post.privacy) {
+        set.warning = FORCED_PRIVATE_WARNING;
+        trip = status.privacyStatus !== post.privacyStatus;
+      } else if (status.rejectionReason) set.warning = status.rejectionReason;
     }
     if (FINAL_UPLOAD_STATUSES.has(set.uploadStatus!)) set.verifiedAt = updatedAt;
 
+    // Trip before the write: if this throws, the post stays unwritten and the next run retries.
+    if (trip) await tripPrivateLock(userId);
     const result = await collections()
       .youtubePosts.updateOne({ _id: post._id, state: "uploaded", verifiedAt: { $exists: false } }, { $set: set });
     if (!result.matchedCount) continue;
-    if (set.warning === FORCED_PRIVATE_WARNING) await tripPrivateLock(userId);
     if (set.verifiedAt) verified++;
   }
   return verified;

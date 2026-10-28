@@ -384,6 +384,32 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect(await storedPost("p2")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
   });
 
+  it("does not re-trip the breaker on a video already known to be locked", async () => {
+    const now = new Date();
+    await seedAccount(); // active: the user has pressed "Resume posting" since the first trip.
+    await seedPost({
+      _id: "p1",
+      state: "uploaded",
+      videoId: "VID1",
+      videoUrl: "https://www.youtube.com/watch?v=VID1",
+      privacy: "public",
+      privacyStatus: "private", // already stored locked, from task 8's markUploaded.
+      uploadStatus: "uploaded",
+      uploadedAt: new Date(now.getTime() - 20 * MINUTE),
+    });
+    // A sibling the user just released by resuming: must stay queued, not re-blocked.
+    await seedPost({ _id: "p2", lineageId: "c2", state: "queued" });
+
+    const fetchImpl = videoStatusFetch({ VID1: { privacyStatus: "private", uploadStatus: "processed" } });
+    expect(await verifyUploads(now, fetchImpl)).toBe(1);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "YouTube made this video private" });
+    expect(p1.verifiedAt).toBeInstanceOf(Date);
+    expect(await collections().youtubeAccounts.findOne({ _id: USER })).toMatchObject({ status: "active" });
+    expect(await storedPost("p2")).toMatchObject({ state: "queued" });
+  });
+
   it("verification skips posts from a previous channel", async () => {
     const now = new Date();
     await seedAccount({ channelId: "UC-NEW" });
