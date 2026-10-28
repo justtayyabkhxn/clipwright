@@ -145,3 +145,22 @@ uploads every clip of a finished video to the user's channel as a public Short.
   first connect now throws `MissingRefreshTokenError` instead of inserting a broken doc; plus the
   test-coverage gaps the review found (refresh token assertion, revoke call/order/failure cases,
   refresh request body, another user's data surviving `deleteAllUserData`). 29 tests now (was 15).
+
+### 2026-10-28 12:32 — Task 6: Post repository
+- Extended `server/youtube/posts.ts` with the post repository: `createPostsForTask` (only for a task
+  still `autopost: "pending"`; one post per non-fallback clip, `insertMany` unordered ignoring
+  E11000 on `lineageId`, snapshots privacy/made-for-kids/channel, notifies only the first clip,
+  `blocked` with `private_lock` whenever the account carries that warning, else `reconnect` unless
+  active; enqueues the queued posts in clip order, then sets `autopost: "done"`), the claim CAS
+  (`queued`+due → `working`, or re-claim by the same job id), claim-fenced defer/block/fail,
+  `markUploaded` (trips the breaker on a privacy other than requested), session/metadata writes,
+  the three cancels, `unblockAfterReconnect`, `tripPrivateLock`/`resumePosting` (the lock survives
+  reconnects; a `reauth_required` account keeps its status), `deferAllQueuedForQuota` (never
+  shortens a longer wait), `retryPost` and `serializePosts`.
+- Judgment calls: retry sets `insertCap = max(insertCap, insertCalls + 1)` (never lowers the cap);
+  a `retry` deferral spends one automatic attempt; the serializer adds `id` and `wait_reason` to the
+  §4.8 fields (the retry route and the quota chip need them).
+- Tests (TDD): `posts.test.ts` written first, RED 17/17 (`… is not a function`), then GREEN 17/17,
+  including a 20-round claim/cancel race (both outcomes observed) and the reauth_required +
+  private_lock combination. Full `npx vitest run` 715 passed / 1 skipped; `tsc --noEmit` clean;
+  `pnpm lint` clean.
