@@ -42,6 +42,9 @@ It runs on your own machine (Windows, macOS or Linux) with no Docker, against a 
 - **Settings:** the admin saves the Anthropic and AssemblyAI keys (encrypted in MongoDB) and picks
   the Claude model, with a free connection test; every user sets caption defaults and can delete
   their account.
+- **YouTube auto-post (optional):** connect your own channel once, and every clip of a finished
+  generation is uploaded as a public Short with a title, description, tags and hashtags written by
+  Claude — no review step. See [docs/youtube.md](docs/youtube.md).
 
 ## Quick start
 
@@ -81,6 +84,7 @@ With GNU make: `make setup`, then `make dev`.
 | [Configuration](docs/configuration.md) | Every environment variable and its default |
 | [Architecture](docs/architecture.md) | Components, request flows, jobs, data model, storage |
 | [Claude integration](docs/claude-integration.md) | Keys, model choice, how selection works, costs |
+| [YouTube auto-post](docs/youtube.md) | Google Cloud setup, how auto-posting behaves, the forced-private lock and its audit, troubleshooting |
 | [Testing](docs/testing.md) | Unit, engine, slow and end-to-end tests; manual checklist |
 | [Troubleshooting](docs/troubleshooting.md) | Worker offline, yt-dlp, keys, ffmpeg, Windows issues |
 | [Deploying to Vercel](docs/deploying-to-vercel.md) | What works today and what is still missing |

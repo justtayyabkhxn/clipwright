@@ -101,11 +101,20 @@ and expire after 7 days.
 | `export_editor` | `{document, preset, basis}` | `editor-render` | 1 |
 | `combine_editor` | `{inputs}` | `editor-combine` | 1 |
 | `export_clip` | `{preset, filename}` | `export-preset` | 1 |
+| `publish_youtube` | `{postId}` | none (plain `fetch` to Claude and Google) | 3 |
 
 Only one `process_task`/`restyle_task` can be active per task (unique `activeKey` `task:{taskId}`),
-and one `prepare_editor` per clip. If a worker dies, the reaper requeues its jobs when the lease
-expires; when attempts run out it runs the job type's failure hook (for example the task goes to
-`error` with "The worker stopped while processing this video. Resume to try again.").
+one `prepare_editor` per clip, and one `publish_youtube` per post (`activeKey` `youtube:{postId}`).
+If a worker dies, the reaper requeues its jobs when the lease expires; when attempts run out it
+runs the job type's failure hook (for example the task goes to `error` with "The worker stopped
+while processing this video. Resume to try again."; a `publish_youtube` post goes back to `queued`
+with a 2-minute wait, or `failed` once its retries are used up).
+
+**YouTube auto-post** (optional, off unless `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`
+are set): when a generation completes, Clipwright uploads every non-fallback clip to the user's own
+connected channel as a public Short, with a title, description, tags and hashtags written by
+Claude. See [`docs/youtube.md`](youtube.md) for setup and behavior, and DESIGN.md §4 for the full
+contract.
 
 ## Data model summary
 
@@ -118,6 +127,9 @@ expires; when attempts run out it runs the job type's failure hook (for example 
 | `processing_cache` | `_id` = sha256 of source type and URL. `transcriptText` and one Claude analysis per clip length. |
 | `app_settings` | `_id` = `ANTHROPIC_API_KEY`, `ASSEMBLY_AI_API_KEY` or `CLAUDE_MODEL`. AES-256-GCM encrypted value plus `preferAdminValue`. |
 | `worker_status` | One document, heartbeat every 10 s. The worker counts as online when it is under 30 s old. |
+| `youtube_accounts` | `_id` = userId (one connected channel per user). Encrypted tokens, `status`, `autoPost`, `privacy`, `madeForKids`, a `warning` (e.g. the forced-private lock). |
+| `oauth_states` | `_id` = the OAuth state. Single-use, TTL-deleted after 10 minutes. |
+| `youtube_posts` | One post per clip *lineage* (unique on `lineageId`), so a restyle can never re-post a clip. `state` (`queued → working → uploaded`, or `blocked`/`failed`/`cancelled`), the stored metadata, `videoId`/`videoUrl` once uploaded. |
 
 ## Storage layout
 

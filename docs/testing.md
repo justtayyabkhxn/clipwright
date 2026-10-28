@@ -100,18 +100,24 @@ costs a little Claude and AssemblyAI usage.
 6. On the task page: clips play, scores and hook titles show, download works, a preset export
    (TikTok, Reels or Shorts) finishes and downloads.
 7. **Upload generation:** upload a short MP4 and repeat steps 5 and 6.
-8. **Cancel and resume:** start a generation, cancel during transcription, then resume; it completes
+8. **YouTube auto-post (optional, real Google Cloud project; see [docs/youtube.md](youtube.md)):**
+   connect a channel in **Settings → YouTube** and turn auto-post on. Run one short generation and
+   watch each clip's status move from "Waiting to post" through "Writing title…" and "Uploading…"
+   to "Posted ↗". Open the link and, in YouTube Studio, confirm the video is **Public** (if it
+   shows **Private**, see docs/youtube.md's audit section). This spends real `videos.insert` quota,
+   so run it sparingly.
+9. **Cancel and resume:** start a generation, cancel during transcription, then resume; it completes
    and reuses the download.
-9. **Restyle:** change the caption template with "apply to existing clips". The old clips stay until
-   the new ones replace them. Start another restyle and cancel it: the old clips and old settings
-   remain.
-10. **Editor:** open a clip, wait for prepare, edit a caption and trim; reload the page and check that
+10. **Restyle:** change the caption template with "apply to existing clips". The old clips stay until
+    the new ones replace them. Start another restyle and cancel it: the old clips and old settings
+    remain.
+11. **Editor:** open a clip, wait for prepare, edit a caption and trim; reload the page and check that
     the autosave kept the edit. Undo and redo. Export in the browser and on the server; both
     downloads play.
-11. **Combine:** select two clips and combine them; the new clip appears in the task.
-12. **Worker offline:** stop the worker (`Ctrl+C` in its pane or run `pnpm dev:web`), create a
+12. **Combine:** select two clips and combine them; the new clip appears in the task.
+13. **Worker offline:** stop the worker (`Ctrl+C` in its pane or run `pnpm dev:web`), create a
     generation: the UI warns that the worker isn't running and the task stays queued. Start the worker
     again (`pnpm worker`): the task runs.
-13. Delete a clip, then the task; then delete the test account from Settings.
+14. Delete a clip, then the task; then delete the test account from Settings.
 
 Record the date, OS, model and anything that failed in the pull request.

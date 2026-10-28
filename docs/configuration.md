@@ -76,6 +76,19 @@ worker reads them at the start of every job, so a change applies to the next job
 | `HOOK_FIRST_TEASER` | `false` | Replay a later punchline as a teaser at the start of each clip. |
 | `YOUTUBE_MAX_HEIGHT` | `1080` (min 144) | Highest YouTube download resolution. |
 
+## YouTube auto-post
+
+Unset `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` turns the whole feature off (no
+Connect button in Settings). See [docs/youtube.md](youtube.md) for the one-time Google Cloud setup
+and how auto-post behaves.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` | none | OAuth client id from the Google Cloud project, env only (not settable in Settings). |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | none | Its client secret. Never logged or returned by any API response. |
+| `CLAUDE_METADATA_MODEL` | `claude-sonnet-5` | Claude model that writes each clip's title, description, tags and hashtags before upload. |
+| `GOOGLE_BASE_URL_OVERRIDE` | unset (Google's real hosts) | **Test-only.** Replaces the origin of every Google endpoint (OAuth, Data API, resumable upload) with this base URL. Used by the vitest and Playwright fakes; never set it in a real `.env.local`. |
+
 ## Browser-side variables
 
 `NEXT_PUBLIC_*` variables are inlined into the client bundle at build time (`next build`, or the

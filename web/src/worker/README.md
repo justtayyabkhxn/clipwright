@@ -36,8 +36,14 @@ What the worker does while running:
   - expires exports;
   - deletes finished job documents older than 7 days, with their files;
   - removes `work/` dirs older than 24 h;
-  - deletes downloaded YouTube videos that no task has used for 24 h. Their word timings stay;
-  - deletes uploads older than 24 h that no task uses, with their word timings.
+  - deletes downloaded YouTube source videos that no task has used for 24 h. Their word timings stay;
+  - deletes uploads older than 24 h that no task uses, with their word timings;
+  - re-runs `createPostsForTask` for any task still `autopost: "pending"` more than 2 minutes after
+    its last update (covers a crash between the completion CAS and the enqueue), and enqueues every
+    due `publish_youtube` job (the posts whose `notBefore` has passed);
+  - re-reads `videos.list?part=status` for posts uploaded at least 10 minutes ago, within the last
+    48 h, to record their final privacy and upload status, and to trip the forced-private circuit
+    breaker (`docs/youtube.md`) if YouTube locked one private.
 
 **Stopping:** press Ctrl+C (SIGINT/SIGTERM). Running engines are cancelled and their jobs go back
 to the queue without using up an attempt. Press Ctrl+C a second time to exit at once.
@@ -55,6 +61,7 @@ attempts are left. When none are left, it runs the job type's failure hook (`run
 | `export_editor` | `{document, preset, basis}` | Runs `editor-render` and writes `editor-exports/{jobId}.mp4`. Expires after 7 days. |
 | `combine_editor` | `{inputs: CombineInput[]}` (from `drafts.ts`) | Runs `editor-combine`. Appends a new clip with a ready draft and writes the export to `editor-exports/{jobId}.mp4`. Result: `{clip_id, fileKey}`. |
 | `export_clip` | `{preset, filename}` | Runs `export-preset` and writes `exports/{jobId}.mp4`. Fails if the clip's file changed. Expires after 7 days. |
+| `publish_youtube` | `{postId}` | YouTube auto-post (see [`docs/youtube.md`](../../../docs/youtube.md)). Writes the clip's title, description, tags and hashtags with Claude, then uploads it with YouTube's resumable protocol and records the video id. Never runs twice for the same clip lineage. |
 
 **Handlers:** each handler (`handlers/*.ts`) gets a `JobContext` (`context.ts`). The context
 provides:

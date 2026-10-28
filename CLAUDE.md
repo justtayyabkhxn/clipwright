@@ -74,8 +74,13 @@ TypeScript (`src/server/ai`). The browser polls every 2 s. Files go through the 
 ## Key contracts (details in DESIGN.md)
 
 - **Jobs:** `process_task`, `restyle_task`, `prepare_editor`, `export_editor`, `combine_editor`,
-  `export_clip`. Job ids are 32 lowercase hex. `activeKey` (`task:{id}`, `prepare:{clipId}`) and
-  `liveKey` are unique partial indexes; E11000 means "already queued or running".
+  `export_clip`, `publish_youtube`. Job ids are 32 lowercase hex. `activeKey` (`task:{id}`,
+  `prepare:{clipId}`, `youtube:{postId}`) and `liveKey` are unique partial indexes; E11000 means
+  "already queued or running".
+- **YouTube auto-post** (`docs/youtube.md`, DESIGN.md §4): `youtube_accounts` (one connected
+  channel per user), `oauth_states` (TTL-indexed, single-use) and `youtube_posts` (one post per
+  clip lineage, unique on `lineageId`) hold its state. Off unless `GOOGLE_OAUTH_CLIENT_ID` and
+  `GOOGLE_OAUTH_CLIENT_SECRET` are set.
 - **Task run:** `task.run = {jobId, type}` is set when a run starts; the worker's CAS writes are
   fenced by `run.jobId`. Task JSON exposes `run_type` while the task is active.
 - **Restyle cancel/failure** returns the task to `completed` with the old clips and rolls the

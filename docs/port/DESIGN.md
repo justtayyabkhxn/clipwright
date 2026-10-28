@@ -20,7 +20,8 @@ algorithms, validation rules), the map files and the original code in git histor
 | Auth | Better Auth (email/password) with `mongodbAdapter`. The **first user to sign up becomes admin**; `ADMIN_EMAILS` (comma-separated) also grants admin at sign-up. Password reset: if no email transport is configured, the reset URL is logged to the server console (`[auth] Password reset link for <email>: <url>`). Email verification is off. |
 | Keys | `ANTHROPIC_API_KEY`, `ASSEMBLY_AI_API_KEY` and `CLAUDE_MODEL` can come from env vars or be saved by an admin in Settings, encrypted in Mongo. The precedence rules are unchanged from SupoClip (section 5). |
 | Kept features | Create (YouTube or upload), all generation options, live progress, library, task page (clip wall, scores, focus view, downloads, preset exports, restyle, delete clip and task, cancel and resume), the full editor (prepare, drafts, autosave, undo/redo, browser and server export, combine, apply style to all), settings (Claude and AssemblyAI keys, model, caption defaults, delete account), fonts (bundled plus user upload). |
-| Dropped | Billing, social and analytics, admin pages (apart from the settings admin gate), API keys and MCP, affiliate, B-roll, emails/SES, PostHog/DataFast/Axiom, all i18n except English (next-intl stays, English only), marketing/blog/SEO/landing/status pages, iOS integration, announcements, feedback, **share links**, **the legacy trim/split/merge/captions/regenerate/legacy-export endpoints** (the editor covers them), transitions (never applied), SSE (replaced by polling). |
+| Dropped | Billing and analytics, admin pages (apart from the settings admin gate), API keys and MCP, affiliate, B-roll, emails/SES, PostHog/DataFast/Axiom, all i18n except English (next-intl stays, English only), marketing/blog/SEO/landing/status pages, iOS integration, announcements, feedback, **share links**, **the legacy trim/split/merge/captions/regenerate/legacy-export endpoints** (the editor covers them), transitions (never applied), SSE (replaced by polling). TikTok, Instagram and other social platforms stay dropped; see the YouTube auto-post row below. |
+| YouTube auto-post | Reverses the "social dropped" decision for YouTube only (sections 2, 5, 6 and 9 below). When a `process_task` run completes, every non-fallback clip is uploaded as a public Short to the user's own connected channel, with a title, description, tags and hashtags written by Claude. One channel per user, connected with the app's own OAuth routes (not Better Auth's Google provider). Off unless `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` are set. See [`docs/youtube.md`](../youtube.md). |
 | Restyle | `POST /api/tasks/:id/settings` with `apply_to_existing: true` enqueues a `restyle_task` job instead of rendering inside the request (section 6.2). |
 | Processing mode | Fixed at `"fast"`. Neither the UI nor the API exposes it. |
 
@@ -78,6 +79,9 @@ Read in `web/src/server/env.ts` (server-only, parsed with zod, with the defaults
 | `HOOK_FIRST_TEASER` | false | |
 | `YOUTUBE_MAX_HEIGHT` | 1080 | |
 | `ASSEMBLYAI_BASE_URL` | unset (SDK default) | AssemblyAI host (e.g. the EU region); passed to the engine as `config.assemblyai_base_url`. The e2e tests point it at a fake server |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | unset (feature off) | YouTube auto-post's OAuth client (`docs/youtube.md`). Env only, never saved in Settings |
+| `CLAUDE_METADATA_MODEL` | `claude-sonnet-5` | Model that writes each clip's YouTube title, description, tags and hashtags |
+| `GOOGLE_BASE_URL_OVERRIDE` | unset (Google's real hosts) | Test-only: replaces every Google endpoint's origin. Used by vitest and the e2e fake server |
 | `NEXT_PUBLIC_SOURCE_CODE_URL` | the SupoClip repo | Client-side, not parsed by `env.ts`. Target of the "Source" link (AGPL-3.0 §13): a modified deployment must point it at its own source |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Client-side. `metadataBase` origin |
 
@@ -167,6 +171,7 @@ type TaskDoc = {
   // are fenced by run.jobId. The task JSON exposes `run_type` (= run.type while queued/processing, else null).
   run?: { jobId: string; type?: "process_task" | "restyle_task"; startedAt?: Date; completedAt?: Date; cacheHit?: boolean; errorCode?: string };
   editLock?: { jobId: string; until: Date } | null;
+  autopost?: "pending" | "done";   // set with the completion CAS when the user has an auto-post account; see "YouTube auto-post" below
   createdAt: Date; updatedAt: Date;
 };
 type ClipDoc = {
@@ -178,6 +183,8 @@ type ClipDoc = {
   sourceRanges: { start: number; end: number }[];      // source seconds, play order
   keepRanges?: [number, number][];                     // ranges the renderer used (restyle keeps cleanup unchanged)
   captionSettings?: { position_y?: number; font_size?: number; position?: string; highlight_words?: string[] };
+  lineageId?: string;   // set to `id` when the clip is first created; restyle carries the old clip's onto the re-render.
+                         // A YouTube post belongs to a lineage, never a clip id, so a restyle can't re-post a clip (section 6.2 jobs table).
   createdAt: Date; updatedAt: Date;
 };
 ```
@@ -190,10 +197,10 @@ Indexes: `{userId:1, createdAt:-1}`, `{status:1, updatedAt:1}`.
 ```ts
 type JobDoc = {
   _id: string;                 // 32 lowercase hex (randomUUID without dashes); editor routes validate /^[a-f0-9]{32}$/
-  type: "process_task" | "restyle_task" | "prepare_editor" | "export_editor" | "combine_editor" | "export_clip";
+  type: "process_task" | "restyle_task" | "prepare_editor" | "export_editor" | "combine_editor" | "export_clip" | "publish_youtube";
   taskId: string; clipId?: string; userId: string; payload: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
-  activeKey?: string;          // process/restyle: "task:{taskId}"; prepare: "prepare:{clipId}". Unset when finished
+  activeKey?: string;          // process/restyle: "task:{taskId}"; prepare: "prepare:{clipId}"; publish_youtube: "youtube:{postId}". Unset when finished
   liveKey?: string;            // export_clip: "{clipId}:{optionsHash}". Unset on failure or expiry
   runAt: Date; attempts: number; maxAttempts: number;
   lockedBy?: string; lockedUntil?: Date; cancelRequested?: boolean;
@@ -214,10 +221,51 @@ Indexes: `{status:1, runAt:1}`, `{status:1, lockedUntil:1}`, `{activeKey:1}` uni
 ### `worker_status` (`_id: "worker"`)
 `{_id, workerId, pid, heartbeatAt, startedAt, version}`. Written every 10 s. `workerHealthy()` = heartbeat less than 30 s old.
 
+### YouTube auto-post (`youtube_accounts`, `oauth_states`, `youtube_posts`)
+Off unless `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` are set. Full behavior in
+`docs/youtube.md` and `web/src/server/youtube/*`.
+
+`youtube_accounts` (`_id` = userId; one connected channel per user):
+```ts
+type YoutubeAccountDoc = {
+  _id: string; channelId: string; channelTitle: string; channelHandle?: string; thumbnailUrl?: string;
+  refreshToken: string; accessToken?: string; accessTokenExpiresAt?: Date;   // encryptSetting
+  scopes: string[];
+  status: "active" | "reauth_required" | "paused"; lastError?: string; warning?: string;
+  autoPost: boolean; privacy: "public" | "unlisted" | "private"; madeForKids: boolean;
+  connectedAt: Date; createdAt: Date; updatedAt: Date;
+};
+```
+
+`oauth_states` (`_id` = the state value): `{_id, userId, codeVerifier, expiresAt}`. Consumed with
+`findOneAndDelete`; indexed `{expiresAt:1}` TTL 0 (10 minutes).
+
+`youtube_posts` — one post per clip **lineage**, never per clip id, so a restyle can never re-post
+a clip that already went out:
+```ts
+type YoutubePostDoc = {
+  _id: string; userId: string; taskId: string;
+  lineageId: string;        // unique index
+  channelId: string;        // snapshotted from the account at creation
+  state: "queued" | "working" | "uploaded" | "blocked" | "failed" | "cancelled";
+  phase?: "writing" | "uploading"; progress?: number; claimedBy?: string;   // the holding job's id
+  notBefore?: Date;
+  waitReason?: "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock";
+  attempts: number; insertCalls: number; insertCap: number;   // insertCap: default 3, +1 per manual retry
+  privacy: "public" | "unlisted" | "private"; madeForKids: boolean; notifySubscribers: boolean;   // snapshotted at creation
+  metadata?: { title: string; description: string; tags: string[]; hashtags: string[]; language?: string; model: string };
+  upload?: { sessionUri: string; storageKey: string; size: number; startedAt: Date };   // never serialized or logged
+  videoId?: string; videoUrl?: string; privacyStatus?: string; uploadStatus?: string;
+  verifiedAt?: Date; uploadedAt?: Date; warning?: string; error?: string; errorReason?: string;
+  createdAt: Date; updatedAt: Date;
+};
+```
+Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1}`, `{state:1, notBefore:1}`.
+
 ## 6. Jobs and the worker
 
 ### 6.1 Queue primitives (`jobs.ts`)
-Implement exactly the pattern in `map-data.md` §7.5: lease 60 s, heartbeat every 15 s (and on every progress update, throttled to 1/s), reaper on every poll (requeue when attempts < maxAttempts, otherwise fail it and run the job type's failure hook), claim with `findOneAndUpdate` sorted by `runAt`, and finish guarded by `lockedBy`. `maxAttempts`: process/restyle 2, prepare 2, exports 1, combine 1. An E11000 on `activeKey` means "already queued or running".
+Implement exactly the pattern in `map-data.md` §7.5: lease 60 s, heartbeat every 15 s (and on every progress update, throttled to 1/s), reaper on every poll (requeue when attempts < maxAttempts, otherwise fail it and run the job type's failure hook), claim with `findOneAndUpdate` sorted by `runAt`, and finish guarded by `lockedBy`. `maxAttempts`: process/restyle 2, prepare 2, exports 1, combine 1, `publish_youtube` 3. An E11000 on `activeKey` means "already queued or running".
 
 Enqueue routes call `workerHealthy()` and **every enqueue response carries `worker_online: boolean`**: create, resume, settings with `apply_to_existing`, editor prepare, editor export, combine and preset export. If no heartbeat, the job is still inserted, but the response includes `worker_online: false`, and the UI shows "The Clipwright worker isn't running. Start it with `pnpm dev` (or `pnpm worker`)." Queued jobs then wait until the worker starts.
 
@@ -225,6 +273,8 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 - process/restyle: CAS the task from queued/processing to error (`progressMessage` "The worker stopped while processing this video. Resume to try again."). For restyle, restore status `completed` with "Restyle failed. Your existing clips are unchanged." and roll the settings back (`restyleRollback`, below).
 - prepare: draft status `failed`.
 - exports and combine: job status `failed`.
+- `publish_youtube`: the post goes back to `queued` with `notBefore` 2 minutes later while it has
+  attempts left (`attempts < 3`), otherwise `failed`.
 
 ### 6.2 Job handlers (`web/src/worker/handlers/*.ts`)
 
@@ -267,12 +317,20 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 
 **`export_clip`** (port of `export_clip_preset`): engine `export-preset`. Output goes to `exports/{exportId}.mp4`, with `expiresAt` = now + 7 days. Before succeeding, check that the clip's `filename` is unchanged.
 
+**`publish_youtube`** (YouTube auto-post, `docs/youtube.md`): payload `{postId}`.
+1. CAS the post `queued` (due) → `working, claimedBy: job._id` (also accepts `working` already claimed by this job id, for a re-run). No match → nothing to do.
+2. Check in order: the account exists, is active and matches the post's snapshotted `channelId`; the task exists and is not mid-restyle (else defer 2 min); a clip with this `lineageId` is still on the task (else cancel the post); the clip's file passes `stat` (else fail).
+3. If `metadata` isn't stored yet, write it with Claude (`web/src/server/ai/youtube-metadata.ts`, model `CLAUDE_METADATA_MODEL`) and save it on the post before any upload, so a retry never re-asks Claude.
+4. Upload with YouTube's resumable protocol: query a saved session first (recovers a lost response without a duplicate `videos.insert`); otherwise spend one `insertCalls` and start a new session; then `PUT` the file in one request. A network error, 5xx or mid-upload 308 retries within the job (backoff 1/2/4/8 s); other failures classify by Google's `error.errors[0].reason` into a quota wait (next Pacific midnight), a channel-limit wait (6 h), a retry wait (1/5/15 min, then `failed`), a reconnect (`blocked`), or a permanent failure.
+5. On success, record `videoId`, `videoUrl`, `privacyStatus`, `uploadStatus`, state `uploaded` (final). If the returned `privacyStatus` isn't the one requested, warn the post and trip the forced-private circuit breaker: pause the account and move its other queued posts to `blocked`.
+
 **Cron** (every 5 minutes in the worker):
 - Expire `export_clip` and editor-export jobs past `expiresAt`: delete the file, unset `liveKey`, status `failed` with "expired" (keep the doc 7 days, then delete it).
 - Delete finished job docs older than 7 days.
 - Orphan sweep of `DATA_DIR/work/*` directories older than 24 h.
 - Delete `sources/youtube/{id}/source.mp4` files older than 24 h that no task references (by `source.videoId` or URL). Their `.transcript_cache.json` sidecars stay.
 - Delete `uploads/{uuid}{ext}` files older than 24 h that no task references (`source.url`), together with their `.transcript_cache.json` sidecar.
+- YouTube auto-post: re-run `createPostsForTask` for a task left `autopost: "pending"` for more than 2 minutes (covers a crash between the completion CAS and the enqueue); enqueue every `queued` post whose `notBefore` has passed; and re-read `videos.list?part=status` for posts uploaded at least 10 minutes ago to record their final status and trip the circuit breaker if YouTube locked one private.
 
 ### 6.3 Status vocabularies at the API
 - Tasks: as stored.
@@ -366,6 +424,12 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `POST /api/upload/authorization` | Returns `{directUpload: false}` (the local driver). Never `{storage:"local"}` |
 | `GET /api/health` | `{ok, db: boolean, worker: {online, heartbeatAt}}` |
 | `/api/auth/[...all]` | Better Auth |
+| `POST /api/youtube/connect` | Session required. Creates a single-use OAuth state (PKCE) and returns `{authorize_url}` for Google's consent screen. 409 `{code:"not_configured"}` unless both `GOOGLE_OAUTH_*` vars are set |
+| `GET /api/youtube/callback` | Consumes the state, exchanges the code, requires both scopes, looks up the channel, upserts the account (tokens encrypted), unblocks or cancels posts per a channel change, then redirects to `/settings?youtube=connected` or `/settings?youtube_error=<code>` (`denied`, `expired`, `missing_scope`, `no_channel`, `exchange_failed`, `not_configured`). Never echoes Google's own error text |
+| `GET`/`PATCH`/`DELETE /api/youtube/account` | GET: `{configured, connected, channel, status, warning, auto_post, privacy, made_for_kids}`, never tokens. PATCH: partial `{auto_post, privacy, made_for_kids}`; turning `auto_post` off cancels `queued`/`blocked` posts. DELETE: disconnects, cancels posts, then best-effort revokes |
+| `POST /api/youtube/account/resume` | "Resume posting": clears the forced-private lock and requeues the posts it was holding |
+| `GET /api/tasks/[id]/youtube` | `{posts:[{clip_id, state, phase, progress, title, description, tags, hashtags, video_url, privacy_status, warning, error, not_before, wait_reason, insert_cap_reached}]}`. Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
+| `POST /api/tasks/[id]/youtube/[postId]/retry` | Retries a `failed`/`blocked` post (404 if gone, 409 if `uploaded` or still `queued`/`working`): resets the automatic retry count, raises the post's `insertCap` to `insertCalls + 1`, enqueues `publish_youtube`, returns `worker_online` |
 
 ## 10. Frontend changes
 - Follow `map-frontend.md` §3 to cut every dropped dependency.

@@ -357,3 +357,34 @@ uploads every clip of a finished video to the user's channel as a public Short.
   dispatched when the task completes.
 - Playwright passed twice in a row (6.4 min, 6.1 min). Full `npx vitest run`: 835 passed / 1
   skipped; `tsc --noEmit`, `pnpm lint` and eslint on `e2e/` clean.
+
+### 2026-10-28 18:33 — Task 14: Documentation and final verification
+- New `docs/youtube.md`: §6's Google Cloud setup steps verbatim, how auto-post behaves (trigger,
+  metadata, upload, quota, failures/retries, stopping, what's not included), a dedicated section on
+  the forced-private lock and how to request YouTube's API compliance audit, troubleshooting tables
+  for both the `youtube_error` codes and the task-page chips, and the Settings reference.
+- Documented the 4 env vars (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+  `CLAUDE_METADATA_MODEL`, `GOOGLE_BASE_URL_OVERRIDE` as test-only) in `docs/configuration.md` and
+  `web/.env.example`; added `GOOGLE_BASE_URL_OVERRIDE` next to the other `GOOGLE_*` vars in
+  `web/src/worker/test-utils.ts`'s env-clearing list (it was missing).
+- Added the `publish_youtube` job and the three collections (`youtube_accounts`, `oauth_states`,
+  `youtube_posts`) to every place the repo already lists jobs/collections: `CLAUDE.md`'s "Key
+  contracts", `docs/port/DESIGN.md` (§0 product-decisions table — reverses the "social dropped"
+  row; §2 env vars; §5 new collections subsection plus `TaskDoc.autopost` and `ClipDoc.lineageId`;
+  §6 `publish_youtube` handler, failure hook, cron steps; §9 the 6 new routes), and
+  `docs/architecture.md` (job types table, data model table, a short flow paragraph).
+  `AGENTS.md` has no "Key contracts" list of its own (it only points at CLAUDE.md), so nothing to
+  add there.
+- `web/src/worker/README.md` (job table row, cron bullets), `README.md` (feature line, doc table
+  row), `docs/testing.md` (manual-checklist step 8: connect YouTube, watch a clip post, confirm
+  Public in Studio).
+- Verification (all from `web/`, after this task's doc-only changes): `tsc --noEmit` 0 errors;
+  `pnpm lint` clean; full `npx vitest run` hit mongod-memory-server startup timeouts under load in
+  3 files (pre-existing machine-load flakiness, not these changes) — rerun with `--maxWorkers=2`:
+  837 passed / 1 skipped, 67/68 files, output pristine; `next build` (with
+  `SWC_NATIVE_BINDING_CACHE`) succeeded; `playwright test` (with the same env var, needed for its
+  own `next` subprocess) passed 1/1 in 9.0 min, including "youtube: both clips posted with Claude's
+  metadata"; engine `pytest`: 362 passed, 1 skipped, unchanged.
+- Left to the user: the Google Cloud project setup (docs/youtube.md §1) and the first live-upload
+  check against a real channel (docs/youtube.md step 9 / docs/testing.md step 8) — both need a real
+  Google account and are not something this environment can do.
