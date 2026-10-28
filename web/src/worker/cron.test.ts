@@ -7,19 +7,31 @@ import { collections } from "../server/db";
 import { PREPARE_FAILED_MESSAGE } from "../server/drafts";
 import { paths } from "../server/env";
 import { claimJob, enqueueJob, finishJob, reapExpiredJobs, WORKER_STOPPED_ERROR } from "../server/jobs";
+import { encryptSetting } from "../server/settings";
 import { getStorage, storageKeys, uploadKeys } from "../server/storage";
 import { EXPORT_EXPIRED_MESSAGE, RESTYLE_FAILED_MESSAGE, settingsFromCreateRequest, WORKER_STOPPED_TASK_MESSAGE } from "../server/tasks";
-import type { JobDoc, JobType } from "../server/types";
-import { deleteOldJobs, expireExports, runCron, sweepUploads, sweepWorkDirs, sweepYoutubeSources } from "./cron";
+import type { JobDoc, JobType, YoutubeAccountDoc, YoutubePostDoc } from "../server/types";
+import {
+  deleteOldJobs,
+  dispatchDuePosts,
+  expireExports,
+  resumePendingAutopost,
+  runCron,
+  sweepUploads,
+  sweepWorkDirs,
+  sweepYoutubeSources,
+  verifyUploads,
+} from "./cron";
 import { EXPORT_STOPPED_MESSAGE } from "./handlers/export-clip";
 import { createJobContext } from "./context";
 import { registerFailureHooks, runJob } from "./run-job";
-import { claimed, exists, fakeEngine, fakeRender, seedTask, untilAborted, setupWorkerTestEnv, writeFile } from "./test-utils";
+import { claimed, clipFixture, exists, fakeEngine, fakeRender, seedTask, untilAborted, setupWorkerTestEnv, writeFile } from "./test-utils";
 
 setupWorkerTestEnv("cron", { env: { ANTHROPIC_API_KEY: "sk-ant-test", ASSEMBLY_AI_API_KEY: "aai" } });
 beforeAll(() => registerFailureHooks());
 
 const DAY = 24 * 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
 const storage = () => getStorage();
 const job = (id: string) => collections().jobs.findOne({ _id: id });
 
@@ -247,5 +259,149 @@ describe("lost lease", () => {
     }
     expect(failedBeats).toBeGreaterThan(0);
     expect((await job(jobId))!).toMatchObject({ status: "running", lockedBy: lease.lockedBy });
+  });
+});
+
+describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
+  const USER = "yt-user";
+
+  function accountDoc(overrides: Partial<YoutubeAccountDoc> = {}): YoutubeAccountDoc {
+    const now = new Date();
+    return {
+      _id: USER,
+      channelId: "UC1",
+      channelTitle: "Mine",
+      refreshToken: encryptSetting("refresh-1"),
+      accessToken: encryptSetting("access-1"),
+      accessTokenExpiresAt: new Date(now.getTime() + 60 * MINUTE),
+      scopes: [],
+      status: "active",
+      autoPost: true,
+      privacy: "public",
+      madeForKids: false,
+      connectedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+  const seedAccount = (overrides: Partial<YoutubeAccountDoc> = {}) => collections().youtubeAccounts.insertOne(accountDoc(overrides));
+
+  function postDoc(overrides: Partial<YoutubePostDoc> = {}): YoutubePostDoc {
+    const now = new Date();
+    return {
+      _id: "p1",
+      userId: USER,
+      taskId: "t1",
+      lineageId: "c1",
+      channelId: "UC1",
+      state: "queued",
+      attempts: 0,
+      insertCalls: 0,
+      insertCap: 3,
+      privacy: "public",
+      madeForKids: false,
+      notifySubscribers: true,
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+  const seedPost = (overrides: Partial<YoutubePostDoc> = {}) => collections().youtubePosts.insertOne(postDoc(overrides));
+  const storedPost = async (id: string) => (await collections().youtubePosts.findOne({ _id: id }))!;
+
+  /** A fake `videos.list?part=status` answering only the ids in `responses`; others come back absent (deleted). */
+  function videoStatusFetch(responses: Record<string, { privacyStatus: string; uploadStatus: string; rejectionReason?: string }>) {
+    return (async (input: string | URL) => {
+      const ids = (new URL(String(input)).searchParams.get("id") ?? "").split(",").filter(Boolean);
+      const items = ids.filter((id) => responses[id]).map((id) => ({ id, status: responses[id] }));
+      return new Response(JSON.stringify({ items }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+  }
+
+  it("dispatches only due queued posts", async () => {
+    const now = new Date();
+    await seedPost({ _id: "due", lineageId: "c1", notBefore: new Date(now.getTime() - MINUTE) });
+    await seedPost({ _id: "no-wait", lineageId: "c2" }); // no notBefore at all: always due
+    await seedPost({ _id: "future", lineageId: "c3", notBefore: new Date(now.getTime() + MINUTE) });
+    await seedPost({ _id: "working", lineageId: "c4", state: "working", claimedBy: "job0" });
+
+    expect(await dispatchDuePosts(now)).toBe(2);
+
+    const jobs = await collections()
+      .jobs.find({ type: "publish_youtube" })
+      .toArray();
+    expect(jobs.map((j) => j.payload.postId).sort()).toEqual(["due", "no-wait"]);
+  });
+
+  it("re-creates posts for a task stuck in autopost pending", async () => {
+    const now = new Date();
+    await seedAccount();
+    const taskFields = {
+      userId: USER,
+      status: "completed" as const,
+      progress: 100,
+      progressMessage: "Complete!",
+      source: { type: "upload" as const, url: "upload://00000000-0000-4000-8000-000000000001.mp4", title: "Talk" },
+      settings: settingsFromCreateRequest({}),
+      autopost: "pending" as const,
+      createdAt: now,
+    };
+    await collections().tasks.insertOne({ ...taskFields, _id: "stuck", clips: [clipFixture("c1", "stuck")], updatedAt: new Date(now.getTime() - 3 * MINUTE) });
+    await collections().tasks.insertOne({ ...taskFields, _id: "fresh", clips: [clipFixture("c2", "fresh")], updatedAt: now });
+
+    expect(await resumePendingAutopost(now)).toBe(1);
+
+    expect((await collections().tasks.findOne({ _id: "stuck" }))!.autopost).toBe("done");
+    expect(await collections().youtubePosts.countDocuments({ taskId: "stuck" })).toBe(1);
+    // Not stuck long enough yet: left alone for the next run.
+    expect((await collections().tasks.findOne({ _id: "fresh" }))!.autopost).toBe("pending");
+    expect(await collections().youtubePosts.countDocuments({ taskId: "fresh" })).toBe(0);
+  });
+
+  it("verification records processed videos and trips the breaker on private", async () => {
+    const now = new Date();
+    await seedAccount();
+    await seedPost({
+      _id: "p1",
+      state: "uploaded",
+      videoId: "VID1",
+      videoUrl: "https://www.youtube.com/watch?v=VID1",
+      privacyStatus: "public",
+      uploadStatus: "uploaded",
+      uploadedAt: new Date(now.getTime() - 20 * MINUTE),
+    });
+    // A second, still-queued post of the same user: the breaker must hold it too.
+    await seedPost({ _id: "p2", lineageId: "c2", state: "queued" });
+
+    const fetchImpl = videoStatusFetch({ VID1: { privacyStatus: "private", uploadStatus: "processed" } });
+    expect(await verifyUploads(now, fetchImpl)).toBe(1);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "YouTube made this video private" });
+    expect(p1.verifiedAt).toBeInstanceOf(Date);
+    expect(await collections().youtubeAccounts.findOne({ _id: USER })).toMatchObject({ status: "paused", warning: "private_lock" });
+    expect(await storedPost("p2")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
+  });
+
+  it("verification skips posts from a previous channel", async () => {
+    const now = new Date();
+    await seedAccount({ channelId: "UC-NEW" });
+    await seedPost({
+      _id: "old-channel",
+      channelId: "UC-OLD",
+      state: "uploaded",
+      videoId: "VIDOLD",
+      uploadedAt: new Date(now.getTime() - 20 * MINUTE),
+    });
+    let called = false;
+    const fetchImpl = (async () => {
+      called = true;
+      throw new Error("must not be called");
+    }) as typeof fetch;
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(0);
+    expect(called).toBe(false);
+    expect((await storedPost("old-channel")).verifiedAt).toBeUndefined();
   });
 });

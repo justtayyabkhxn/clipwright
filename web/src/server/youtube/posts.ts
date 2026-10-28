@@ -47,12 +47,16 @@ async function enqueuePost(post: Pick<YoutubePostDoc, "_id" | "taskId" | "userId
   return job;
 }
 
-/** Enqueue every due `queued` post matching `filter` (an already-held activeKey is a no-op). */
-async function enqueueQueued(filter: Filter<YoutubePostDoc>): Promise<void> {
+/**
+ * Enqueue every due `queued` post matching `filter` (an already-held activeKey is a no-op).
+ * Exported for the cron dispatch step (§4.5), which calls it with no filter and its own `now`.
+ */
+export async function enqueueQueued(filter: Filter<YoutubePostDoc> = {}, now = new Date()): Promise<number> {
   const posts = await collections()
-    .youtubePosts.find({ ...filter, state: "queued", ...due(new Date()) })
+    .youtubePosts.find({ ...filter, state: "queued", ...due(now) })
     .toArray();
   for (const post of posts) await enqueuePost(post);
+  return posts.length;
 }
 
 // --- Creation (§4.4) ---

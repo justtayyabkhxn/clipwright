@@ -237,3 +237,21 @@ uploads every clip of a finished video to the user's channel as a public Short.
   token is reused for the job; a session-URI 401 fails the post (no reconnect); non-Google errors
   (e.g. MongoDB in `markUploaded`) fail the job so the hook re-queues it and the kept session
   recovers the video. 13 new tests; full `npx vitest run`: 798 passed / 1 skipped.
+
+### 2026-10-28 14:47 — Task 9: Cron steps
+- `worker/cron.ts` gained three steps, wired into `runCron`: `dispatchDuePosts(now)` enqueues every
+  `queued` post whose `notBefore` has passed or is absent (via `posts.ts`'s now-exported
+  `enqueueQueued`, so the activeKey dedup stays in one place); `resumePendingAutopost(now)` re-runs
+  `createPostsForTask` for a task still `autopost:"pending"` more than 2 min after its last update,
+  one task's error logged and skipped rather than stopping the rest; `verifyUploads(now, fetchImpl?)`
+  re-reads each `uploaded` post 10 min–48 h old with no `verifiedAt`, grouped per user (one user's
+  network/5xx/reauth failure never stops another's), skips posts whose `channelId` no longer matches
+  the account, sets `verifiedAt` once `uploadStatus` is processed/rejected/failed/deleted (deleted =
+  absent from `videos.list`), warns "YouTube made this video private" and trips `tripPrivateLock` on
+  a privacy other than the post's own, or stores the rejection reason.
+- Tests (TDD): 4 new cases in `cron.test.ts` — dispatch skips not-yet-due and already-working posts,
+  resume leaves a freshly-pending task alone, verification records a forced-private video and blocks
+  the user's other queued post, verification never calls out for a previous channel's post. RED
+  first (missing exports / duplicate lineageId), then GREEN.
+- Full `npx vitest run --maxWorkers=2`: 802 passed / 1 skipped, output pristine; `tsc --noEmit` and
+  `pnpm lint` clean.
