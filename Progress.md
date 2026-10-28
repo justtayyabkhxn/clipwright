@@ -284,3 +284,26 @@ uploads every clip of a finished video to the user's channel as a public Short.
   modules), then GREEN. Full `npx vitest run --maxWorkers=2`: 815 passed / 1 skipped, output
   pristine; `tsc --noEmit` and `pnpm lint` clean.
 - 2026-10-28 15:55 controller follow-up: retry is scoped to the URL's task (`retryPost` takes an optional `taskId`; a post of another task gets 404, test added, RED then GREEN); `ponytail:` notes on the delete routes' check-then-cancel window. `src/app/api/tasks` + `src/server/youtube` 124/124; tsc and lint clean.
+
+### 2026-10-28 16:14 — Task 11: Settings UI
+- New `YoutubeSettings` (`web/src/components/settings/youtube-settings.tsx`), added as a
+  `<Section id="youtube">` on the settings page after the AI section, shown to every user. Not
+  configured: a setup hint naming `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` and linking
+  `docs/youtube.md`. Not connected: a Connect button that posts to `/api/youtube/connect` and
+  navigates to `authorize_url`. Connected: channel avatar/title/handle, the auto-post switch,
+  visibility and made-for-kids selects (autosaving via `PATCH /api/youtube/account`), a
+  reauth-required banner with Reconnect, a private-lock banner with "Resume posting"
+  (`POST /api/youtube/account/resume`), Disconnect behind an `AlertDialog` confirm, and links to the
+  YouTube ToS, Google's Privacy Policy and `myaccount.google.com/permissions`. `?youtube_error=...`
+  codes map to our own copy with a generic fallback for an unrecognized code; the raw query value is
+  never rendered. Copy added to `messages/en/settings.json`.
+- The doc link uses `${NEXT_PUBLIC_SOURCE_CODE_URL}/blob/main/docs/youtube.md` — the only existing
+  convention for linking into the repo, assuming a GitHub-style `/blob/main/` path (noted as a
+  concern: a fork on another host or branch would need a different link).
+- Updated `settings/page.test.tsx`'s `next/navigation` mock to add `useSearchParams` (the new
+  section now calls it), since the existing mock didn't provide one.
+- Tests (TDD): 12 cases in new `youtube-settings.test.tsx` (setup hint, Connect + navigate, connected
+  view, reconnect + private-lock banners together, 6 known `youtube_error` codes, the unknown-code
+  fallback never echoing the raw value, Disconnect's confirm). RED first (missing module), then
+  GREEN. Full `npx vitest run --maxWorkers=2`: 828 passed / 1 skipped, output pristine; `tsc --noEmit`
+  and `pnpm lint` clean.

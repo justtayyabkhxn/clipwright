@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { AlertCircle, Check, Loader2, Sparkles, Type } from "lucide-react";
+import { AlertCircle, Check, Loader2, Sparkles, Type, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/
 import { Slider } from "@/components/ui/slider";
 import { useSession } from "@/lib/auth-client";
 import { AiProviderSettings } from "@/components/settings/ai-provider-settings";
+import { YoutubeSettings } from "@/components/settings/youtube-settings";
 import { cn } from "@/lib/utils";
 import { FontSelectOption, type FontOption } from "@/components/font-select-option";
 
@@ -163,6 +164,10 @@ export default function SettingsPage() {
       <div className="mt-8 space-y-6">
         <Section id="ai" icon={<Sparkles className="size-4" />} title={t("ai.title")} description={t("ai.description")}>
           <AiProviderSettings isAdmin={Boolean((session.user as { is_admin?: boolean }).is_admin)} />
+        </Section>
+
+        <Section id="youtube" icon={<Youtube className="size-4" />} title={t("youtube.title")} description={t("youtube.description")}>
+          <YoutubeSettings />
         </Section>
 
         <Section icon={<Type className="size-4" />} title={t("captions.title")} description={t("captions.description")}>

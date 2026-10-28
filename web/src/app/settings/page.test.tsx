@@ -7,6 +7,7 @@ import SettingsPage from "./page";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/lib/auth-client", () => ({
