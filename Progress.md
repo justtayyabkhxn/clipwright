@@ -388,3 +388,6 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - Left to the user: the Google Cloud project setup (docs/youtube.md §1) and the first live-upload
   check against a real channel (docs/youtube.md step 9 / docs/testing.md step 8) — both need a real
   Google account and are not something this environment can do.
+- 2026-10-28 18:52 review fix round 1: fixed 3 of the 4 "DESIGN.md §4" YouTube cross-references
+  (CLAUDE.md, docs/architecture.md, docs/youtube.md) to §2/§5/§6/§9; the 4th cited location
+  (DESIGN.md:363) has no such self-reference, so it was left unchanged (see fix report).

@@ -151,4 +151,4 @@ specific wait reason, or an error with "Try again" — never nothing.
   Privacy Policy and your Google account's connected-apps page.
 
 See [Configuration](configuration.md) for the four environment variables, and
-[`docs/port/DESIGN.md`](port/DESIGN.md) §4 for the full behavioral spec.
+[`docs/port/DESIGN.md`](port/DESIGN.md) §2/§5/§6/§9 for the full behavioral spec.

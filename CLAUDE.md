@@ -77,7 +77,7 @@ TypeScript (`src/server/ai`). The browser polls every 2 s. Files go through the 
   `export_clip`, `publish_youtube`. Job ids are 32 lowercase hex. `activeKey` (`task:{id}`,
   `prepare:{clipId}`, `youtube:{postId}`) and `liveKey` are unique partial indexes; E11000 means
   "already queued or running".
-- **YouTube auto-post** (`docs/youtube.md`, DESIGN.md §4): `youtube_accounts` (one connected
+- **YouTube auto-post** (`docs/youtube.md`, DESIGN.md §2/§5/§6/§9): `youtube_accounts` (one connected
   channel per user), `oauth_states` (TTL-indexed, single-use) and `youtube_posts` (one post per
   clip lineage, unique on `lineageId`) hold its state. Off unless `GOOGLE_OAUTH_CLIENT_ID` and
   `GOOGLE_OAUTH_CLIENT_SECRET` are set.

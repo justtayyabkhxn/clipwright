@@ -113,8 +113,8 @@ with a 2-minute wait, or `failed` once its retries are used up).
 **YouTube auto-post** (optional, off unless `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`
 are set): when a generation completes, Clipwright uploads every non-fallback clip to the user's own
 connected channel as a public Short, with a title, description, tags and hashtags written by
-Claude. See [`docs/youtube.md`](youtube.md) for setup and behavior, and DESIGN.md §4 for the full
-contract.
+Claude. See [`docs/youtube.md`](youtube.md) for setup and behavior, and DESIGN.md §2/§5/§6/§9 for
+the full contract.
 
 ## Data model summary
 
