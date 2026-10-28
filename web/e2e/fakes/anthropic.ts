@@ -1,5 +1,6 @@
 // Fake Anthropic Models + Messages API. Clip selection answers with two grounded segments of
-// 15-30 s built from the "[MM:SS - MM:SS] ..." transcript lines found in the prompt.
+// 15-30 s built from the "[MM:SS - MM:SS] ..." transcript lines found in the prompt. YouTube
+// metadata, asked of the metadata model only, answers with fixed text built from the hook title.
 import { startJsonServer, type FakeServer } from "./http";
 
 const MODELS = [
@@ -7,6 +8,19 @@ const MODELS = [
   { type: "model", id: "claude-sonnet-5", display_name: "Claude Sonnet 5", created_at: "2026-01-01T00:00:00Z" },
 ];
 export const FAKE_HOOK_TITLES = ["Open with the surprise", "Cut every empty pause"];
+/** CLAUDE_METADATA_MODEL's default; global setup sets it explicitly. */
+export const FAKE_METADATA_MODEL = "claude-sonnet-5";
+
+/** What the fake writes for a clip's YouTube Short; the spec checks every upload against it. */
+export function fakeYoutubeMetadata(hookTitle: string) {
+  return {
+    title: `${hookTitle}: a short-video editing tip`,
+    description: `One tip from the test video: ${hookTitle.toLowerCase()}.`,
+    hashtags: ["videoediting", "shortvideo", "creatortips"],
+    tags: ["video editing", "short clips", "editing tips", "content creation", "video hooks"],
+    language: "en",
+  };
+}
 
 type Line = { start: string; end: string; startS: number; endS: number; text: string };
 
@@ -66,13 +80,20 @@ export function startFakeAnthropic(): Promise<FakeServer> {
     if (request.method === "POST" && url.pathname === "/v1/messages") {
       const params = JSON.parse(body.toString("utf8"));
       const schema = params.output_config?.format?.schema;
-      if (!schema?.properties?.most_relevant_segments) return error(400, "invalid_request_error", "fake only answers clip selection");
       const prompt = params.messages
         .filter((message: { role: string }) => message.role === "user")
         .map((message: { content: unknown }) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content)))
         .join("\n");
-      const segments = pickSegments(transcriptLines(prompt));
-      const text = JSON.stringify({ most_relevant_segments: segments, summary: "A fake summary of the test video.", key_topics: ["short clips", "editing"] });
+      let text: string;
+      if (schema?.properties?.hashtags) {
+        if (params.model !== FAKE_METADATA_MODEL) return error(400, "invalid_request_error", `metadata expects ${FAKE_METADATA_MODEL}`);
+        // The user turn is a one-line preamble, then the clip as JSON data.
+        const clip = JSON.parse(prompt.slice(prompt.indexOf("{")));
+        text = JSON.stringify(fakeYoutubeMetadata(String(clip.hook_title)));
+      } else if (schema?.properties?.most_relevant_segments) {
+        const segments = pickSegments(transcriptLines(prompt));
+        text = JSON.stringify({ most_relevant_segments: segments, summary: "A fake summary of the test video.", key_topics: ["short clips", "editing"] });
+      } else return error(400, "invalid_request_error", "fake only answers clip selection and YouTube metadata");
       return {
         json: {
           id: `msg_fake_${Date.now()}`, type: "message", role: "assistant", model: params.model,

@@ -62,13 +62,16 @@ encoding consistent on Windows.
 ## End-to-end (Playwright)
 
 `web/e2e/full-flow.spec.ts` drives the whole app in Chromium: sign-up (first user becomes admin),
-saving keys and testing the connection, uploading a video and generating clips, playback and
-download, a TikTok preset export, the editor (prepare, edit, autosave across a reload, server
+saving keys and testing the connection, connecting YouTube, uploading a video and generating clips,
+auto-posting both clips (exactly one public `videos.insert` each, with Claude's metadata), playback
+and download, a TikTok preset export, the editor (prepare, edit, autosave across a reload, server
 export), the library, and deleting a clip and the task. Global setup
 (`web/e2e/global-setup.ts`) starts everything it needs, so it requires no real accounts or database
 server:
 
-- It starts **fake Claude and AssemblyAI HTTP servers**, so no keys are needed and nothing is billed.
+- It starts **fake Claude, AssemblyAI and Google HTTP servers** (Google covers OAuth, `channels.list`,
+  the resumable upload and `videos.list` through `GOOGLE_BASE_URL_OVERRIDE`), so no keys are needed
+  and nothing is billed or posted.
 - It uses an **in-memory MongoDB** (`mongodb-memory-server`).
 - It runs the real worker and Python engine, so `engine/.venv` and ffmpeg must be installed.
 

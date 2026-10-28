@@ -1,8 +1,9 @@
-// One user journey through the real stack (see global-setup.ts): sign up, configure keys, upload,
-// generate, play, export, edit, autosave, server export, library, delete.
+// One user journey through the real stack (see global-setup.ts): sign up, configure keys, connect
+// YouTube, upload, generate, auto-post, play, export, edit, autosave, server export, library, delete.
 import { execFileSync } from "node:child_process";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { FAKE_HOOK_TITLES } from "./fakes/anthropic";
+import { FAKE_HOOK_TITLES, fakeYoutubeMetadata } from "./fakes/anthropic";
+import { FAKE_CHANNEL, type Initiation } from "./fakes/google";
 
 test.use({ baseURL: process.env.E2E_BASE_URL });
 
@@ -23,7 +24,7 @@ async function readyState(page: Page, selector: string) {
   return page.locator(selector).first().evaluate((v) => (v as HTMLVideoElement).readyState);
 }
 
-test("upload to clips, export, edit, autosave, server export, library and delete", async ({ page }) => {
+test("upload to clips, auto-post, export, edit, autosave, server export, library and delete", async ({ page }) => {
   const step = async <T>(name: string, body: () => Promise<T>) => {
     const t0 = Date.now();
     const result = await test.step(name, body);
@@ -60,6 +61,14 @@ test("upload to clips, export, edit, autosave, server export, library and delete
     await expect(connected).toBeVisible();
   });
 
+  await step("settings: connect YouTube", async () => {
+    // The fake consent screen redirects straight back to /api/youtube/callback with a code.
+    await page.getByRole("button", { name: "Connect YouTube", exact: true }).click();
+    await page.waitForURL((url) => url.pathname === "/settings" && url.searchParams.get("youtube") === "connected", { timeout: 120_000 });
+    await expect(page.getByText(FAKE_CHANNEL.title, { exact: true })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "Publish every new clip to this channel as soon as it's ready" })).toBeChecked();
+  });
+
   const taskId = await step("home: upload and generate", async () => {
     await page.goto("/");
     await page.locator("#video-upload").setInputFiles(process.env.E2E_VIDEO!);
@@ -81,6 +90,44 @@ test("upload to clips, export, edit, autosave, server export, library and delete
     for (const clip of list) expect(clip.duration).toBeGreaterThanOrEqual(14);
     expect(list.map((clip) => clip.hook_title).sort()).toEqual([...FAKE_HOOK_TITLES].sort());
     return list;
+  });
+
+  await step("youtube: both clips posted with Claude's metadata", async () => {
+    const posted = page.getByRole("link", { name: "Posted", exact: true });
+    await expect(posted).toHaveCount(2, { timeout: 180_000 });
+    const body = await (await page.request.get(`/api/tasks/${taskId}/youtube`)).json();
+    // The session URI (on the fake's origin) and the tokens never reach API JSON.
+    expect(JSON.stringify(body)).not.toContain(process.env.E2E_GOOGLE_URL!);
+    expect(JSON.stringify(body)).not.toContain("ya29.");
+    expect(body.posts.map((post: { state: string; privacy_status: string }) => [post.state, post.privacy_status])).toEqual([
+      ["uploaded", "public"],
+      ["uploaded", "public"],
+    ]);
+    expect((await posted.evaluateAll((links) => links.map((link) => link.getAttribute("href")))).sort()).toEqual(
+      body.posts.map((post: { video_url: string }) => post.video_url).sort(),
+    );
+
+    // Exactly one videos.insert per clip: the public, not-for-kids Short Claude described, and
+    // only the top clip notifies subscribers.
+    const initiations = (await (await fetch(`${process.env.E2E_GOOGLE_URL}/__fake/initiations`)).json()) as Initiation[];
+    expect(initiations).toHaveLength(2);
+    clips.forEach((clip, index) => {
+      const metadata = fakeYoutubeMetadata(clip.hook_title!);
+      expect(initiations.find((initiation) => initiation.body.snippet.title === metadata.title)).toEqual({
+        query: { uploadType: "resumable", part: "snippet,status", notifySubscribers: String(index === 0) },
+        body: {
+          snippet: {
+            title: metadata.title,
+            description: `${metadata.description}\n\n${metadata.hashtags.map((tag) => `#${tag}`).join(" ")}`,
+            tags: metadata.tags,
+            categoryId: "22",
+            defaultLanguage: metadata.language,
+            defaultAudioLanguage: metadata.language,
+          },
+          status: { privacyStatus: "public", selfDeclaredMadeForKids: false, containsSyntheticMedia: false },
+        },
+      });
+    });
   });
 
   await step("clip plays; original download is video/mp4", async () => {

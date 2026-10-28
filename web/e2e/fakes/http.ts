@@ -2,7 +2,11 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 
 export type FakeServer = { url: string; calls: string[]; close: () => Promise<void> };
-export type Handler = (request: http.IncomingMessage, body: Buffer, url: URL) => { status?: number; json: unknown };
+export type Handler = (
+  request: http.IncomingMessage,
+  body: Buffer,
+  url: URL,
+) => { status?: number; json: unknown; headers?: Record<string, string> };
 
 /** A tiny JSON server on 127.0.0.1 and a free port. Every request is logged as "METHOD /path". */
 export async function startJsonServer(name: string, handle: Handler): Promise<FakeServer> {
@@ -15,13 +19,14 @@ export async function startJsonServer(name: string, handle: Handler): Promise<Fa
       calls.push(`${request.method} ${url.pathname}`);
       let status = 500;
       let payload: unknown;
+      let headers: Record<string, string> = {};
       try {
-        ({ status = 200, json: payload } = handle(request, Buffer.concat(chunks), url));
+        ({ status = 200, json: payload, headers = {} } = handle(request, Buffer.concat(chunks), url));
       } catch (error) {
         payload = { type: "error", error: { type: "api_error", message: String(error) } };
         console.error(`[fake ${name}]`, error);
       }
-      response.writeHead(status, { "content-type": "application/json", "request-id": `req_${calls.length}` });
+      response.writeHead(status, { "content-type": "application/json", "request-id": `req_${calls.length}`, ...headers });
       response.end(JSON.stringify(payload));
     });
   });

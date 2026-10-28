@@ -1,5 +1,5 @@
-// Boots the whole stack with no paid services: an in-memory Mongo replica set, fake Anthropic and
-// AssemblyAI servers, a synthetic video, `next dev` and the real worker + Python engine.
+// Boots the whole stack with no paid services: an in-memory Mongo replica set, fake Anthropic,
+// AssemblyAI and Google servers, a synthetic video, `next dev` and the real worker + Python engine.
 // The returned function is the teardown. State for the spec goes through process.env (E2E_*).
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createWriteStream, mkdirSync, rmSync } from "node:fs";
@@ -8,8 +8,9 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
-import { startFakeAnthropic } from "./fakes/anthropic";
+import { FAKE_METADATA_MODEL, startFakeAnthropic } from "./fakes/anthropic";
 import { startFakeAssemblyAI } from "./fakes/assemblyai";
+import { FAKE_GOOGLE_CLIENT, startFakeGoogle } from "./fakes/google";
 
 const webDir = path.resolve(__dirname, "..");
 
@@ -74,6 +75,8 @@ export default async function globalSetup() {
     closers.push(anthropic.close);
     const assembly = await startFakeAssemblyAI();
     closers.push(assembly.close);
+    const google = await startFakeGoogle();
+    closers.push(google.close);
 
     const video = path.join(runDir, "synthetic-talk.mp4");
     execFileSync("ffmpeg", [
@@ -97,6 +100,10 @@ export default async function globalSetup() {
       ANTHROPIC_BASE_URL: anthropic.url,
       ASSEMBLYAI_BASE_URL: assembly.url,
       CLAUDE_MODEL: "claude-opus-5",
+      CLAUDE_METADATA_MODEL: FAKE_METADATA_MODEL,
+      GOOGLE_BASE_URL_OVERRIDE: google.url,
+      GOOGLE_OAUTH_CLIENT_ID: FAKE_GOOGLE_CLIENT.id,
+      GOOGLE_OAUTH_CLIENT_SECRET: FAKE_GOOGLE_CLIENT.secret,
       // Keys come from Settings in the spec; never from the developer's shell.
       ANTHROPIC_API_KEY: "",
       ASSEMBLY_AI_API_KEY: "",
@@ -121,6 +128,7 @@ export default async function globalSetup() {
       E2E_LOG_DIR: logDir,
       E2E_ANTHROPIC_URL: anthropic.url,
       E2E_ASSEMBLYAI_URL: assembly.url,
+      E2E_GOOGLE_URL: google.url,
     });
     console.log(`[e2e] stack ready at ${baseURL} in ${((Date.now() - started) / 1000).toFixed(1)} s (logs: ${logDir})`);
     return teardown;

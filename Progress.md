@@ -338,3 +338,18 @@ uploads every clip of a finished video to the user's channel as a public Short.
   repo) for inline `docs/youtube.md` text in Settings and a `/settings#youtube` link on the task
   page's private-lock chip; added tests for the `blocked` chip (reconnect/private_lock) and the
   generic unknown-warning-code line.
+
+### 2026-10-28 17:30 — Task 13: End-to-end with a fake Google
+- New `web/e2e/fakes/google.ts` behind `GOOGLE_BASE_URL_OVERRIDE`: consent screen (instant 302 back
+  with a code), PKCE-checked token exchange and refresh, revoke, `channels.list`, the resumable
+  `videos.insert` session (initiate, PUT, status query) and `videos.list`. It records each
+  initiation's query and JSON body, served at `GET /__fake/initiations` for the spec.
+- The fake Anthropic also answers the metadata request (on `claude-sonnet-5` only) with
+  `fakeYoutubeMetadata(hook_title)`; `fakes/http.ts` handlers can now set response headers.
+- `full-flow.spec.ts`: Settings → Connect YouTube → connected with the fake channel; after the 2
+  clips render, both tiles show "Posted" (in about 1 s; budget 3 min), the posts API leaks no session
+  URI or token, and exactly 2 initiations carry public / not-for-kids / category 22 / Claude's
+  metadata, with `notifySubscribers` true for the first clip only. No cron knob needed: posts are
+  dispatched when the task completes.
+- Playwright passed twice in a row (6.4 min, 6.1 min). Full `npx vitest run`: 835 passed / 1
+  skipped; `tsc --noEmit`, `pnpm lint` and eslint on `e2e/` clean.
