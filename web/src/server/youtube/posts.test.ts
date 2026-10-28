@@ -2,22 +2,28 @@
 // Post repository (design §4.2, §4.4, §4.6, §4.7, §4.8): creation, the claim/cancel CAS, the
 // private-lock circuit breaker, retry and the serializer. In-memory MongoDB; no Google or Anthropic calls.
 
+import { type BulkWriteResult, Collection, MongoBulkWriteError, MongoNetworkError } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeDb, collections, ensureIndexes } from "../db";
 import { resetEnv } from "../env";
 import type { ClipDoc, TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../types";
 import {
+  blockPost,
   cancelPostForLineage,
   cancelPostsForTask,
   cancelPostsForUser,
   claimPost,
+  clearMetadata,
   createPostsForTask,
   deferAllQueuedForQuota,
   deferPost,
+  failPost,
   markUploaded,
   resumePosting,
   retryPost,
+  saveMetadata,
+  saveSession,
   serializePosts,
   tripPrivateLock,
   unblockAfterReconnect,
@@ -140,6 +146,13 @@ const storedPosts = () => collections().youtubePosts.find({}).toArray();
 const storedPost = async (id: string) => (await collections().youtubePosts.findOne({ _id: id }))!;
 const publishJobs = () => collections().jobs.find({ type: "publish_youtube" }).toArray();
 const autopostFlag = async () => (await collections().tasks.findOne({ _id: "t1" }))?.autopost;
+const storedAccount = () => collections().youtubeAccounts.findOne({ _id: USER });
+const video = (privacyStatus: string, id = "VID") => ({ id, status: { privacyStatus, uploadStatus: "uploaded" } });
+/** Seed p1 (plus `overrides`) and claim it for job1. */
+async function claimed(overrides: Partial<YoutubePostDoc> = {}): Promise<YoutubePostDoc> {
+  await seedPost(overrides);
+  return (await claimPost("p1", "job1"))!;
+}
 
 describe("createPostsForTask", () => {
   it("creates one post per non-fallback clip in order, notifying only the first", async () => {
@@ -208,6 +221,25 @@ describe("createPostsForTask", () => {
     expect(await publishJobs()).toHaveLength(0);
   });
 
+  it("rethrows a bulk error that is not a duplicate lineage, leaving the task pending", async () => {
+    await seedAccount();
+    await seedTask([clip("c1")]);
+    // What mongodb 7 throws from insertMany on a network failure: a bulk error with no write errors.
+    const networkError = new MongoBulkWriteError(new MongoNetworkError("connection reset"), { insertedCount: 0 } as BulkWriteResult);
+    const insertMany = vi.spyOn(Collection.prototype, "insertMany").mockRejectedValueOnce(networkError);
+    try {
+      await expect(createPostsForTask("t1")).rejects.toBe(networkError);
+    } finally {
+      insertMany.mockRestore();
+    }
+
+    expect(await autopostFlag()).toBe("pending");
+    expect(await publishJobs()).toHaveLength(0);
+    // The cron's re-run then creates the posts.
+    expect(await createPostsForTask("t1")).toBe(1);
+    expect(await autopostFlag()).toBe("done");
+  });
+
   it("creates nothing when auto-post is off", async () => {
     await seedAccount({ autoPost: false });
     await seedTask([clip("c1")]);
@@ -271,7 +303,7 @@ describe("claim and cancel", () => {
   it("cancels queued, blocked and failed posts, never working or uploaded ones", async () => {
     for (const [id, state] of [["q", "queued"], ["b", "blocked"], ["f", "failed"], ["w", "working"], ["u", "uploaded"]] as const) {
       await seedPost({ _id: id, lineageId: id, state });
-      await seedPost({ _id: `other-${id}`, lineageId: `other-${id}`, state, taskId: "t2", userId: "u2" });
+      await seedPost({ _id: `other-${id}`, lineageId: `other-${id}`, state, taskId: "t2", userId: "u2", errorReason: "backendError" });
     }
 
     expect(await cancelPostsForTask("t1")).toEqual({ cancelled: 3, working: 1 });
@@ -283,7 +315,112 @@ describe("claim and cancel", () => {
       "other-q": "cancelled", "other-b": "cancelled", "other-f": "cancelled", "other-w": "working", "other-u": "uploaded",
     });
     expect((await storedPost("other-q")).error).toBe("Auto-post was turned off.");
+    expect((await storedPost("other-f")).errorReason).toBeUndefined();
+    expect((await storedPost("other-w")).errorReason).toBe("backendError");
     expect(await cancelPostForLineage("t1", "u")).toBe("none");
+  });
+});
+
+describe("transitions of a claimed post", () => {
+  it("deferPost with a new error drops the old reason code", async () => {
+    const post = await claimed({ error: "Upload failed.", errorReason: "backendError" });
+    expect(await deferPost(post, "retry", new Date(), "Upload interrupted; retrying.")).toBe(true);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "queued", waitReason: "retry", error: "Upload interrupted; retrying." });
+    expect(stored.errorReason).toBeUndefined();
+  });
+
+  it("blockPost blocks the post for the claim holder only", async () => {
+    const post = await claimed({ phase: "uploading", progress: 40, error: "Upload failed.", errorReason: "backendError" });
+    expect(await blockPost({ ...post, claimedBy: "stale-job" }, "reconnect", "Reconnect YouTube to post.")).toBe(false);
+    expect((await storedPost("p1")).state).toBe("working");
+
+    expect(await blockPost(post, "reconnect", "Reconnect YouTube to post.")).toBe(true);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "blocked", waitReason: "reconnect", error: "Reconnect YouTube to post." });
+    for (const field of ["claimedBy", "phase", "progress", "notBefore", "errorReason"] as const) expect(stored[field]).toBeUndefined();
+  });
+
+  it("failPost records the error and its reason code for the claim holder only", async () => {
+    const post = await claimed({ phase: "writing" });
+    expect(await failPost({ ...post, claimedBy: "stale-job" }, "Upload failed.", "backendError")).toBe(false);
+    expect((await storedPost("p1")).state).toBe("working");
+
+    expect(await failPost(post, "Upload failed.", "backendError")).toBe(true);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "failed", error: "Upload failed.", errorReason: "backendError" });
+    for (const field of ["claimedBy", "phase", "waitReason", "notBefore"] as const) expect(stored[field]).toBeUndefined();
+
+    // Without a reason code, the stale one is dropped.
+    await collections().youtubePosts.deleteMany({});
+    expect(await failPost(await claimed({ errorReason: "backendError" }), "The clip file is missing.")).toBe(true);
+    expect(await storedPost("p1")).toMatchObject({ state: "failed", error: "The clip file is missing." });
+    expect((await storedPost("p1")).errorReason).toBeUndefined();
+  });
+
+  it("claim-fenced transitions never overwrite an uploaded post", async () => {
+    await seedAccount();
+    const post = await claimed();
+    expect(await markUploaded(post, video("public"))).toBe(true);
+
+    expect(await deferPost(post, "retry", new Date(), "Upload interrupted; retrying.")).toBe(false);
+    expect(await blockPost(post, "reconnect", "Reconnect YouTube to post.")).toBe(false);
+    expect(await failPost(post, "Upload failed.", "backendError")).toBe(false);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "uploaded", videoId: "VID" });
+    for (const field of ["error", "errorReason", "waitReason", "notBefore"] as const) expect(stored[field]).toBeUndefined();
+  });
+
+  it("session and metadata writes need no claim and never touch an uploaded post", async () => {
+    const upload = { sessionUri: "https://upload.example/s", storageKey: "clips/t1/c1.mp4", size: 10, startedAt: new Date() };
+    const metadata = { title: "Why index funds win", description: "Fees compound.", tags: ["index funds"], hashtags: ["investing"], model: "claude-sonnet-5" };
+    await seedPost();
+    await saveSession("p1", upload);
+    await saveMetadata("p1", metadata);
+    expect(await storedPost("p1")).toMatchObject({ state: "queued", upload, metadata });
+    await clearMetadata("p1");
+    expect((await storedPost("p1")).metadata).toBeUndefined();
+    expect((await storedPost("p1")).upload).toEqual(upload);
+
+    const posted = { ...metadata, title: "As posted" };
+    await seedPost({ _id: "u", lineageId: "c2", state: "uploaded", videoId: "VID", metadata: posted });
+    await saveSession("u", upload);
+    await saveMetadata("u", metadata);
+    await clearMetadata("u");
+    const stored = await storedPost("u");
+    expect(stored.metadata).toEqual(posted);
+    expect(stored.upload).toBeUndefined();
+  });
+
+  it("markUploaded with the requested privacy does not trip the breaker", async () => {
+    await seedAccount();
+    await seedPost({ _id: "next", lineageId: "c2" });
+    const post = await claimed({ privacy: "unlisted" });
+
+    expect(await markUploaded(post, video("unlisted"))).toBe(true);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "uploaded", privacyStatus: "unlisted" });
+    expect(stored.warning).toBeUndefined();
+    const account = await storedAccount();
+    expect(account?.status).toBe("active");
+    expect(account?.warning).toBeUndefined();
+    expect((await storedPost("next")).state).toBe("queued");
+  });
+
+  it("markUploaded on an already-uploaded post records nothing and does not trip the breaker", async () => {
+    await seedAccount();
+    await seedPost({ _id: "next", lineageId: "c2" });
+    const uploadedAt = new Date("2026-10-28T10:00:00Z");
+    const post = await seedPost({ state: "uploaded", videoId: "VID", videoUrl: "https://www.youtube.com/watch?v=VID", privacyStatus: "public", uploadStatus: "processed", uploadedAt });
+
+    expect(await markUploaded(post, video("private", "OTHER"))).toBe(false);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ videoId: "VID", privacyStatus: "public", uploadStatus: "processed", uploadedAt });
+    expect(stored.warning).toBeUndefined();
+    const account = await storedAccount();
+    expect(account?.status).toBe("active");
+    expect(account?.warning).toBeUndefined();
+    expect((await storedPost("next")).state).toBe("queued");
   });
 });
 
@@ -300,18 +437,38 @@ describe("account-wide transitions", () => {
     expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
     expect((await storedPost("u")).state).toBe("uploaded");
 
-    // A reconnect releases reconnect-blocked posts but never the lock.
-    expect(await unblockAfterReconnect(USER)).toBe(1);
+    // A reconnect never releases the lock, and the lock wins over the reconnect a post waited for.
+    expect(await unblockAfterReconnect(USER)).toBe(0);
     expect(await storedPost("q")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
-    expect(await storedPost("b")).toMatchObject({ state: "queued" });
+    expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
+    expect(await publishJobs()).toHaveLength(0);
 
     const account = await resumePosting(USER);
     expect(account).toMatchObject({ status: "active" });
     expect(account?.warning).toBeUndefined();
-    const resumed = await storedPost("q");
-    expect(resumed.state).toBe("queued");
-    expect(resumed.waitReason).toBeUndefined();
+    for (const id of ["q", "b"]) {
+      const resumed = await storedPost(id);
+      expect(resumed.state).toBe("queued");
+      expect(resumed.waitReason).toBeUndefined();
+    }
     expect((await publishJobs()).map((job) => job.payload.postId).sort()).toEqual(["b", "q"]);
+  });
+
+  it("unblockAfterReconnect queues every blocked post but private_lock's on an unlocked account", async () => {
+    await seedAccount();
+    await seedPost({ _id: "b", state: "blocked", waitReason: "reconnect", error: "Reconnect YouTube to post.", errorReason: "invalid_grant" });
+    await seedPost({ _id: "lock", lineageId: "c2", state: "blocked", waitReason: "private_lock" });
+    await seedPost({ _id: "f", lineageId: "c3", state: "failed", error: "Upload failed." });
+    await seedPost({ _id: "other", lineageId: "c4", userId: "u2", state: "blocked", waitReason: "reconnect" });
+
+    expect(await unblockAfterReconnect(USER)).toBe(1);
+    const queued = await storedPost("b");
+    expect(queued.state).toBe("queued");
+    for (const field of ["waitReason", "error", "errorReason"] as const) expect(queued[field]).toBeUndefined();
+    expect(await storedPost("lock")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
+    expect((await storedPost("f")).state).toBe("failed");
+    expect((await storedPost("other")).state).toBe("blocked");
+    expect((await publishJobs()).map((job) => job.payload.postId)).toEqual(["b"]);
   });
 
   it("keeps a reauth_required account's status through the lock, and its posts wait for a reconnect", async () => {

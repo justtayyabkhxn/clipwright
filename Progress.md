@@ -164,3 +164,10 @@ uploads every clip of a finished video to the user's channel as a public Short.
   including a 20-round claim/cancel race (both outcomes observed) and the reauth_required +
   private_lock combination. Full `npx vitest run` 715 passed / 1 skipped; `tsc --noEmit` clean;
   `pnpm lint` clean.
+- 2026-10-28 12:44 review fix round 1: `createPostsForTask` now rethrows a bulk error with no write
+  errors (network/write-concern) instead of marking the task done; `unblockAfterReconnect` keeps
+  posts blocked (re-labelled `private_lock`) while the account still has the lock; defer/block/cancel
+  drop a stale `errorReason`; `markUploaded` trips the breaker only when its write matched; retry
+  docstring matches `max(insertCap, insertCalls + 1)`; tests for block/fail/session/metadata and
+  both markUploaded no-trip cases. posts tests 26/26 (6 RED before the fix); full suite 724 passed /
+  1 skipped; tsc and lint clean.

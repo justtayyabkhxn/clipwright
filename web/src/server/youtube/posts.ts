@@ -100,7 +100,11 @@ export async function createPostsForTask(taskId: string): Promise<number> {
     try {
       inserted = (await youtubePosts.insertMany(docs, { ordered: false })).insertedCount;
     } catch (error) {
-      if (!(error instanceof MongoBulkWriteError) || ![error.writeErrors].flat().every((e) => e.code === 11000)) throw error;
+      // Only duplicate lineages are expected. The driver also wraps network and write-concern errors
+      // in a MongoBulkWriteError with no write errors; those must fail the call, never mark it done.
+      if (!(error instanceof MongoBulkWriteError)) throw error;
+      const errs = [error.writeErrors].flat();
+      if (!errs.length || !errs.every((e) => e.code === 11000)) throw error;
       inserted = error.insertedCount;
     }
     // Enqueue from the stored docs: after a crash the existing posts carry other ids than `docs`.
@@ -139,11 +143,14 @@ export async function claimPost(postId: string, jobId: string): Promise<YoutubeP
 
 // --- Transitions of a claimed post ---
 
-/** Back to `queued` until `until`. A `retry` deferral spends one of the automatic attempts. */
+/**
+ * Back to `queued` until `until`. A `retry` deferral spends one of the automatic attempts. A given
+ * `error` replaces the old one; the old `errorReason` is always dropped (it described another error).
+ */
 export async function deferPost(post: YoutubePostDoc, reason: YoutubeWaitReason, until: Date, error?: string): Promise<boolean> {
   const update: UpdateFilter<YoutubePostDoc> = {
     $set: { state: "queued", notBefore: until, waitReason: reason, updatedAt: new Date(), ...(error !== undefined && { error }) },
-    $unset: { ...RELEASE, ...(error === undefined && { error: "", errorReason: "" }) },
+    $unset: { ...RELEASE, errorReason: "", ...(error === undefined && { error: "" }) },
     ...(reason === "retry" && { $inc: { attempts: 1 } }),
   };
   return (await collections().youtubePosts.updateOne(held(post), update)).matchedCount > 0;
@@ -152,7 +159,7 @@ export async function deferPost(post: YoutubePostDoc, reason: YoutubeWaitReason,
 export async function blockPost(post: YoutubePostDoc, reason: YoutubeWaitReason, message: string): Promise<boolean> {
   const result = await collections().youtubePosts.updateOne(held(post), {
     $set: { state: "blocked", waitReason: reason, error: message, updatedAt: new Date() },
-    $unset: { ...RELEASE, notBefore: "" },
+    $unset: { ...RELEASE, notBefore: "", errorReason: "" },
   });
   return result.matchedCount > 0;
 }
@@ -185,8 +192,9 @@ export async function markUploaded(post: YoutubePostDoc, video: VideoResource): 
     },
     $unset: { ...RELEASE, upload: "", notBefore: "", waitReason: "", error: "", errorReason: "" },
   });
+  if (!result.matchedCount) return false; // already uploaded: nothing recorded, nothing to trip
   if (locked) await tripPrivateLock(post.userId);
-  return result.matchedCount > 0;
+  return true;
 }
 
 /** Save the resumable session right after initiation, so any later run queries it before a new insert. */
@@ -206,7 +214,7 @@ export async function clearMetadata(postId: string): Promise<void> {
 
 const cancel = (error?: string): UpdateFilter<YoutubePostDoc> => ({
   $set: { state: "cancelled", updatedAt: new Date(), ...(error !== undefined && { error }) },
-  $unset: { notBefore: "", waitReason: "" },
+  $unset: { notBefore: "", waitReason: "", ...(error !== undefined && { errorReason: "" }) },
 });
 
 /** Disconnect, auto-post off, or a different channel: `reason` becomes the posts' error. */
@@ -233,12 +241,22 @@ export async function cancelPostForLineage(taskId: string, lineageId: string): P
 
 // --- Account-wide transitions ---
 
-/** After a reconnect: every blocked post except the private lock's goes back to the queue. */
+/**
+ * After a reconnect: every blocked post except the private lock's goes back to the queue. The lock
+ * wins, as in `createPostsForTask`: while the account still carries it (a reconnect keeps the pause),
+ * those posts stay blocked, re-labelled `private_lock`, for `resumePosting` to release. Returns how
+ * many posts were queued.
+ */
 export async function unblockAfterReconnect(userId: string): Promise<number> {
+  const locked = (await getAccount(userId))?.warning === PRIVATE_LOCK;
+  const now = new Date();
   const result = await collections().youtubePosts.updateMany(
-    { userId, state: "blocked", waitReason: { $ne: "private_lock" } },
-    { $set: { state: "queued", updatedAt: new Date() }, $unset: { waitReason: "", notBefore: "", error: "", errorReason: "" } },
+    { userId, state: "blocked", waitReason: { $ne: PRIVATE_LOCK } },
+    locked
+      ? { $set: { waitReason: PRIVATE_LOCK, updatedAt: now }, $unset: { notBefore: "", error: "", errorReason: "" } }
+      : { $set: { state: "queued", updatedAt: now }, $unset: { waitReason: "", notBefore: "", error: "", errorReason: "" } },
   );
+  if (locked) return 0;
   await enqueueQueued({ userId });
   return result.modifiedCount;
 }
@@ -297,9 +315,10 @@ export async function deferAllQueuedForQuota(until: Date): Promise<number> {
 // --- Manual retry (§4.8) ---
 
 /**
- * "Try again" on a `failed` or `blocked` post: reset the automatic attempts and allow exactly one
- * more `videos.insert` than already made (`insertCap = insertCalls + 1`, never lowered), so a retry
- * never resets the duplicate guard. A saved session is still queried before any new insert.
+ * "Try again" on a `failed` or `blocked` post: reset the automatic attempts and set
+ * `insertCap = max(insertCap, insertCalls + 1)`. A post that used up its cap gets exactly one more
+ * `videos.insert`; one that did not keeps its unused allowance (the cap is never lowered). A retry
+ * never resets the duplicate guard, and a saved session is still queried before any new insert.
  */
 export async function retryPost(postId: string, userId: string): Promise<{ post: YoutubePostDoc; job: JobDoc }> {
   const { youtubePosts } = collections();
