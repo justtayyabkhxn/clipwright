@@ -27,7 +27,8 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 export const INSERT_CAP = 3;
 export const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
 export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
-const PRIVATE_LOCK = "private_lock";
+/** The §4.6 forced-private code: the UI maps it to copy in `messages/en` (never an English sentence in `post.warning`). */
+export const PRIVATE_LOCK = "private_lock";
 const CANCELLABLE: YoutubePostDoc["state"][] = ["queued", "blocked", "failed"];
 /** Fields that only mean something while a job holds the post. */
 const RELEASE = { claimedBy: "", phase: "", progress: "" } as const;
@@ -36,27 +37,29 @@ const due = (now: Date): Filter<YoutubePostDoc> => ({ $or: [{ notBefore: { $exis
 const held = (post: YoutubePostDoc): Filter<YoutubePostDoc> => ({ _id: post._id, state: "working", claimedBy: post.claimedBy });
 const notUploaded = (postId: string): Filter<YoutubePostDoc> => ({ _id: postId, state: { $ne: "uploaded" } });
 
-async function enqueuePost(post: Pick<YoutubePostDoc, "_id" | "taskId" | "userId">): Promise<JobDoc> {
-  const { job } = await enqueueJob({
+async function enqueuePost(post: Pick<YoutubePostDoc, "_id" | "taskId" | "userId">): Promise<{ job: JobDoc; created: boolean }> {
+  return enqueueJob({
     type: "publish_youtube",
     taskId: post.taskId,
     userId: post.userId,
     activeKey: `youtube:${post._id}`,
     payload: { postId: post._id },
   });
-  return job;
 }
 
 /**
  * Enqueue every due `queued` post matching `filter` (an already-held activeKey is a no-op).
  * Exported for the cron dispatch step (§4.5), which calls it with no filter and its own `now`.
+ * Returns how many jobs this call actually created, not how many posts matched (a post whose job
+ * already existed is a no-op, not a new dispatch).
  */
 export async function enqueueQueued(filter: Filter<YoutubePostDoc> = {}, now = new Date()): Promise<number> {
   const posts = await collections()
     .youtubePosts.find({ ...filter, state: "queued", ...due(now) })
     .toArray();
-  for (const post of posts) await enqueuePost(post);
-  return posts.length;
+  let created = 0;
+  for (const post of posts) if ((await enqueuePost(post)).created) created++;
+  return created;
 }
 
 // --- Creation (§4.4) ---
@@ -384,7 +387,7 @@ export async function retryPost(postId: string, userId: string): Promise<{ post:
     if (existing.state === "uploaded") throw new ApiError(409, "This clip is already on YouTube.");
     throw new ApiError(409, "Only a failed or blocked post can be retried.");
   }
-  return { post, job: await enqueuePost(post) };
+  return { post, job: (await enqueuePost(post)).job };
 }
 
 // --- Serializer: never `upload`, tokens, `claimedBy` or storage keys ---

@@ -260,3 +260,9 @@ uploads every clip of a finished video to the user's channel as a public Short.
   post's `updateOne` so a failed trip leaves the post unwritten for a retry; a video already known to
   be locked no longer re-blocks the posts "Resume posting" just released. 1 new test; full
   `npx vitest run --maxWorkers=2`: 803 passed / 1 skipped.
+- 2026-10-28 15:14 review fix round 2: `post.warning` now stores the `private_lock` code (imported
+  from `posts.ts`, the sentence constant deleted) instead of an English sentence; `enqueueQueued`
+  counts only jobs it actually created, not posts whose job already existed; `byUser` in
+  `verifyUploads` now pushes onto its existing array instead of copying it per post; added 6 tests
+  for the untested §4.6 branches (deleted/non-final/rejection-reason/window bounds/one user's fetch
+  failure). Full `npx vitest run --maxWorkers=2`: 809 passed / 1 skipped.

@@ -9,7 +9,7 @@ import { EXPORT_EXPIRED_MESSAGE, jobFileKey } from "../server/tasks";
 import type { JobType, YoutubePostDoc } from "../server/types";
 import { getAccessToken, getAccount } from "../server/youtube/accounts";
 import { listVideoStatus } from "../server/youtube/google";
-import { createPostsForTask, enqueueQueued, tripPrivateLock } from "../server/youtube/posts";
+import { createPostsForTask, enqueueQueued, PRIVATE_LOCK, tripPrivateLock } from "../server/youtube/posts";
 
 export const CRON_INTERVAL_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -24,7 +24,6 @@ const RESUME_AUTOPOST_DELAY_MS = 2 * MINUTE_MS;
 const VERIFY_MIN_AGE_MS = 10 * MINUTE_MS;
 const VERIFY_MAX_AGE_MS = 48 * 60 * MINUTE_MS;
 const FINAL_UPLOAD_STATUSES = new Set(["processed", "rejected", "failed", "deleted"]);
-const FORCED_PRIVATE_WARNING = "YouTube made this video private";
 
 /** Succeeded exports past `expiresAt` lose their file and become failed (the doc stays 7 more days). */
 export async function expireExports(now = new Date()) {
@@ -164,7 +163,11 @@ export async function verifyUploads(now = new Date(), fetchImpl: typeof fetch = 
   if (!due.length) return 0;
 
   const byUser = new Map<string, YoutubePostDoc[]>();
-  for (const post of due) byUser.set(post.userId, [...(byUser.get(post.userId) ?? []), post]);
+  for (const post of due) {
+    const posts = byUser.get(post.userId);
+    if (posts) posts.push(post);
+    else byUser.set(post.userId, [post]);
+  }
 
   let verified = 0;
   for (const [userId, posts] of byUser) {
@@ -204,7 +207,8 @@ async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchI
       set.privacyStatus = status.privacyStatus;
       set.uploadStatus = status.uploadStatus;
       if (status.privacyStatus !== post.privacy) {
-        set.warning = FORCED_PRIVATE_WARNING;
+        // A code, never a sentence: the UI maps it to copy (messages/en), same as markUploaded's own lock.
+        set.warning = PRIVATE_LOCK;
         trip = status.privacyStatus !== post.privacyStatus;
       } else if (status.rejectionReason) set.warning = status.rejectionReason;
     }

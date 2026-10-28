@@ -334,6 +334,16 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect(jobs.map((j) => j.payload.postId).sort()).toEqual(["due", "no-wait"]);
   });
 
+  it("does not count a due post whose job already exists", async () => {
+    const now = new Date();
+    await seedPost({ _id: "due", lineageId: "c1" });
+    // Already enqueued by an earlier pass: the activeKey E11000 makes a second dispatch a no-op.
+    await enqueueJob({ type: "publish_youtube", taskId: "t1", userId: USER, activeKey: "youtube:due", payload: { postId: "due" } });
+
+    expect(await dispatchDuePosts(now)).toBe(0);
+    expect(await collections().jobs.countDocuments({ type: "publish_youtube" })).toBe(1);
+  });
+
   it("re-creates posts for a task stuck in autopost pending", async () => {
     const now = new Date();
     await seedAccount();
@@ -378,7 +388,8 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect(await verifyUploads(now, fetchImpl)).toBe(1);
 
     const p1 = await storedPost("p1");
-    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "YouTube made this video private" });
+    // post.warning is a code, never an English sentence: the UI maps it to copy in messages/en.
+    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "private_lock" });
     expect(p1.verifiedAt).toBeInstanceOf(Date);
     expect(await collections().youtubeAccounts.findOne({ _id: USER })).toMatchObject({ status: "paused", warning: "private_lock" });
     expect(await storedPost("p2")).toMatchObject({ state: "blocked", waitReason: "private_lock" });
@@ -404,7 +415,7 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect(await verifyUploads(now, fetchImpl)).toBe(1);
 
     const p1 = await storedPost("p1");
-    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "YouTube made this video private" });
+    expect(p1).toMatchObject({ state: "uploaded", privacyStatus: "private", uploadStatus: "processed", warning: "private_lock" });
     expect(p1.verifiedAt).toBeInstanceOf(Date);
     expect(await collections().youtubeAccounts.findOne({ _id: USER })).toMatchObject({ status: "active" });
     expect(await storedPost("p2")).toMatchObject({ state: "queued" });
@@ -429,5 +440,102 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect(await verifyUploads(now, fetchImpl)).toBe(0);
     expect(called).toBe(false);
     expect((await storedPost("old-channel")).verifiedAt).toBeUndefined();
+  });
+
+  it("stores a video missing from videos.list as deleted and finalizes it", async () => {
+    const now = new Date();
+    await seedAccount();
+    await seedPost({ _id: "p1", state: "uploaded", videoId: "VIDGONE", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    const fetchImpl = videoStatusFetch({}); // VIDGONE absent from the response: gone from YouTube.
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(1);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ uploadStatus: "deleted" });
+    expect(p1.verifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("leaves verifiedAt unset for a non-final uploadStatus", async () => {
+    const now = new Date();
+    await seedAccount();
+    await seedPost({ _id: "p1", state: "uploaded", videoId: "VID1", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    const fetchImpl = videoStatusFetch({ VID1: { privacyStatus: "public", uploadStatus: "uploaded" } });
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(0);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ uploadStatus: "uploaded", privacyStatus: "public" });
+    expect(p1.verifiedAt).toBeUndefined();
+  });
+
+  it("stores a rejection reason as the post warning and finalizes it", async () => {
+    const now = new Date();
+    await seedAccount();
+    await seedPost({ _id: "p1", state: "uploaded", videoId: "VID1", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    const fetchImpl = videoStatusFetch({ VID1: { privacyStatus: "public", uploadStatus: "rejected", rejectionReason: "copyright" } });
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(1);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ uploadStatus: "rejected", warning: "copyright" });
+    expect(p1.verifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("checks only posts inside the 10 min / 48 h verification window", async () => {
+    const now = new Date();
+    const MIN_AGE = 10 * MINUTE;
+    const MAX_AGE = 48 * 60 * MINUTE;
+    await seedAccount();
+    await seedPost({ _id: "too-fresh", lineageId: "c-fresh", videoId: "V-FRESH", state: "uploaded", uploadedAt: new Date(now.getTime() - (MIN_AGE - MINUTE)) });
+    await seedPost({ _id: "min-edge", lineageId: "c-min", videoId: "V-MIN", state: "uploaded", uploadedAt: new Date(now.getTime() - MIN_AGE) });
+    await seedPost({ _id: "max-edge", lineageId: "c-max", videoId: "V-MAX", state: "uploaded", uploadedAt: new Date(now.getTime() - MAX_AGE) });
+    await seedPost({ _id: "too-old", lineageId: "c-old", videoId: "V-OLD", state: "uploaded", uploadedAt: new Date(now.getTime() - (MAX_AGE + MINUTE)) });
+    const fetchImpl = videoStatusFetch({
+      "V-FRESH": { privacyStatus: "public", uploadStatus: "processed" },
+      "V-MIN": { privacyStatus: "public", uploadStatus: "processed" },
+      "V-MAX": { privacyStatus: "public", uploadStatus: "processed" },
+      "V-OLD": { privacyStatus: "public", uploadStatus: "processed" },
+    });
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(2);
+
+    expect((await storedPost("too-fresh")).verifiedAt).toBeUndefined();
+    expect((await storedPost("min-edge")).verifiedAt).toBeInstanceOf(Date);
+    expect((await storedPost("max-edge")).verifiedAt).toBeInstanceOf(Date);
+    expect((await storedPost("too-old")).verifiedAt).toBeUndefined();
+  });
+
+  it("one user's fetch failure does not stop another user's verification", async () => {
+    const now = new Date();
+    const FAILING_USER = "yt-user-fails";
+    await seedAccount();
+    await seedAccount({ _id: FAILING_USER, channelId: "UC2" });
+    await seedPost({ _id: "ok", lineageId: "c-ok", state: "uploaded", videoId: "VID-OK", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    await seedPost({
+      _id: "broken",
+      lineageId: "c-broken",
+      userId: FAILING_USER,
+      channelId: "UC2",
+      state: "uploaded",
+      videoId: "VID-BROKEN",
+      uploadedAt: new Date(now.getTime() - 20 * MINUTE),
+    });
+    const fetchImpl = (async (input: string | URL) => {
+      if (String(input).includes("VID-BROKEN")) throw new Error("network down");
+      return videoStatusFetch({ "VID-OK": { privacyStatus: "public", uploadStatus: "processed" } })(input);
+    }) as typeof fetch;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      expect(await verifyUploads(now, fetchImpl)).toBe(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    expect((await storedPost("ok")).verifiedAt).toBeInstanceOf(Date);
+    const broken = await storedPost("broken");
+    expect(broken.state).toBe("uploaded");
+    expect(broken.uploadStatus).toBeUndefined();
+    expect(broken.verifiedAt).toBeUndefined();
   });
 });
