@@ -33,6 +33,10 @@ export class GoogleApiError extends Error {
     operation: string,
     readonly status: number,
     readonly reason?: string,
+    // Only the token endpoint returns OAuth error codes (invalid_client, invalid_grant, ...). A 401
+    // there is a server misconfiguration (bad/missing client secret), not an expired user token, so
+    // classify must not treat it like a Data API/upload 401 (§4.3: only invalid_grant means reconnect).
+    readonly tokenEndpoint = false,
   ) {
     super(`Google ${operation} failed (HTTP ${status}${reason ? `, ${reason}` : ""})`);
     this.name = "GoogleApiError";
@@ -40,7 +44,7 @@ export class GoogleApiError extends Error {
 }
 
 /** Throw for a failed response; `reason` is the token endpoint's `error` or the Data API's `error.errors[0].reason`. */
-async function fail(operation: string, response: Response): Promise<never> {
+async function fail(operation: string, response: Response, tokenEndpoint = false): Promise<never> {
   let reason: string | undefined;
   try {
     const body = JSON.parse(await response.text()) as { error?: string | { errors?: { reason?: unknown }[] } };
@@ -49,7 +53,7 @@ async function fail(operation: string, response: Response): Promise<never> {
   } catch {
     // Not JSON: the status alone classifies it.
   }
-  throw new GoogleApiError(operation, response.status, reason);
+  throw new GoogleApiError(operation, response.status, reason, tokenEndpoint);
 }
 
 async function readJson<T>(operation: string, response: Response): Promise<T> {
@@ -62,8 +66,8 @@ async function readJson<T>(operation: string, response: Response): Promise<T> {
   }
 }
 
-async function okJson<T>(operation: string, response: Response): Promise<T> {
-  if (!response.ok) await fail(operation, response);
+async function okJson<T>(operation: string, response: Response, tokenEndpoint = false): Promise<T> {
+  if (!response.ok) await fail(operation, response, tokenEndpoint);
   return readJson<T>(operation, response);
 }
 
@@ -80,7 +84,7 @@ async function tokenRequest(operation: string, params: Record<string, string>, f
     }),
     signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
-  return okJson<TokenResponse>(operation, response);
+  return okJson<TokenResponse>(operation, response, true);
 }
 
 const expiresAt = (token: TokenResponse) => new Date(Date.now() + token.expires_in * 1000);
@@ -111,7 +115,7 @@ export async function revokeToken(token: string, fetchImpl: typeof fetch = fetch
     body: new URLSearchParams({ token }),
     signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
-  if (!response.ok) await fail("token revoke", response);
+  if (!response.ok) await fail("token revoke", response, true);
 }
 
 const apiGet = (accessToken: string, path: string, fetchImpl: typeof fetch) =>
@@ -148,9 +152,11 @@ export async function listVideoStatus(accessToken: string, ids: string[], fetchI
   const statuses = new Map<string, VideoStatus>();
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50).map(encodeURIComponent).join(",");
+    // videos.list does not support maxResults together with the id filter; an id lookup already
+    // returns every match (up to the 50 ids sent in this batch).
     const list = await okJson<VideoList>(
       "video status lookup",
-      await apiGet(accessToken, `/videos?part=status&maxResults=50&id=${batch}`, fetchImpl),
+      await apiGet(accessToken, `/videos?part=status&id=${batch}`, fetchImpl),
     );
     for (const { id, status } of list.items ?? []) {
       // A failed upload explains itself in failureReason, a rejected one in rejectionReason.
@@ -266,9 +272,14 @@ export function classify(error: unknown): ErrorClass {
   if (error instanceof GoogleApiError) {
     const byReason = error.reason ? REASONS[error.reason] : undefined;
     if (byReason) return byReason;
-    if (error.status === 429 || error.status >= 500) return "transient";
+    // 308 on the upload PUT is "Resume Incomplete", not a failure: the handler's retry queries the
+    // saved session and resumes from its Range offset (§4.5 step 1), same as a network error or 5xx.
+    if (error.status === 429 || error.status === 308 || error.status >= 500) return "transient";
     // §4.3: a 401 that survives one token refresh means reconnect; callers refresh before classifying.
-    if (error.status === 401) return "reauth";
+    // That only holds for Data API/upload calls. A 401 from the token endpoint itself (e.g.
+    // invalid_client from a missing or wrong client secret) is a server misconfiguration, not an
+    // expired user token, and must not mark the account reauth_required.
+    if (error.status === 401 && !error.tokenEndpoint) return "reauth";
     return "permanent";
   }
   // fetch rejects with a TypeError on network failure, and with AbortError/TimeoutError when cut off.

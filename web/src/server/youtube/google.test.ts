@@ -8,11 +8,14 @@ import { resetEnv } from "../env";
 import {
   classify,
   exchangeCode,
+  fetchMyChannel,
   GoogleApiError,
   googleUrls,
   listVideoStatus,
   nextMidnightPacific,
   querySession,
+  refreshAccessToken,
+  revokeToken,
   startUploadSession,
   uploadFrom,
   type VideoInsertBody,
@@ -168,6 +171,43 @@ describe("errors", () => {
     expect(classify(new Error("something else"))).toBe("permanent");
   });
 
+  it("classify maps a 308 on the upload PUT to transient, so the handler resumes instead of failing", () => {
+    expect(classify(new GoogleApiError("upload", 308))).toBe("transient");
+  });
+
+  it("classify keeps the 401 reauth fallback for Data API/upload calls only", () => {
+    // A Data API or upload 401 with no matched reason still means reconnect.
+    expect(classify(new GoogleApiError("video status lookup", 401))).toBe("reauth");
+    // A token-endpoint 401 (e.g. invalid_client from a bad or missing client secret) is a server
+    // misconfiguration, not an expired user token: it must not mark the account reauth_required.
+    expect(classify(new GoogleApiError("token refresh", 401, "invalid_client", true))).toBe("permanent");
+    // invalid_grant from the token endpoint is still the one case that means reconnect, regardless
+    // of the tokenEndpoint flag (it is matched by reason before the status fallback runs).
+    expect(classify(new GoogleApiError("token refresh", 400, "invalid_grant", true))).toBe("reauth");
+  });
+
+  it("refreshAccessToken classifies a 401 invalid_client (bad client secret) as permanent, not reauth", async () => {
+    const fake = fakeFetch(json({ error: "invalid_client", error_description: "The OAuth client was not found." }, 401));
+
+    const error = await refreshAccessToken("refresh-1", fake.fetchImpl).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(GoogleApiError);
+    expect(error).toMatchObject({ status: 401, reason: "invalid_client" });
+    expect(classify(error)).toBe("permanent");
+  });
+
+  it("wraps a malformed 200 body so V8's SyntaxError never quotes it into the error message", async () => {
+    // response.json() on a non-JSON body throws a SyntaxError that quotes the body's start; a token
+    // response's body can contain the access/refresh token, so that quote must never surface.
+    const fake = fakeFetch(new Response("not json at all: secret-token-abc123", { status: 200 }));
+
+    const error = await refreshAccessToken("refresh-1", fake.fetchImpl).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(GoogleApiError);
+    expect(error).toMatchObject({ reason: "invalidJson" });
+    expect((error as Error).message).not.toContain("secret-token-abc123");
+  });
+
   it("GoogleApiError messages never include tokens or bodies", async () => {
     const fake = fakeFetch(json({ error: "invalid_grant", error_description: "Bad code secret-token" }, 400));
 
@@ -225,10 +265,68 @@ describe("OAuth and Data API", () => {
     const statuses = await listVideoStatus("at", ids, fake.fetchImpl);
 
     expect(fake.requests).toHaveLength(2);
+    // videos.list rejects maxResults alongside the id filter, so it must never be sent here.
+    expect(fake.requests[0].url).toBe(`https://www.googleapis.com/youtube/v3/videos?part=status&id=${ids.slice(0, 50).join(",")}`);
+    expect(new URL(fake.requests[0].url).searchParams.has("maxResults")).toBe(false);
     expect(new URL(fake.requests[0].url).searchParams.get("id")?.split(",")).toEqual(ids.slice(0, 50));
     expect(new URL(fake.requests[1].url).searchParams.get("id")).toBe("v50");
     expect(statuses.get("v0")).toEqual({ privacyStatus: "public", uploadStatus: "processed" });
     expect(statuses.get("v50")).toEqual({ privacyStatus: "private", uploadStatus: "rejected", rejectionReason: "duplicate" });
+  });
+
+  it("fetchMyChannel returns the channel's id, title, handle and thumbnail", async () => {
+    const fake = fakeFetch(
+      json({
+        items: [
+          {
+            id: "UC123",
+            snippet: { title: "My Channel", customUrl: "@mychannel", thumbnails: { default: { url: "https://example.com/t.jpg" } } },
+          },
+        ],
+      }),
+    );
+
+    const channel = await fetchMyChannel("at", fake.fetchImpl);
+
+    expect(channel).toEqual({ channelId: "UC123", title: "My Channel", handle: "@mychannel", thumbnailUrl: "https://example.com/t.jpg" });
+    expect(fake.requests[0].url).toBe("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true");
+    expect(fake.requests[0].headers.get("authorization")).toBe("Bearer at");
+  });
+
+  it("fetchMyChannel returns null when the Google account has no channel", async () => {
+    const fake = fakeFetch(json({ items: [] }));
+
+    expect(await fetchMyChannel("at", fake.fetchImpl)).toBeNull();
+  });
+
+  it("refreshAccessToken sends the refresh_token grant and returns the new access token", async () => {
+    const fake = fakeFetch(json({ access_token: "new-at", expires_in: 3600 }));
+    const before = Date.now();
+
+    const token = await refreshAccessToken("refresh-1", fake.fetchImpl);
+
+    expect(token.accessToken).toBe("new-at");
+    expect(token.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 3600_000);
+    const [request] = fake.requests;
+    expect(request.url).toBe("https://oauth2.googleapis.com/token");
+    expect(Object.fromEntries(new URLSearchParams(String(request.init.body)))).toEqual({
+      grant_type: "refresh_token",
+      refresh_token: "refresh-1",
+      client_id: "client-id",
+      client_secret: "client-secret",
+    });
+  });
+
+  it("revokeToken posts the token in the body, never in the URL", async () => {
+    const fake = fakeFetch(new Response(null, { status: 200 }));
+
+    await revokeToken("access-or-refresh-token", fake.fetchImpl);
+
+    const [request] = fake.requests;
+    expect(request.url).toBe("https://oauth2.googleapis.com/revoke");
+    expect(request.init.method).toBe("POST");
+    expect(request.url).not.toContain("access-or-refresh-token");
+    expect(Object.fromEntries(new URLSearchParams(String(request.init.body)))).toEqual({ token: "access-or-refresh-token" });
   });
 });
 

@@ -99,6 +99,12 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - Tests (TDD): `google.test.ts` written first, RED (module missing), then 10/10 passing; full suite 670/671 (1 slow-test skip). Also checked
   against a local HTTP server with real Node `fetch` (308 without `Location`, explicit
   `Content-Length` on a streamed body). `tsc --noEmit` 0 errors; `pnpm lint` clean.
+- 2026-10-28 11:25 review fix round 1: `classify` now treats a 308 on the upload PUT as `transient`
+  (resume instead of fail) and a token-endpoint 401 (e.g. `invalid_client`) as `permanent` rather
+  than `reauth`, via a new `GoogleApiError.tokenEndpoint` flag set only by `tokenRequest`/`revokeToken`;
+  `listVideoStatus` drops the unsupported `maxResults` alongside `id`; added tests for all of these
+  plus `fetchMyChannel` (both branches), `refreshAccessToken`, `revokeToken` and the `invalidJson`
+  secret-wrapping path (18/18 passing).
 
 ### 2026-10-27 19:01 — Paused (stopped by the user; resume tomorrow)
 - Done and reviewed: Tasks 1–4 (data model, clip lineage, Claude-written metadata, Google client).
