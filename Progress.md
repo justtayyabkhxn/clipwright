@@ -391,3 +391,10 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - 2026-10-28 18:52 review fix round 1: fixed 3 of the 4 "DESIGN.md §4" YouTube cross-references
   (CLAUDE.md, docs/architecture.md, docs/youtube.md) to §2/§5/§6/§9; the 4th cited location
   (DESIGN.md:363) has no such self-reference, so it was left unchanged (see fix report).
+
+### 2026-10-28 18:56 — Paused before the final whole-branch review (stopped by the user)
+- Done and reviewed: Tasks 1–14. Last full verification (Task 14): tsc 0 errors, lint clean,
+  vitest 837 passed / 1 skipped, `next build` OK, Playwright passed, engine pytest 362 passed / 1 skipped.
+- The final review was launched and then stopped before any reviewer finished; nothing was changed.
+- Next: re-run the final review over `review-8300730..04cb93d.diff`, one fix wave plus a re-review,
+  then finish the branch. Details and the decisions taken are in `work.md`.

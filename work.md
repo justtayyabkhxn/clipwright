@@ -1,6 +1,6 @@
 # Clipwright: work log and resume guide
 
-Last updated: 2026-10-27. Phases 1 to 4 are done and verified. Next: Phase 5, a real run with the user's MongoDB Atlas URI and API keys.
+Last updated: 2026-10-28. Phases 1 to 4 are done and verified. Phase 5 (a real run with the user's Atlas URI and keys) is partly done. **Current work:** branch `youtube-autopost` (YouTube Shorts auto-post). All 14 plan tasks are done and reviewed; the final whole-branch review is next. See "Branch `youtube-autopost`" below.
 
 **Goal:** rebrand the SupoClip + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
 
@@ -108,13 +108,90 @@ docs/      user docs; docs/port/ holds the design spec and the maps of the origi
 
 ---
 
+## Branch `youtube-autopost`: YouTube Shorts auto-post (paused 2026-10-28 18:56)
+
+Claude writes each clip's title, description, tags and hashtags, and the worker uploads every clip of a finished video to the user's connected channel as a public Short.
+
+- **Design:** `docs/superpowers/specs/2026-10-27-youtube-autopost-design.md`.
+- **Plan:** `docs/superpowers/plans/2026-10-27-youtube-autopost.md` (14 tasks).
+- **Per-task log:** `Progress.md`.
+- **User guide:** `docs/youtube.md`.
+- The branch starts from `clipwright` at `8300730`; head is `04cb93d`; the tree is clean.
+
+**Done (each task implemented test-first, then independently reviewed and fixed until clean):**
+1. Data model.
+2. Clip lineage.
+3. Claude metadata.
+4. Google client.
+5. Accounts and tokens.
+6. Post repository.
+7. Connect, callback and account routes.
+8. `publish_youtube` job and completion trigger.
+9. Cron: dispatch, recovery and verification.
+10. Task routes and delete/restyle guards.
+11. Settings section.
+12. Task-page chips.
+13. End-to-end test with a fake Google.
+14. Docs.
+
+**Last full verification (Task 14, 2026-10-28):**
+
+| Check | Result |
+|---|---|
+| tsc | 0 errors |
+| lint | clean |
+| vitest | 837 passed, 1 skipped |
+| `next build` | OK |
+| Playwright | passed, including the YouTube step |
+| Engine pytest | 362 passed, 1 skipped |
+
+**Left to do:**
+- [ ] **Final whole-branch review.** It was launched and then stopped by the user before any reviewer finished, so nothing came of it.
+  - The package is already built: `.superpowers/sdd/2026-10-27-youtube-autopost/review-8300730..04cb93d.diff`. Rebuild it if HEAD moves.
+  - The workflow script is saved at `C:\Users\wefor\.claude\projects\C--other-projects-supoclip\5b25db19-79cd-4b3d-85fe-b98a85eb689a\workflows\scripts\final-review-youtube-autopost-wf_8b110748-30a.js`. It runs 4 Fable reviewers (spec plus triage of parked items, duplicates/concurrency, security/secrets, failure handling and UI), each followed by an Opus verifier that tries to refute its findings.
+  - Then: one fix agent with the confirmed findings, one scoped re-review, and an adjudication of the leftovers.
+- [ ] **Known doc minors to include in that fix wave** (from Task 14's review):
+  - `docs/port/DESIGN.md`: the `GET /api/tasks/[id]/youtube` row lacks `autopost_pending` and the post `id`; the PATCH row should say turning auto-post off also cancels `failed` posts.
+  - `docs/youtube.md`: the troubleshooting table lacks the "Waiting to retry" and "Waiting for the new style" chips, and merges the quota row (which shows a time) with the channel-limit row (which doesn't).
+- [ ] Finish the branch: merge into `clipwright`, or open a PR.
+- [ ] **Manual steps for the user:**
+  - The Google Cloud setup in `docs/youtube.md` (an OAuth client, then `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `web/.env.local`).
+  - The first live upload check.
+  - Requesting YouTube's API audit, because unverified projects get their uploads forced to private.
+
+**Decisions taken during the build on the user's behalf.** The full list, with what each costs if wrong, is in the local ledger `.superpowers/sdd/2026-10-27-youtube-autopost/progress.md` (git-ignored; delete it after the final review). The main ones:
+- **Private lock.** A video YouTube forced to private pauses the account. The pause survives reconnects and token failures, and only "Resume posting" releases it.
+  - Reconnect-blocked posts stay blocked while the lock holds.
+  - The verification step trips the lock only on new evidence.
+- **Channel change.** Connecting a different channel cancels the old channel's not-yet-uploaded posts, including failed ones. A post whose channel differs from the account's is cancelled, never uploaded.
+- **Upload sessions.**
+  - When an upload session fails to start, the post waits 1, 5, then 15 minutes, so the 3 upload allowances aren't spent within seconds.
+  - Quick in-job retries only happen once a session exists, and only for network errors, 5xx or 308.
+  - A 401 from the session URL fails the post. Its session is kept.
+- **"Try again"** sets the upload allowance to `max(cap, insertCalls + 1)`, so an unused allowance is never lowered.
+- **Warning codes.** `post.warning` stores codes (`private_lock` or YouTube's reason code). The UI maps them to text.
+- **Setup-doc links.** The Settings hint shows `docs/youtube.md` as text, not a link, because `NEXT_PUBLIC_SOURCE_CODE_URL` defaults to upstream SupoClip. The task page's private-lock line links to `/settings#youtube`.
+- **Accepted, documented windows** (marked with `ponytail:` notes where they apply):
+  - The unblock/trip read-then-write window; the post-claim account check is the backstop.
+  - A re-claimed run of the same job id; the insert cap bounds it.
+  - The delete routes' check-then-cancel window.
+
+**How to resume:**
+1. `git checkout youtube-autopost`.
+2. Re-run the final review (re-launch the saved script, or write a new one over the package).
+3. Run the fix wave and re-review.
+4. Run the full verification above.
+5. Finish the branch.
+
+---
+
 ## How to resume
 
 1. **Check state:**
    `git -c safe.directory=C:/other-projects/supoclip log --oneline` (the branch is `clipwright`).
    - **Why the flag:** the folder is owned by another Windows account ("Tayyab Khan"), so every git command needs `-c safe.directory=...`. The global git config was intentionally left unchanged.
    - **Repo-local identity:** user.name `nakul`, user.email `nakul.volume@gmail.com`.
-2. **Next step:** Phase 5 (above). Everything before it is committed.
+2. **Next step:** the final review of branch `youtube-autopost` (see above), then the rest of Phase 5. Everything is committed.
 3. **Install dependencies:**
    - `cd web && npx -y pnpm@10 install`
    - `cd engine && uv sync`
