@@ -54,8 +54,10 @@ export function setupWorkerTestEnv(name: string, options: { env?: Record<string,
     resetEnv();
   });
   beforeEach(async () => {
-    const { tasks, jobs, clipDrafts, processingCache, appSettings } = collections();
-    await Promise.all([tasks, jobs, clipDrafts, processingCache, appSettings].map((c) => c.deleteMany({})));
+    const { tasks, jobs, clipDrafts, processingCache, appSettings, youtubeAccounts, youtubePosts } = collections();
+    await Promise.all(
+      [tasks, jobs, clipDrafts, processingCache, appSettings, youtubeAccounts, youtubePosts].map((c) => c.deleteMany({})),
+    );
   });
   return state;
 }

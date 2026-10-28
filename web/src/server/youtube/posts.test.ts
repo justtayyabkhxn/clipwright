@@ -10,6 +10,7 @@ import { resetEnv } from "../env";
 import type { ClipDoc, TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../types";
 import {
   blockPost,
+  cancelClaimedPost,
   cancelPostForLineage,
   cancelPostsForTask,
   cancelPostsForUser,
@@ -25,6 +26,8 @@ import {
   saveMetadata,
   saveSession,
   serializePosts,
+  setPhase,
+  takeInsertCall,
   tripPrivateLock,
   unblockAfterReconnect,
 } from "./posts";
@@ -400,6 +403,40 @@ describe("transitions of a claimed post", () => {
     const stored = await storedPost("u");
     expect(stored.metadata).toEqual(posted);
     expect(stored.upload).toBeUndefined();
+  });
+
+  it("takeInsertCall counts session starts up to the post's cap, for the claim holder only", async () => {
+    const post = await claimed({ insertCalls: 1, insertCap: 3 });
+    expect(await takeInsertCall({ ...post, claimedBy: "stale-job" })).toBe(false);
+    expect(await takeInsertCall(post)).toBe(true);
+    expect(await takeInsertCall(post)).toBe(true);
+    expect(await takeInsertCall(post)).toBe(false);
+    expect((await storedPost("p1")).insertCalls).toBe(3);
+
+    // A manual retry's raised cap allows exactly one more.
+    await collections().youtubePosts.updateOne({ _id: "p1" }, { $set: { insertCap: 4 } });
+    expect(await takeInsertCall(post)).toBe(true);
+    expect(await takeInsertCall(post)).toBe(false);
+    expect((await storedPost("p1")).insertCalls).toBe(4);
+  });
+
+  it("setPhase marks what the claim holder is doing", async () => {
+    const post = await claimed();
+    expect(await setPhase({ ...post, claimedBy: "stale-job" }, "writing")).toBe(false);
+    expect((await storedPost("p1")).phase).toBeUndefined();
+    expect(await setPhase(post, "uploading")).toBe(true);
+    expect(await storedPost("p1")).toMatchObject({ state: "working", phase: "uploading" });
+  });
+
+  it("cancelClaimedPost cancels with an error for the claim holder only", async () => {
+    const post = await claimed({ phase: "writing", errorReason: "backendError" });
+    expect(await cancelClaimedPost({ ...post, claimedBy: "stale-job" }, "Not posted: a different channel was connected.")).toBe(false);
+    expect((await storedPost("p1")).state).toBe("working");
+
+    expect(await cancelClaimedPost(post, "Not posted: a different channel was connected.")).toBe(true);
+    const stored = await storedPost("p1");
+    expect(stored).toMatchObject({ state: "cancelled", error: "Not posted: a different channel was connected." });
+    for (const field of ["claimedBy", "phase", "errorReason", "waitReason", "notBefore"] as const) expect(stored[field]).toBeUndefined();
   });
 
   it("markUploaded with the requested privacy does not trip the breaker", async () => {

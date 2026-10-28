@@ -3,12 +3,10 @@ import { handle } from "@/server/http";
 import { getSessionUser } from "@/server/session";
 import { consumeOAuthState, MissingRefreshTokenError, saveConnectedAccount } from "@/server/youtube/accounts";
 import { callbackRedirectUri, exchangeCode, fetchMyChannel, SCOPES } from "@/server/youtube/google";
-import { cancelPostsForUser, unblockAfterReconnect } from "@/server/youtube/posts";
+import { cancelPostsForUser, CHANNEL_CHANGED_ERROR, unblockAfterReconnect } from "@/server/youtube/posts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
 
 function redirectTo(query: string): Response {
   return Response.redirect(`${env.BETTER_AUTH_URL.replace(/\/+$/, "")}/settings?${query}`, 302);

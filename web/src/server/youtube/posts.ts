@@ -25,6 +25,8 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 
 /** `videos.insert` session starts allowed per post before a manual retry (§4.5). */
 export const INSERT_CAP = 3;
+export const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
+export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
 const PRIVATE_LOCK = "private_lock";
 const CANCELLABLE: YoutubePostDoc["state"][] = ["queued", "blocked", "failed"];
 /** Fields that only mean something while a job holds the post. */
@@ -169,6 +171,33 @@ export async function failPost(post: YoutubePostDoc, message: string, errorReaso
     $set: { state: "failed", error: message, updatedAt: new Date(), ...(errorReason !== undefined && { errorReason }) },
     $unset: { ...RELEASE, notBefore: "", waitReason: "", ...(errorReason === undefined && { errorReason: "" }) },
   });
+  return result.matchedCount > 0;
+}
+
+/** A held post that must never be uploaded (clip gone, another channel, auto-post off): `error` says why. */
+export async function cancelClaimedPost(post: YoutubePostDoc, error: string): Promise<boolean> {
+  const result = await collections().youtubePosts.updateOne(held(post), {
+    $set: { state: "cancelled", error, updatedAt: new Date() },
+    $unset: { ...RELEASE, notBefore: "", waitReason: "", errorReason: "" },
+  });
+  return result.matchedCount > 0;
+}
+
+/** What the claim holder is doing, for the task page's chip. */
+export async function setPhase(post: YoutubePostDoc, phase: NonNullable<YoutubePostDoc["phase"]>): Promise<boolean> {
+  const result = await collections().youtubePosts.updateOne(held(post), { $set: { phase, updatedAt: new Date() } });
+  return result.matchedCount > 0;
+}
+
+/**
+ * Spend one `videos.insert` session start, counted *before* the call (§4.5). False when the post's
+ * `insertCap` is used up (or the claim was lost): the caller must not initiate.
+ */
+export async function takeInsertCall(post: YoutubePostDoc): Promise<boolean> {
+  const result = await collections().youtubePosts.updateOne(
+    { ...held(post), $expr: { $lt: ["$insertCalls", "$insertCap"] } },
+    { $inc: { insertCalls: 1 }, $set: { updatedAt: new Date() } },
+  );
   return result.matchedCount > 0;
 }
 

@@ -14,6 +14,7 @@ import { EXPORT_STOPPED_MESSAGE, exportClip } from "./handlers/export-clip";
 import { EDITOR_EXPORT_FAILED_MESSAGE, exportEditor } from "./handlers/export-editor";
 import { prepareEditor } from "./handlers/prepare-editor";
 import { errorCodeFor, processTask } from "./handlers/process-task";
+import { publishFailed, publishYoutube } from "./handlers/publish-youtube";
 import { restyleTask } from "./handlers/restyle-task";
 
 export type Handler = (ctx: JobContext) => Promise<JobOutcome>;
@@ -25,10 +26,7 @@ export const HANDLERS: Record<JobType, Handler> = {
   export_editor: exportEditor,
   combine_editor: combineEditor,
   export_clip: exportClip,
-  // ponytail: placeholder until Task 8 implements the YouTube upload handler.
-  publish_youtube: async () => {
-    throw new Error("not implemented");
-  },
+  publish_youtube: publishYoutube,
 };
 
 /** The job is already failed by the reaper; give it the message its UI shows. */
@@ -61,10 +59,8 @@ export const FAILURE_HOOKS: Record<JobType, FailureHook> = {
   export_editor: jobError(EDITOR_EXPORT_FAILED_MESSAGE),
   combine_editor: jobError(COMBINE_FAILED_MESSAGE),
   export_clip: jobError(EXPORT_STOPPED_MESSAGE),
-  // ponytail: placeholder until Task 8 implements the real failure hook.
-  publish_youtube: async () => {
-    throw new Error("not implemented");
-  },
+  // The post goes back to the queue (or fails); the job doc is not where its state lives.
+  publish_youtube: publishFailed,
 };
 
 export function registerFailureHooks() {

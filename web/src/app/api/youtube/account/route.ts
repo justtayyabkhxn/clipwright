@@ -2,7 +2,7 @@ import { ApiError, handle, json, readJsonObject } from "@/server/http";
 import { requireUser } from "@/server/session";
 import type { YoutubeAccountDoc } from "@/server/types";
 import { disconnectAccount, getAccount, serializeAccount, updateAccountPrefs } from "@/server/youtube/accounts";
-import { cancelPostsForUser } from "@/server/youtube/posts";
+import { AUTO_POST_OFF_ERROR, cancelPostsForUser } from "@/server/youtube/posts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export const PATCH = handle(async (request: Request) => {
     madeForKids: made_for_kids as boolean | undefined,
   });
   if (!account) throw new ApiError(404, "YouTube account is not connected.");
-  if (auto_post === false) await cancelPostsForUser(user.id, "Auto-post was turned off.");
+  if (auto_post === false) await cancelPostsForUser(user.id, AUTO_POST_OFF_ERROR);
   return json(serializeAccount(account));
 });
 

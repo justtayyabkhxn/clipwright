@@ -213,3 +213,21 @@ uploads every clip of a finished video to the user's channel as a public Short.
   redirect, PATCH 404s off `updateAccountPrefs`'s own null return, resume's response includes
   `worker_online`, and the test gaps (no session, `MissingRefreshTokenError`, auto-post-off on a
   blocked post, GET unconfigured, trailing slash) are covered.
+
+### 2026-10-28 14:06 — Task 8: publish_youtube handler and the trigger
+- `worker/handlers/publish-youtube.ts`: claim, then the §4.5 checks (account missing or needing a
+  reconnect → blocked `reconnect`; private lock or paused → blocked `private_lock`; another channel
+  or auto-post off → cancelled; restyle running → +2 min; lineage gone → cancelled; file missing →
+  failed), Claude metadata stored before any upload, then query a saved session → spend one insert
+  call → start → one streamed PUT, with 5 tries per job 1/2/4/8 s apart and one token refresh on a
+  401. Errors follow the §4.5 table (quota holds every queued post to midnight Pacific + 5 min,
+  channel limit 6 h, transient 1/5/15 min then failed, invalid metadata re-asks Claude once), stored
+  as our words plus the reason code. The failure hook re-queues the post in 2 min or fails it.
+- `process-task.ts` sets `autopost: "pending"` in the completion CAS for any account with auto-post
+  on, then runs `createPostsForTask` in a try/catch. `posts.ts` gained `takeInsertCall` (CAS on the
+  claim and `insertCalls < insertCap`), `setPhase` and `cancelClaimedPost`; `accounts.ts` gained the
+  fenced `markReauthRequired`. The two cancel messages now live in `posts.ts`.
+- Tests (TDD): 27 handler tests (the brief's 14 plus account states, both 401 paths, a stale
+  session, the failure hook, and no secret in any log line), 3 trigger tests, 3 repository tests;
+  RED first, then GREEN. Full `npx vitest run --maxWorkers=2`: 785 passed / 1 skipped; `tsc --noEmit`
+  and `pnpm lint` clean.

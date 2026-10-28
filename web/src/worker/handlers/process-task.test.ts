@@ -349,6 +349,66 @@ describe("process_task", () => {
     expect((await jobDoc(job._id))!.status).toBe("cancelled");
   });
 
+  describe("auto-post trigger", () => {
+    async function connectYoutube() {
+      const now = new Date();
+      await collections().youtubeAccounts.insertOne({
+        _id: "user-1",
+        channelId: "UC1",
+        channelTitle: "Mine",
+        refreshToken: "encrypted-refresh",
+        scopes: [],
+        status: "active",
+        autoPost: true,
+        privacy: "public",
+        madeForKids: false,
+        connectedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    const postsOf = (taskId: string) => collections().youtubePosts.find({ taskId }).toArray();
+    const publishJobsOf = (taskId: string) => collections().jobs.find({ taskId, type: "publish_youtube" }).toArray();
+
+    it("completion creates posts for an auto-post account", async () => {
+      await connectYoutube();
+      const { task: seeded, job } = await queuedTask();
+      await runJob(job, { runEngine: uploadEngine().runEngine, fetch: claude().fetch });
+
+      const done = (await task(seeded._id))!;
+      expect(done).toMatchObject({ status: "completed", autopost: "done" });
+      const posts = await postsOf(seeded._id);
+      expect(posts.map((post) => post.lineageId)).toEqual(done.clips.map((clip) => clip.id));
+      expect(posts.map((post) => [post.state, post.notifySubscribers])).toEqual([["queued", true], ["queued", false]]);
+      expect((await publishJobsOf(seeded._id)).map((j) => j.payload.postId)).toEqual(posts.map((post) => post._id));
+    });
+
+    it("completion creates none when not connected", async () => {
+      const { task: seeded, job } = await queuedTask();
+      await runJob(job, { runEngine: uploadEngine().runEngine, fetch: claude().fetch });
+
+      const done = (await task(seeded._id))!;
+      expect(done.status).toBe("completed");
+      expect(done.autopost).toBeUndefined();
+      expect(await postsOf(seeded._id)).toHaveLength(0);
+      expect(await publishJobsOf(seeded._id)).toHaveLength(0);
+    });
+
+    it("a resumed task posts on completion", async () => {
+      await connectYoutube();
+      // What the resume route leaves: the errored run's partial clip, the task re-queued under a new run.
+      const { task: seeded, job } = await queuedTask({ progressMessage: "Re-queued by user", clips: [clipFixture("partial", "t")] });
+      await runJob(job, { runEngine: uploadEngine().runEngine, fetch: claude().fetch });
+
+      const done = (await task(seeded._id))!;
+      expect(done).toMatchObject({ status: "completed", autopost: "done" });
+      const posts = await postsOf(seeded._id);
+      expect(posts.map((post) => post.lineageId)).toEqual(done.clips.map((clip) => clip.id));
+      expect(posts.map((post) => post.lineageId)).not.toContain("partial");
+      expect(await publishJobsOf(seeded._id)).toHaveLength(2);
+    });
+  });
+
   it("finishes a job whose task points at another run as cancelled, without touching the task", async () => {
     const seeded = await seedTask({ run: { jobId: "f".repeat(32) }, clips: [clipFixture("old", "t")] });
     const job = await claimed({ id: "e".repeat(32), type: "process_task", taskId: seeded._id, userId: seeded.userId });

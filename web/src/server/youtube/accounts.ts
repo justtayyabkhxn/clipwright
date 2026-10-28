@@ -156,19 +156,26 @@ export async function getAccessToken(account: YoutubeAccountDoc, fetchImpl: type
   if (account.accessToken && expiresAt - Date.now() > REFRESH_MARGIN_MS) {
     return decryptSetting(account.accessToken);
   }
-  const fence = { _id: account._id, refreshToken: account.refreshToken };
   try {
     const refreshed = await refreshAccessToken(decryptSetting(account.refreshToken), fetchImpl);
-    await collections().youtubeAccounts.updateOne(fence, {
+    await collections().youtubeAccounts.updateOne(tokenFence(account), {
       $set: { accessToken: encryptSetting(refreshed.accessToken), accessTokenExpiresAt: refreshed.expiresAt, updatedAt: new Date() },
     });
     return refreshed.accessToken;
   } catch (error) {
-    if (error instanceof GoogleApiError && error.reason === "invalid_grant") {
-      await collections().youtubeAccounts.updateOne(fence, { $set: { status: "reauth_required", updatedAt: new Date() } });
-    }
+    if (error instanceof GoogleApiError && error.reason === "invalid_grant") await markReauthRequired(account);
     throw error;
   }
+}
+
+const tokenFence = (account: Pick<YoutubeAccountDoc, "_id" | "refreshToken">) => ({ _id: account._id, refreshToken: account.refreshToken });
+
+/**
+ * The account needs a reconnect (§4.3): `invalid_grant`, a 401 that outlived a refresh, or a refused
+ * scope. Fenced like `getAccessToken`, so a stale caller never flags a newly reconnected account.
+ */
+export async function markReauthRequired(account: Pick<YoutubeAccountDoc, "_id" | "refreshToken">): Promise<void> {
+  await collections().youtubeAccounts.updateOne(tokenFence(account), { $set: { status: "reauth_required", updatedAt: new Date() } });
 }
 
 // --- Serializer: never includes tokens ---

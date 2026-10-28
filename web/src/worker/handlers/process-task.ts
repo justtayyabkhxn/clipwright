@@ -20,6 +20,8 @@ import {
   secondsToMmss,
 } from "../../server/tasks";
 import type { ClipLength, TaskDoc } from "../../server/types";
+import { getAccount } from "../../server/youtube/accounts";
+import { createPostsForTask } from "../../server/youtube/posts";
 import {
   cancelledOutcome,
   clipDocFrom,
@@ -269,12 +271,29 @@ export async function processTask(ctx: JobContext): Promise<JobOutcome> {
 
     if (!pushed) throw new UserError(NO_CLIPS_RENDERED);
     ctx.throwIfStopped();
+    // §4.4: the auto-post flag rides on the completion CAS itself, so a crash before the posts exist
+    // leaves the task "pending" for the cron. Any status counts: a reconnect or resume releases the posts.
+    const autopost = (await getAccount(job.userId))?.autoPost === true;
     const completed = await casStatus(
       taskId,
       ["processing"],
-      { status: "completed", progress: 100, progressMessage: "Complete!", "run.completedAt": new Date() },
+      {
+        status: "completed",
+        progress: 100,
+        progressMessage: "Complete!",
+        "run.completedAt": new Date(),
+        ...(autopost && { autopost: "pending" as const }),
+      },
       runFilter,
     );
+    if (completed && autopost) {
+      try {
+        await createPostsForTask(taskId);
+      } catch (error) {
+        // The task is complete either way; the cron re-runs a task left "pending".
+        console.error(`[worker] Task ${taskId}: could not create the YouTube posts`, error);
+      }
+    }
     return completed ? { status: "succeeded", result: { clips: pushed } } : cancelledOutcome;
   } catch (error) {
     if (ctx.stopReason) throw error;
