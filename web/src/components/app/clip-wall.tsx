@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import {
-  AudioLines, Check, ChevronLeft, ChevronRight, Clapperboard, Download, Flame, Loader2, MessageSquare,
-  Play, Scissors, Share2, Sparkles, Star, Trash2, TrendingUp,
+  AudioLines, Check, ChevronLeft, ChevronRight, Clapperboard, Download, ExternalLink, Flame, Loader2,
+  MessageSquare, Play, Scissors, Share2, Sparkles, Star, Trash2, TrendingUp,
 } from "lucide-react";
 import { ClipCover, ScoreRing } from "@/components/app/clip-cover";
 import DynamicVideoPlayer from "@/components/dynamic-video-player";
+import { SETUP_DOC_URL } from "@/components/settings/youtube-settings";
 import { TranscriptPreview } from "@/components/transcript-preview";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +17,116 @@ import { getClipUrl } from "@/lib/clip-actions";
 import { formatClipDuration } from "@/lib/generations";
 import { cn } from "@/lib/utils";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
+
+/** One `GET /api/tasks/[id]/youtube` post (design §4.8). Mirrors `SerializedPost`, client-side only. */
+export interface YoutubePost {
+  id: string;
+  clip_id: string | null;
+  state: "queued" | "working" | "uploaded" | "blocked" | "failed" | "cancelled";
+  phase: "writing" | "uploading" | null;
+  wait_reason: "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock" | null;
+  title: string | null;
+  description: string | null;
+  tags: string[];
+  hashtags: string[];
+  video_url: string | null;
+  warning: string | null;
+  error: string | null;
+  not_before: string | null;
+  insert_cap_reached: boolean;
+}
+
+/** Known `rejectionReason`/`failureReason` codes (design §4.6) with their own copy; anything else gets a generic line. */
+const KNOWN_WARNING_CODES: Record<string, string> = { duplicate: "youtube.warnings.duplicate" };
+
+function formatLocalTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+}
+
+function pillClass(tone: "muted" | "warn" | "error" | "success") {
+  return cn(
+    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+    tone === "muted" && "bg-muted text-muted-foreground",
+    tone === "warn" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    tone === "error" && "bg-red-500/10 text-red-700 dark:text-red-400",
+    tone === "success" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  );
+}
+
+/** The task page's per-clip status chip (design §4.8). Only `ClipTile` shows it. */
+function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePost; retrying: boolean; onRetry: () => void }) {
+  const t = useTranslations("task");
+
+  if (post.state === "cancelled") return null;
+
+  if (post.state === "working") {
+    return <span className={pillClass("muted")}>{post.phase === "uploading" ? t("youtube.uploading") : t("youtube.writingTitle")}</span>;
+  }
+
+  if (post.state === "queued") {
+    const text = post.wait_reason === "quota" && post.not_before ? t("youtube.waitingQuota", { time: formatLocalTime(post.not_before) })
+      : post.wait_reason === "channel_limit" ? t("youtube.waitingChannelLimit")
+      : post.wait_reason === "retry" ? t("youtube.waitingRetry")
+      : post.wait_reason === "restyle" ? t("youtube.waitingRestyle")
+      : t("youtube.waitingToPost");
+    return <span className={pillClass("muted")}>{text}</span>;
+  }
+
+  if (post.state === "blocked") {
+    const locked = post.wait_reason === "private_lock";
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        <span className={pillClass("warn")}>{locked ? t("youtube.pausedPrivateLock") : t("youtube.reconnectToPost")}</span>
+        <Link href="/settings#youtube" className="text-[10px] text-muted-foreground underline-offset-2 hover:underline">
+          {locked ? t("youtube.resumeInSettings") : t("youtube.reconnectInSettings")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (post.state === "failed") {
+    return (
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={pillClass("error")}>{t("youtube.failed")}</span>
+          <span className="text-[10px] text-muted-foreground">{post.error || t("youtube.failedGeneric")}</span>
+        </div>
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Loader2 className="size-3 animate-spin" /> : t("youtube.tryAgain")}
+        </Button>
+      </div>
+    );
+  }
+
+  // state === "uploaded"
+  if (post.warning === "private_lock") {
+    return (
+      <div className="space-y-0.5">
+        <span className={pillClass("warn")}>{t("youtube.privateOnYoutube")}</span>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          {t("youtube.privateOnYoutubeLine")}{" "}
+          <a href={SETUP_DOC_URL} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">{t("youtube.auditLink")}</a>
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-0.5">
+      {post.video_url ? (
+        <a href={post.video_url} target="_blank" rel="noreferrer" className={cn(pillClass("success"), "hover:underline")}>
+          {t("youtube.posted")}<ExternalLink className="size-2.5" />
+        </a>
+      ) : (
+        <span className={pillClass("success")}>{t("youtube.posted")}</span>
+      )}
+      {post.warning && (
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          {t(KNOWN_WARNING_CODES[post.warning] ?? "youtube.warningUnknown", { code: post.warning })}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export interface WallClip {
   id: string;
@@ -40,7 +151,7 @@ function clipTitle(clip: WallClip, fallback: string) {
   return clip.hook_title || fallback;
 }
 
-export function ClipTile({ clip, taskId, busy, best, editable, onOpen, onDownload, onDelete }: {
+export function ClipTile({ clip, taskId, busy, best, editable, onOpen, onDownload, onDelete, post, retryingPostId, onRetryPost }: {
   clip: WallClip;
   taskId: string;
   busy: boolean;
@@ -49,6 +160,10 @@ export function ClipTile({ clip, taskId, busy, best, editable, onOpen, onDownloa
   onOpen: () => void;
   onDownload: () => void;
   onDelete?: () => void;
+  /** The clip's YouTube auto-post status (design §4.8), or null if none was ever created. */
+  post?: YoutubePost | null;
+  retryingPostId?: string | null;
+  onRetryPost?: (post: YoutubePost) => void;
 }) {
   const t = useTranslations("task");
   const title = clipTitle(clip, t("clipNumber", { order: clip.clip_order }));
@@ -84,6 +199,11 @@ export function ClipTile({ clip, taskId, busy, best, editable, onOpen, onDownloa
       <div className="mt-2.5 px-0.5">
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug">{title}</h3>
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{clip.start_time} – {clip.end_time}</p>
+        {post && (
+          <div className="mt-1.5">
+            <YoutubeStatusChip post={post} retrying={retryingPostId === post.id} onRetry={() => onRetryPost?.(post)} />
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-1">
           <Button size="sm" variant="outline" className="h-7 flex-1 px-2 text-xs" onClick={onDownload} disabled={busy} aria-label={t("downloadNamed", { title })}>
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}<span className="hidden @min-[190px]:inline">{t("download")}</span>
@@ -111,7 +231,7 @@ const BREAKDOWN = [
   { key: "shareability_score", labelKey: "shareability", icon: Share2 },
 ] as const;
 
-export function ClipFocus({ clip, taskId, index, total, busy, editable, onNavigate, onClose, onDownload, onDelete, hookTypeLabel }: {
+export function ClipFocus({ clip, taskId, index, total, busy, editable, onNavigate, onClose, onDownload, onDelete, hookTypeLabel, post }: {
   clip: WallClip | null;
   taskId: string;
   index: number;
@@ -123,6 +243,8 @@ export function ClipFocus({ clip, taskId, index, total, busy, editable, onNaviga
   onDownload: () => void;
   onDelete?: () => void;
   hookTypeLabel: (hookType: string | null) => string;
+  /** The clip's YouTube auto-post status (design §4.8); its metadata is shown read-only once Claude wrote it. */
+  post?: YoutubePost | null;
 }) {
   const t = useTranslations("task");
   useEffect(() => {
@@ -190,6 +312,24 @@ export function ClipFocus({ clip, taskId, index, total, busy, editable, onNaviga
                 )}
 
                 {clip.text && <TranscriptPreview text={clip.text} clipTitle={clipTitle(clip, t("clipNumber", { order: clip.clip_order }))} />}
+
+                {post?.title && (
+                  <section className="space-y-2 rounded-xl border p-4">
+                    <p className="text-sm font-semibold">{t("youtube.metadataTitle")}</p>
+                    <p className="text-sm font-medium">{post.title}</p>
+                    {post.description && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{post.description}</p>}
+                    {post.hashtags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {post.hashtags.map((hashtag) => (
+                          <span key={hashtag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">#{hashtag}</span>
+                        ))}
+                      </div>
+                    )}
+                    {post.tags.length > 0 && (
+                      <p className="text-xs text-muted-foreground">{t("youtube.tagsLabel")}: {post.tags.join(", ")}</p>
+                    )}
+                  </section>
+                )}
               </div>
               <div className="mt-auto flex flex-wrap items-center gap-2 border-t bg-muted/30 px-5 py-3">
                 <Button size="sm" onClick={onDownload} disabled={busy}>

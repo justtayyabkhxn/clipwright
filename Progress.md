@@ -307,3 +307,30 @@ uploads every clip of a finished video to the user's channel as a public Short.
   fallback never echoing the raw value, Disconnect's confirm). RED first (missing module), then
   GREEN. Full `npx vitest run --maxWorkers=2`: 828 passed / 1 skipped, output pristine; `tsc --noEmit`
   and `pnpm lint` clean.
+
+### 2026-10-28 16:41 — Task 12: Task page UI
+- `ClipTile` now shows a per-clip status chip (design §4.8): "Waiting to post", "Writing title…",
+  "Uploading…", a "Posted" link (`target="_blank"`, to `video_url`), "Private on YouTube" (+ "YouTube
+  made this video private" and a link to the setup doc, reusing Task 11's exported `SETUP_DOC_URL`),
+  "Waiting for YouTube's daily limit (until <local time>)" for `wait_reason: "quota"`, and "Failed" +
+  the post's own `error` text + a "Try again" button. Also mapped `channel_limit`/`retry`/`restyle`
+  (queued) and `reconnect`/`private_lock` (blocked, linking to `/settings#youtube`) wait reasons, and
+  an uploaded post's non-`private_lock` `warning` code (a known-code map plus a generic fallback
+  naming the code). `ClipFocus` shows the written title, description, hashtags and tags read-only.
+  "Try again" calls `POST …/youtube/[postId]/retry` directly, or — when `insert_cap_reached` —
+  confirms first with "If this clip is already on your channel, don't retry; it would post twice."
+  The clip-delete and task-delete confirm dialogs now say the delete never removes videos already on
+  YouTube (§4.7).
+- The task page polls `GET /api/tasks/[id]/youtube` once on mount, again when the task completes, and
+  every 4 s on its own `setInterval` while any post is `queued` or `working`, stopping once none are
+  (and on unmount) — independent of the task's own poll, which stops at completion.
+- Tests (TDD): 4 new cases in `src/app/tasks/[id]/page.test.tsx` — the 7-state chip matrix, the
+  insert-cap-reached retry confirm, the focus view's metadata, and the 4 s poll starting/stopping
+  (via `vi.useFakeTimers()` + `advanceTimersByTimeAsync`, following `use-task-progress.test.tsx`'s
+  pattern). RED first (no `post` prop / no chip rendered), then GREEN.
+- Full `npx vitest run --maxWorkers=2`: 832 passed / 1 skipped, output pristine (one pre-existing
+  expected stderr log from an unrelated restyle test); `tsc --noEmit` and `pnpm lint` clean.
+- Concerns: wait-reason/warning-code copy beyond the brief's literal examples (`channel_limit`,
+  `retry`, `restyle`, the generic warning-code line) is my own wording, not spec text. The "Private on
+  YouTube" chip links to the setup doc itself (no `#audit` anchor) since `docs/youtube.md` doesn't
+  exist in the repo yet; once it's written, point the link at its audit section.

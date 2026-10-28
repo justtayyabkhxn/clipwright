@@ -39,7 +39,8 @@ type YoutubeAccount = {
 const ERROR_CODES = ["denied", "expired", "missing_scope", "no_channel", "exchange_failed", "not_configured"] as const;
 // Our fork's own clone of this repo may use a different default branch; this follows the only
 // existing convention for linking into the repo (NEXT_PUBLIC_SOURCE_CODE_URL) rather than inventing one.
-const SETUP_DOC_URL = `${SOURCE_CODE_URL.replace(/\/+$/, "")}/blob/main/docs/youtube.md`;
+// Exported so the task page's "Private on YouTube" chip (design §4.6) can link to the same doc.
+export const SETUP_DOC_URL = `${SOURCE_CODE_URL.replace(/\/+$/, "")}/blob/main/docs/youtube.md`;
 
 /** Settings → YouTube auto-post (design §4.8), shown to every user. */
 export function YoutubeSettings() {
