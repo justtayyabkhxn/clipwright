@@ -15,5 +15,7 @@ export const GET = handle(async (request: Request, { params }: Params) => {
   const user = await requireUser(request);
   const task = await getTaskForUser(id, user.id);
   const posts = await collections().youtubePosts.find({ taskId: id }).sort({ createdAt: 1 }).toArray();
-  return json(serializePosts(task, posts));
+  // createPostsForTask hasn't inserted yet while this is true — the page keeps polling through it
+  // instead of reading an empty `posts` array as "nothing to post" (finding: task-12 review round 2).
+  return json({ ...serializePosts(task, posts), autopost_pending: task.autopost === "pending" });
 });

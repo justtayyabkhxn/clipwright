@@ -338,6 +338,10 @@ uploads every clip of a finished video to the user's channel as a public Short.
   repo) for inline `docs/youtube.md` text in Settings and a `/settings#youtube` link on the task
   page's private-lock chip; added tests for the `blocked` chip (reconnect/private_lock) and the
   generic unknown-warning-code line.
+- 2026-10-28 17:56 review fix round 2: `GET /api/tasks/[id]/youtube` now also returns
+  `autopost_pending` (from `task.autopost === "pending"`); the task page's 4 s poll runs while that
+  flag is true or any post is queued/working, so a fetch that lands before `createPostsForTask`'s
+  insert (seeing an empty `posts` array) keeps polling instead of going silent until a reload.
 
 ### 2026-10-28 17:30 — Task 13: End-to-end with a fake Google
 - New `web/e2e/fakes/google.ts` behind `GOOGLE_BASE_URL_OVERRIDE`: consent screen (instant 302 back

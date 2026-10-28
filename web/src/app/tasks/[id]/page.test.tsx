@@ -38,6 +38,7 @@ function post(overrides: Partial<Record<string, unknown>> = {}) {
 let task: Record<string, unknown>;
 let clips: ReturnType<typeof clip>[];
 let youtubePosts: ReturnType<typeof post>[];
+let autopostPending: boolean;
 let youtubeRetryCalls: string[];
 let settingsBody: Record<string, unknown> | null;
 let taskGetFails: boolean;
@@ -54,6 +55,7 @@ beforeEach(() => {
   };
   clips = [clip("old", 1)];
   youtubePosts = [];
+  autopostPending = false;
   youtubeRetryCalls = [];
   settingsBody = null;
   taskGetFails = false;
@@ -70,7 +72,7 @@ beforeEach(() => {
     }
     if (url === "/api/tasks/t1/clips") return Response.json({ task_id: "t1", clips, total_clips: clips.length });
     if (url === "/api/tasks/t1") return taskGetFails ? Response.json({ detail: "down" }, { status: 500 }) : Response.json(task);
-    if (url === "/api/tasks/t1/youtube") return Response.json({ posts: youtubePosts });
+    if (url === "/api/tasks/t1/youtube") return Response.json({ posts: youtubePosts, autopost_pending: autopostPending });
     const retryMatch = /^\/api\/tasks\/t1\/youtube\/([^/]+)\/retry$/.exec(url);
     if (retryMatch && init?.method === "POST") {
       const id = retryMatch[1];
@@ -268,6 +270,36 @@ it("polls posts every 4 s while any is queued or working, and stops after", asyn
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
     expect(screen.getByText("Uploading…")).toBeInTheDocument();
 
+    youtubePosts = [post({ id: "p1", clip_id: "c1", state: "uploaded", video_url: "https://youtu.be/xyz" })];
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    expect(screen.getByRole("link", { name: "Posted" })).toBeInTheDocument();
+
+    const postCalls = () => fetchMock.mock.calls.filter((args) => args[0] === "/api/tasks/t1/youtube").length;
+    const callsBefore = postCalls();
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(postCalls()).toBe(callsBefore);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("keeps polling while autopost_pending is true even with an empty posts array, and stops once settled", async () => {
+  vi.useFakeTimers();
+  try {
+    clips = [clip("c1", 1)];
+    // createPostsForTask hasn't inserted yet — the first response is {posts: [], autopost_pending: true}.
+    youtubePosts = [];
+    autopostPending = true;
+    render(<TaskPage />, { wrapper: TooltipProvider });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.queryByText("Waiting to post")).not.toBeInTheDocument();
+
+    // The next poll is the one that lands after the insert: the chip now shows, with no reload.
+    youtubePosts = [post({ id: "p1", clip_id: "c1", state: "queued" })];
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    expect(screen.getByText("Waiting to post")).toBeInTheDocument();
+
+    autopostPending = false;
     youtubePosts = [post({ id: "p1", clip_id: "c1", state: "uploaded", video_url: "https://youtu.be/xyz" })];
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
     expect(screen.getByRole("link", { name: "Posted" })).toBeInTheDocument();

@@ -177,6 +177,24 @@ describe("GET /api/tasks/[id]/youtube", () => {
     const missing = await call(youtubeRoute.GET, "/api/tasks/nope/youtube", { params: { id: "nope" } });
     expect(missing.status).toBe(404);
   });
+
+  it("reports autopost_pending from the task's own flag, not from the posts found", async () => {
+    const task = await completedTask(["a"]);
+
+    const before = await call(youtubeRoute.GET, `/api/tasks/${task._id}/youtube`, { params: { id: task._id } });
+    expect(await before.json()).toMatchObject({ posts: [], autopost_pending: false });
+
+    // createPostsForTask hasn't inserted yet: the flag is what tells the page to keep polling
+    // through an empty `posts` array instead of reading it as "nothing to post" (review round 2).
+    await collections().tasks.updateOne({ _id: task._id }, { $set: { autopost: "pending" } });
+    const pending = await call(youtubeRoute.GET, `/api/tasks/${task._id}/youtube`, { params: { id: task._id } });
+    expect(await pending.json()).toMatchObject({ posts: [], autopost_pending: true });
+
+    await collections().tasks.updateOne({ _id: task._id }, { $set: { autopost: "done" } });
+    await seedPost(task._id, { _id: "p1", lineageId: "a", state: "uploaded" });
+    const done = await call(youtubeRoute.GET, `/api/tasks/${task._id}/youtube`, { params: { id: task._id } });
+    expect((await done.json()).autopost_pending).toBe(false);
+  });
 });
 
 describe("POST /api/tasks/[id]/youtube/[postId]/retry", () => {

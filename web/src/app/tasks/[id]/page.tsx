@@ -163,6 +163,10 @@ export default function TaskPage() {
   const [sortBy, setSortBy] = useState<"score" | "timeline">("score");
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const [youtubePosts, setYoutubePosts] = useState<YoutubePost[]>([]);
+  // True while the task's own `autopost: "pending"` flag is still set (createPostsForTask hasn't
+  // inserted its posts yet) — kept separate from `youtubePosts` so an empty posts array during that
+  // window doesn't read as "nothing to post" (review round 2 finding).
+  const [autopostPending, setAutopostPending] = useState(false);
   const [retryingPostId, setRetryingPostId] = useState<string | null>(null);
   const [capConfirmPost, setCapConfirmPost] = useState<YoutubePost | null>(null);
 
@@ -308,6 +312,7 @@ export default function TaskPage() {
       if (!response.ok) return;
       const data = await response.json();
       setYoutubePosts(data.posts || []);
+      setAutopostPending(Boolean(data.autopost_pending));
     } catch (err) {
       console.error("Error fetching YouTube posts:", err);
     }
@@ -317,12 +322,15 @@ export default function TaskPage() {
   // Posts are created once the task completes (createPostsForTask), which can land between polls.
   useEffect(() => { if (task?.status === "completed") void fetchYoutubePosts(); }, [task?.status, fetchYoutubePosts]);
 
-  const youtubePostsActive = youtubePosts.some((post) => post.state === "queued" || post.state === "working");
+  // Poll while auto-post is still creating posts (autopostPending) or any created post is still
+  // queued/working — never on a timer just because the task completed (that would also fire with
+  // auto-post off, since `autopostPending` is only ever true when the task set it).
+  const youtubePostsPending = autopostPending || youtubePosts.some((post) => post.state === "queued" || post.state === "working");
   useEffect(() => {
-    if (!youtubePostsActive) return;
+    if (!youtubePostsPending) return;
     const timer = window.setInterval(() => { void fetchYoutubePosts(); }, 4000);
     return () => window.clearInterval(timer);
-  }, [youtubePostsActive, fetchYoutubePosts]);
+  }, [youtubePostsPending, fetchYoutubePosts]);
 
   const retryYoutubePost = async (post: YoutubePost) => {
     if (!params.id) return;
