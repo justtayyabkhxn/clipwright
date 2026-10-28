@@ -14,6 +14,6 @@ export const POST = handle(async (request: Request, { params }: Params) => {
   const { id, postId } = await params;
   const user = await requireUser(request);
   const task = await getTaskForUser(id, user.id);
-  const { post } = await retryPost(postId, user.id);
+  const { post } = await retryPost(postId, user.id, task._id);
   return json({ ...serializePosts(task, [post]).posts[0], worker_online: await workerHealthy() });
 });

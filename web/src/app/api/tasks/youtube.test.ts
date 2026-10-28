@@ -208,6 +208,20 @@ describe("POST /api/tasks/[id]/youtube/[postId]/retry", () => {
     });
     expect(theirs.status).toBe(403);
   });
+
+  it("404s a post that belongs to another task of the same user", async () => {
+    const task = await completedTask(["a"]);
+    const other = await completedTask(["b"]);
+    await seedPost(other._id, { _id: "p9", lineageId: "b", state: "failed" });
+
+    const response = await call(retryRoute.POST, `/api/tasks/${task._id}/youtube/p9/retry`, {
+      method: "POST",
+      params: { id: task._id, postId: "p9" },
+    });
+
+    expect(response.status).toBe(404);
+    expect(await jobsFor("p9")).toHaveLength(0);
+  });
 });
 
 describe("DELETE /api/tasks/[id]/clips/[clipId]", () => {

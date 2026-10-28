@@ -283,3 +283,4 @@ uploads every clip of a finished video to the user's channel as a public Short.
   clip-delete cancel + 409, task-delete cancel/delete + 409, restyle 409); RED first (missing route
   modules), then GREEN. Full `npx vitest run --maxWorkers=2`: 815 passed / 1 skipped, output
   pristine; `tsc --noEmit` and `pnpm lint` clean.
+- 2026-10-28 15:55 controller follow-up: retry is scoped to the URL's task (`retryPost` takes an optional `taskId`; a post of another task gets 404, test added, RED then GREEN); `ponytail:` notes on the delete routes' check-then-cancel window. `src/app/api/tasks` + `src/server/youtube` 124/124; tsc and lint clean.

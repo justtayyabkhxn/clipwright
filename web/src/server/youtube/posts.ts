@@ -373,10 +373,15 @@ export async function deferAllQueuedForQuota(until: Date): Promise<number> {
  * `videos.insert`; one that did not keeps its unused allowance (the cap is never lowered). A retry
  * never resets the duplicate guard, and a saved session is still queried before any new insert.
  */
-export async function retryPost(postId: string, userId: string): Promise<{ post: YoutubePostDoc; job: JobDoc }> {
+export async function retryPost(
+  postId: string,
+  userId: string,
+  taskId?: string,
+): Promise<{ post: YoutubePostDoc; job: JobDoc }> {
   const { youtubePosts } = collections();
+  const owned = { _id: postId, userId, ...(taskId && { taskId }) };
   const post = await youtubePosts.findOneAndUpdate(
-    { _id: postId, userId, state: { $in: ["failed", "blocked"] } },
+    { ...owned, state: { $in: ["failed", "blocked"] } },
     [
       {
         $set: {
@@ -391,7 +396,7 @@ export async function retryPost(postId: string, userId: string): Promise<{ post:
     { returnDocument: "after" },
   );
   if (!post) {
-    const existing = await youtubePosts.findOne({ _id: postId, userId }, { projection: { state: 1 } });
+    const existing = await youtubePosts.findOne(owned, { projection: { state: 1 } });
     if (!existing) throw new ApiError(404, "Post not found");
     if (existing.state === "uploaded") throw new ApiError(409, "This clip is already on YouTube.");
     throw new ApiError(409, "Only a failed or blocked post can be retried.");

@@ -41,6 +41,7 @@ export const DELETE = handle(async (request: Request, { params }: Params) => {
   const user = await requireUser(request);
   const task = await getTaskForUser(id, user.id);
   if (ACTIVE_STATUSES.includes(task.status)) throw new ApiError(400, EDIT_LOCKED_MESSAGE);
+  // ponytail: same check-then-cancel window as clip delete (see clips/[clipId]/route.ts).
   if ((await cancelPostsForTask(id)).working) throw new ApiError(409, POST_UPLOADING_MESSAGE);
   await deleteTaskCompletely(id);
   await collections().youtubePosts.deleteMany({ taskId: id });

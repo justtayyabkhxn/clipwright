@@ -19,6 +19,9 @@ export const DELETE = handle(async (request: Request, { params }: Params) => {
   const task = await getTaskForUser(id, user.id);
   if (ACTIVE_STATUSES.includes(task.status)) throw new ApiError(400, EDIT_LOCKED_MESSAGE);
   const clip = task.clips.find((candidate) => candidate.id === clipId);
+  // ponytail: the status check above and removeClip's own edit-lock CAS are separate writes, so a
+  // restyle starting in between can cancel the post of a delete that then 400s. Needs a
+  // transaction to close; the user just presses "Try again" on the post.
   if (clip && (await cancelPostForLineage(id, lineageOf(clip))) === "working") {
     throw new ApiError(409, POST_UPLOADING_MESSAGE);
   }
