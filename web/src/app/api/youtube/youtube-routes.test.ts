@@ -4,7 +4,7 @@
 
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { http, HttpResponse } from "msw";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { server as mockServer } from "@/test/setup";
 import { getAuth } from "@/server/auth";
 import { closeDb, collections, ensureIndexes } from "@/server/db";
@@ -222,6 +222,36 @@ describe("GET /api/youtube/callback", () => {
     expect(location).not.toContain("denied+the+request");
   });
 
+  it("logs the sanitized error when the token exchange fails", async () => {
+    const state = await startConnect("alice");
+    mockServer.use(
+      http.post("https://oauth2.googleapis.com/token", () => HttpResponse.json({ error: "invalid_client" }, { status: 400 })),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const response = await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`);
+
+    expect(locationQuery(response).get("youtube_error")).toBe("exchange_failed");
+    expect(warn).toHaveBeenCalledWith(
+      "[youtube] OAuth callback: code exchange failed:",
+      expect.stringContaining("invalid_client"),
+    );
+    warn.mockRestore();
+  });
+
+  it("logs the sanitized error when the channel lookup fails", async () => {
+    const state = await startConnect("alice");
+    mockTokenExchange();
+    mockServer.use(http.get("https://www.googleapis.com/youtube/v3/channels", () => new HttpResponse(null, { status: 500 })));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const response = await call(callbackRoute.GET, `/api/youtube/callback?code=abc&state=${state}`);
+
+    expect(locationQuery(response).get("youtube_error")).toBe("exchange_failed");
+    expect(warn).toHaveBeenCalledWith("[youtube] OAuth callback: channel lookup failed:", expect.stringContaining("500"));
+    warn.mockRestore();
+  });
+
   it("on a channel change, cancels the user's queued and blocked posts with the channel-change error", async () => {
     // First connection: channel A.
     let state = await startConnect("alice");
@@ -351,9 +381,17 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
     expect(response.status).toBe(400);
   });
 
-  it("DELETE disconnects and cancels queued and blocked posts", async () => {
+  it("DELETE disconnects and cancels queued and blocked posts, before revoking (design §4.3 order)", async () => {
     await connectAlice();
-    mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => new HttpResponse(null, { status: 200 })));
+    // If the posts were still queued/blocked when the revoke call fires, the route cancelled them
+    // after the (possibly slow or hung) revoke instead of before it — the order §4.3 forbids.
+    let postStateWhenRevokeCalled: string | undefined;
+    mockServer.use(
+      http.post("https://oauth2.googleapis.com/revoke", async () => {
+        postStateWhenRevokeCalled = (await collections().youtubePosts.findOne({ _id: "post-q" }))?.state;
+        return new HttpResponse(null, { status: 200 });
+      }),
+    );
     const base: Omit<YoutubePostDoc, "_id" | "lineageId" | "state"> = {
       userId: users.alice.id,
       taskId: "task-1",
@@ -378,6 +416,7 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
     expect(await collections().youtubeAccounts.findOne({ _id: users.alice.id })).toBeNull();
     expect((await collections().youtubePosts.findOne({ _id: "post-q" }))?.state).toBe("cancelled");
     expect((await collections().youtubePosts.findOne({ _id: "post-b" }))?.state).toBe("cancelled");
+    expect(postStateWhenRevokeCalled).toBe("cancelled");
   });
 });
 

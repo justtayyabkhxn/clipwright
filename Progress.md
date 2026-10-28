@@ -203,3 +203,6 @@ uploads every clip of a finished video to the user's channel as a public Short.
   and resume requeuing a `private_lock` post and enqueueing its job (plus 404 with no account).
 - Full `npx vitest run --maxWorkers=2`: 741 passed / 1 skipped, output pristine; `tsc --noEmit` 0
   errors; `pnpm lint` clean.
+- 2026-10-28 13:16 review fix round 1: DELETE now cancels posts before the best-effort revoke
+  (`disconnectAccount` returns a revoke thunk instead of awaiting it internally), and the callback
+  logs the sanitized Google error on exchange/channel-lookup failure instead of swallowing it.

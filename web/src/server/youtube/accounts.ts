@@ -107,15 +107,23 @@ export async function updateAccountPrefs(
   return collections().youtubeAccounts.findOneAndUpdate({ _id: userId }, { $set: set }, { returnDocument: "after" });
 }
 
-/** Deletes the account doc first, then makes a best-effort, logged-only revoke (never thrown). */
-export async function disconnectAccount(userId: string): Promise<void> {
+/**
+ * Deletes the account doc and returns a thunk that best-effort revokes its token (logged-only,
+ * never thrown), or `null` when there was no account. The revoke is a separate step, not awaited
+ * here, so a caller can cancel the user's queued/blocked posts *before* the network call: a hung or
+ * slow revoke (60 s `CALL_TIMEOUT_MS`) must never delay that cancel (design §4.3: delete → cancel →
+ * best-effort revoke).
+ */
+export async function disconnectAccount(userId: string): Promise<(() => Promise<void>) | null> {
   const account = await collections().youtubeAccounts.findOneAndDelete({ _id: userId });
-  if (!account) return;
-  try {
-    await revokeToken(decryptSetting(account.refreshToken));
-  } catch (error) {
-    console.warn(`[youtube] Could not revoke token for user ${userId}:`, (error as Error).message);
-  }
+  if (!account) return null;
+  return async () => {
+    try {
+      await revokeToken(decryptSetting(account.refreshToken));
+    } catch (error) {
+      console.warn(`[youtube] Could not revoke token for user ${userId}:`, (error as Error).message);
+    }
+  };
 }
 
 /**

@@ -176,38 +176,46 @@ describe("account repository", () => {
     expect(await getAccount("u1")).toMatchObject({ privacy: "unlisted", autoPost: false, madeForKids: true });
   });
 
-  it("disconnectAccount deletes the doc first, then best-effort revokes with the decrypted token", async () => {
+  it("disconnectAccount deletes the doc and returns a thunk that revokes with the decrypted token, without calling it", async () => {
     await saveConnectedAccount("u1", TOKENS, CHANNEL);
     let revokedToken: string | null = null;
-    let docGoneWhenRevokeCalled = false;
     mockServer.use(
       http.post("https://oauth2.googleapis.com/revoke", async ({ request }) => {
         revokedToken = new URLSearchParams(await request.text()).get("token");
-        docGoneWhenRevokeCalled = (await getAccount("u1")) === null;
         return new HttpResponse(null, { status: 200 });
       }),
     );
 
-    await disconnectAccount("u1");
+    const revoke = await disconnectAccount("u1");
 
+    // The doc is gone, and the network call has not happened yet: the caller decides when (design
+    // §4.3: delete -> cancel posts -> revoke), so disconnectAccount itself must never block on it.
     expect(await getAccount("u1")).toBeNull();
+    expect(revokedToken).toBeNull();
+
+    await revoke!();
     expect(revokedToken).toBe("rt-1");
-    expect(docGoneWhenRevokeCalled).toBe(true);
   });
 
-  it("disconnectAccount resolves without throwing when the revoke returns 500", async () => {
+  it("disconnectAccount returns null when there is no account to disconnect", async () => {
+    expect(await disconnectAccount("ghost")).toBeNull();
+  });
+
+  it("disconnectAccount's revoke thunk resolves without throwing when the revoke returns 500", async () => {
     await saveConnectedAccount("u1", TOKENS, CHANNEL);
     mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => new HttpResponse(null, { status: 500 })));
 
-    await expect(disconnectAccount("u1")).resolves.toBeUndefined();
+    const revoke = await disconnectAccount("u1");
+    await expect(revoke!()).resolves.toBeUndefined();
     expect(await getAccount("u1")).toBeNull();
   });
 
-  it("disconnectAccount resolves without throwing when the revoke request itself fails", async () => {
+  it("disconnectAccount's revoke thunk resolves without throwing when the revoke request itself fails", async () => {
     await saveConnectedAccount("u1", TOKENS, CHANNEL);
     mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => HttpResponse.error()));
 
-    await expect(disconnectAccount("u1")).resolves.toBeUndefined();
+    const revoke = await disconnectAccount("u1");
+    await expect(revoke!()).resolves.toBeUndefined();
     expect(await getAccount("u1")).toBeNull();
   });
 

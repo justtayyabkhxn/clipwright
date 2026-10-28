@@ -576,8 +576,8 @@ export async function deleteTaskCompletely(taskId: string): Promise<void> {
 
 /**
  * Account deletion (Better Auth `beforeDelete`): every task, job, draft and font of the user, plus
- * their YouTube account (deleted, then best-effort revoked, as `disconnectAccount` does), posts and
- * OAuth states (design §4.3).
+ * their YouTube account doc, posts and OAuth states, with the token best-effort revoked last
+ * (design §4.3; same delete-before-revoke order as `disconnectAccount`'s callers).
  */
 export async function deleteAllUserData(userId: string): Promise<void> {
   const { tasks, clipDrafts, jobs, youtubePosts, oauthStates } = collections();
@@ -588,9 +588,10 @@ export async function deleteAllUserData(userId: string): Promise<void> {
   await jobs.deleteMany({ userId, status: { $ne: "running" } });
   await clipDrafts.deleteMany({ userId });
   await getStorage().deletePrefix(storageKeys.userFontsDir(userId));
-  await disconnectAccount(userId);
+  const revoke = await disconnectAccount(userId);
   await youtubePosts.deleteMany({ userId });
   await oauthStates.deleteMany({ userId });
+  if (revoke) await revoke();
 }
 
 export const WORKER_STOPPED_TASK_MESSAGE = "The worker stopped while processing this video. Resume to try again.";

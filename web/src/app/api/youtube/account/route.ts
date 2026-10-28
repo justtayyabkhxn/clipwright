@@ -35,7 +35,8 @@ export const PATCH = handle(async (request: Request) => {
 /** Disconnects the channel: the account doc goes first, then queued/blocked posts are cancelled, then a best-effort revoke (design §4.3). */
 export const DELETE = handle(async (request: Request) => {
   const user = await requireUser(request);
-  await disconnectAccount(user.id);
+  const revoke = await disconnectAccount(user.id);
   await cancelPostsForUser(user.id, "YouTube account was disconnected.");
+  if (revoke) await revoke();
   return json({ message: "YouTube account disconnected" });
 });

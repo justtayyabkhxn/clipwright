@@ -34,7 +34,8 @@ export const GET = handle(async (request: Request) => {
   let tokens;
   try {
     tokens = await exchangeCode(code, consumed.codeVerifier, callbackRedirectUri());
-  } catch {
+  } catch (error) {
+    console.warn("[youtube] OAuth callback: code exchange failed:", (error as Error).message);
     return redirectTo("youtube_error=exchange_failed");
   }
 
@@ -43,7 +44,8 @@ export const GET = handle(async (request: Request) => {
   let channel;
   try {
     channel = await fetchMyChannel(tokens.accessToken);
-  } catch {
+  } catch (error) {
+    console.warn("[youtube] OAuth callback: channel lookup failed:", (error as Error).message);
     return redirectTo("youtube_error=exchange_failed");
   }
   if (!channel) return redirectTo("youtube_error=no_channel");
