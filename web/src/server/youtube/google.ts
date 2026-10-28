@@ -15,6 +15,11 @@ export const SCOPES = [
 // Every call but the upload PUT is small; a hung connection must not hold the worker's only slot.
 const CALL_TIMEOUT_MS = 60_000;
 
+/** The redirect URI registered with Google (design §4.3): one literal, shared by `/connect` and `/callback`. */
+export function callbackRedirectUri(): string {
+  return `${env.BETTER_AUTH_URL}/api/youtube/callback`;
+}
+
 /** Google's endpoints; GOOGLE_BASE_URL_OVERRIDE (tests, e2e) replaces every origin. */
 export function googleUrls() {
   const base = env.GOOGLE_BASE_URL_OVERRIDE?.replace(/\/+$/, "");

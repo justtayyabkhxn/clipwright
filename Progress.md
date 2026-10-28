@@ -171,3 +171,35 @@ uploads every clip of a finished video to the user's channel as a public Short.
   docstring matches `max(insertCap, insertCalls + 1)`; tests for block/fail/session/metadata and
   both markUploaded no-trip cases. posts tests 26/26 (6 RED before the fix); full suite 724 passed /
   1 skipped; tsc and lint clean.
+
+### 2026-10-28 13:05 — Task 7: Connection routes
+- Added the four route handlers: `POST /api/youtube/connect` (session + config required, returns
+  `authorize_url` with both scopes, `access_type=offline`, `prompt=consent`,
+  `include_granted_scopes=true`, PKCE `code_challenge`/`S256`, and the state from
+  `createOAuthState`; 409 `{code: "not_configured"}` when the OAuth env vars are unset);
+  `GET /api/youtube/callback` (`getSessionUser`, not `requireUser`: consumes the state, exchanges
+  the code, checks both scopes, looks up the channel, upserts the account, then either
+  `cancelPostsForUser` on a channel change or `unblockAfterReconnect`, and redirects to
+  `/settings?youtube=connected` or `?youtube_error=<denied|expired|missing_scope|no_channel|
+  exchange_failed>` — Google's own error text is never echoed); `GET/PATCH/DELETE
+  /api/youtube/account` (GET hides tokens; PATCH validates `auto_post`/`privacy`/`made_for_kids`
+  and cancels queued/blocked posts when auto-post turns off; DELETE disconnects then cancels);
+  `POST /api/youtube/account/resume`. Added `google.ts#callbackRedirectUri()` so the literal
+  redirect URI has one source for both routes.
+- Judgment calls: a Google `?error=` of any value maps to `youtube_error=denied` (the fixed code
+  set has no generic/unknown bucket); a channel change cancels *all* the user's not-yet-uploaded
+  posts via `cancelPostsForUser` (not filtered to the old `channelId`, per the task brief's ledger
+  ruling, since that function cancels by `userId` only and a failed post must not be retried onto
+  the new channel); PATCH/DELETE 404 when no account is connected only matters for PATCH (DELETE's
+  `disconnectAccount` and `cancelPostsForUser` are both no-ops on an absent account).
+- Tests (TDD): `youtube-routes.test.ts` written first (real Better Auth sessions, msw for Google),
+  RED confirmed (`Cannot find module './connect/route'`), then GREEN on the first implementation
+  pass, 17/17. Covers the exact authorize-URL params, the 409 config error, a successful connect,
+  missing-scope and no-channel rejections (no account stored), a reused state and a foreign
+  (other-user) state both redirecting `expired`, never echoing `error_description`, a channel
+  change cancelling an old post with the exact message, a same-channel reconnect unblocking a
+  `reconnect`-waiting post but not a `private_lock` one, GET hiding tokens, PATCH cancelling queued
+  posts on auto-post-off and rejecting an invalid `privacy`, DELETE cancelling queued+blocked posts,
+  and resume requeuing a `private_lock` post and enqueueing its job (plus 404 with no account).
+- Full `npx vitest run --maxWorkers=2`: 741 passed / 1 skipped, output pristine; `tsc --noEmit` 0
+  errors; `pnpm lint` clean.
