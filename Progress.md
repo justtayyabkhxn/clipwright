@@ -138,3 +138,10 @@ uploads every clip of a finished video to the user's channel as a public Short.
   it, a string replaces it) so the private-lock circuit breaker's warning survives an unrelated
   status change (e.g. a later `reauth_required`); the brief's signature did not say which, so this is
   a judgment call for the route tasks (6+) to follow.
+- 2026-10-28 12:09 review fix round 1: `saveConnectedAccount` now unsets a missing handle/thumbnail
+  and keeps the §4.6 private-lock pause through a reconnect (one aggregation-pipeline update, still
+  no read-then-write); `getAccessToken`'s two writes are fenced on the caller's own refresh-token
+  snapshot so a stale snapshot can never clobber a reconnected account; a refresh-token-less
+  first connect now throws `MissingRefreshTokenError` instead of inserting a broken doc; plus the
+  test-coverage gaps the review found (refresh token assertion, revoke call/order/failure cases,
+  refresh request body, another user's data surviving `deleteAllUserData`). 29 tests now (was 15).

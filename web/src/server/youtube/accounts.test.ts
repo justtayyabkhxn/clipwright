@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { server as mockServer } from "@/test/setup";
 import { closeDb, collections, ensureIndexes } from "../db";
 import { resetEnv } from "../env";
-import { encryptSetting } from "../settings";
+import { decryptSetting, encryptSetting } from "../settings";
 import { deleteAllUserData } from "../tasks";
 import type { YoutubeAccountDoc, YoutubePostDoc } from "../types";
 import {
@@ -16,6 +16,7 @@ import {
   disconnectAccount,
   getAccessToken,
   getAccount,
+  MissingRefreshTokenError,
   saveConnectedAccount,
   serializeAccount,
   setAccountStatus,
@@ -131,13 +132,40 @@ describe("account repository", () => {
     await saveConnectedAccount("u1", { ...TOKENS, accessToken: "at-2", refreshToken: undefined }, CHANNEL);
 
     const account = await getAccount("u1");
-    expect(account?.accessToken).not.toContain("at-1");
+    expect(decryptSetting(account!.refreshToken)).toBe("rt-1");
+    expect(decryptSetting(account!.accessToken!)).toBe("at-2");
+  });
+
+  it("refuses to insert a brand-new account when Google sends no refresh token", async () => {
+    await expect(saveConnectedAccount("u1", { ...TOKENS, refreshToken: undefined }, CHANNEL)).rejects.toBeInstanceOf(
+      MissingRefreshTokenError,
+    );
+    expect(await getAccount("u1")).toBeNull();
   });
 
   it("reports channelChanged when a different channel connects", async () => {
     expect((await saveConnectedAccount("u1", TOKENS, CHANNEL)).channelChanged).toBe(false); // first connect
     expect((await saveConnectedAccount("u1", TOKENS, CHANNEL)).channelChanged).toBe(false); // same channel
     expect((await saveConnectedAccount("u1", TOKENS, CHANNEL_2)).channelChanged).toBe(true); // switched channel
+
+    // The new channel has no handle or thumbnail: the old channel's must not survive the switch.
+    expect(serializeAccount(await getAccount("u1")).channel).toEqual({
+      id: "UC2",
+      title: "Other Channel",
+      handle: null,
+      thumbnail_url: null,
+    });
+  });
+
+  it("keeps the §4.6 private-lock pause through a reconnect, same channel or a different one", async () => {
+    await saveConnectedAccount("u1", TOKENS, CHANNEL);
+    await setAccountStatus("u1", "paused", "private_lock");
+
+    await saveConnectedAccount("u1", TOKENS, CHANNEL); // reconnect, same channel
+    expect(await getAccount("u1")).toMatchObject({ status: "paused", warning: "private_lock" });
+
+    await saveConnectedAccount("u1", TOKENS, CHANNEL_2); // reconnect, different channel
+    expect(await getAccount("u1")).toMatchObject({ status: "paused", warning: "private_lock" });
   });
 
   it("updateAccountPrefs only touches the given fields", async () => {
@@ -148,12 +176,38 @@ describe("account repository", () => {
     expect(await getAccount("u1")).toMatchObject({ privacy: "unlisted", autoPost: false, madeForKids: true });
   });
 
-  it("disconnectAccount deletes the doc first, then best-effort revokes", async () => {
+  it("disconnectAccount deletes the doc first, then best-effort revokes with the decrypted token", async () => {
     await saveConnectedAccount("u1", TOKENS, CHANNEL);
-    mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => new HttpResponse(null, { status: 200 })));
+    let revokedToken: string | null = null;
+    let docGoneWhenRevokeCalled = false;
+    mockServer.use(
+      http.post("https://oauth2.googleapis.com/revoke", async ({ request }) => {
+        revokedToken = new URLSearchParams(await request.text()).get("token");
+        docGoneWhenRevokeCalled = (await getAccount("u1")) === null;
+        return new HttpResponse(null, { status: 200 });
+      }),
+    );
 
     await disconnectAccount("u1");
 
+    expect(await getAccount("u1")).toBeNull();
+    expect(revokedToken).toBe("rt-1");
+    expect(docGoneWhenRevokeCalled).toBe(true);
+  });
+
+  it("disconnectAccount resolves without throwing when the revoke returns 500", async () => {
+    await saveConnectedAccount("u1", TOKENS, CHANNEL);
+    mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => new HttpResponse(null, { status: 500 })));
+
+    await expect(disconnectAccount("u1")).resolves.toBeUndefined();
+    expect(await getAccount("u1")).toBeNull();
+  });
+
+  it("disconnectAccount resolves without throwing when the revoke request itself fails", async () => {
+    await saveConnectedAccount("u1", TOKENS, CHANNEL);
+    mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => HttpResponse.error()));
+
+    await expect(disconnectAccount("u1")).resolves.toBeUndefined();
     expect(await getAccount("u1")).toBeNull();
   });
 
@@ -201,10 +255,33 @@ describe("getAccessToken", () => {
 
     expect(token).toBe("fresh-token");
     expect(fake.requests).toHaveLength(1);
+    const body = fake.requests[0].init.body as URLSearchParams;
+    expect(body.get("refresh_token")).toBe("rt-1");
+    expect(body.get("grant_type")).toBe("refresh_token");
     const refreshed = await getAccount("u1");
     expect(refreshed?.accessToken).toMatch(/^v1:/);
     expect(refreshed?.accessToken).not.toContain("fresh-token");
     expect(refreshed?.accessTokenExpiresAt?.getTime()).toBeGreaterThan(Date.now() + 3500_000);
+  });
+
+  it("does not let a stale account snapshot overwrite a reconnected account's token or status", async () => {
+    await saveConnectedAccount("u1", TOKENS, CHANNEL);
+    const stale = (await getAccount("u1"))!; // snapshot: channel UC1, refresh token rt-1
+    const staleExpiring = { ...stale, accessTokenExpiresAt: new Date(Date.now() + 60_000) };
+
+    // The user reconnects with a new refresh token and a different channel.
+    await saveConnectedAccount("u1", { ...TOKENS, accessToken: "at-new", refreshToken: "rt-new" }, CHANNEL_2);
+
+    // A stale refresh that still succeeds at Google must not overwrite the reconnected account's token.
+    const succeeds = fakeFetch(json({ access_token: "stale-refreshed", expires_in: 3600 }));
+    await getAccessToken(staleExpiring, succeeds.fetchImpl);
+    const afterSuccess = await getAccount("u1");
+    expect(decryptSetting(afterSuccess!.accessToken!)).toBe("at-new");
+
+    // A stale refresh that fails with invalid_grant (the old token was revoked) must not flag the fresh account.
+    const fails = fakeFetch(json({ error: "invalid_grant" }, 400));
+    await expect(getAccessToken(staleExpiring, fails.fetchImpl)).rejects.toBeInstanceOf(GoogleApiError);
+    expect((await getAccount("u1"))?.status).toBe("active");
   });
 
   it("does not refresh when the access token still has plenty of time left", async () => {
@@ -290,10 +367,20 @@ describe("deleteAllUserData", () => {
     await collections().youtubePosts.insertOne(post);
     mockServer.use(http.post("https://oauth2.googleapis.com/revoke", () => new HttpResponse(null, { status: 200 })));
 
+    // Another user's account, posts and OAuth state must survive u1's deletion.
+    await saveConnectedAccount("u2", TOKENS, CHANNEL_2);
+    await createOAuthState("u2");
+    const otherPost: YoutubePostDoc = { ...post, _id: "post-2", userId: "u2", lineageId: "clip-2", channelId: "UC2" };
+    await collections().youtubePosts.insertOne(otherPost);
+
     await deleteAllUserData("u1");
 
     expect(await getAccount("u1")).toBeNull();
     expect(await collections().youtubePosts.countDocuments({ userId: "u1" })).toBe(0);
     expect(await collections().oauthStates.countDocuments({ userId: "u1" })).toBe(0);
+
+    expect(await getAccount("u2")).not.toBeNull();
+    expect(await collections().youtubePosts.countDocuments({ userId: "u2" })).toBe(1);
+    expect(await collections().oauthStates.countDocuments({ userId: "u2" })).toBe(1);
   });
 });

@@ -4,7 +4,7 @@
 // `serializeAccount` is the only shape the API or the worker should hand back to a client.
 
 import { createHash, randomBytes } from "node:crypto";
-import type { MatchKeysAndValues, UpdateFilter } from "mongodb";
+import type { Document, MatchKeysAndValues, UpdateFilter } from "mongodb";
 import { collections } from "../db";
 import { env } from "../env";
 import { decryptSetting, encryptSetting } from "../settings";
@@ -44,31 +44,53 @@ export async function getAccount(userId: string): Promise<YoutubeAccountDoc | nu
 type Tokens = Awaited<ReturnType<typeof exchangeCode>>;
 type Channel = NonNullable<Awaited<ReturnType<typeof fetchMyChannel>>>;
 
+/** A first-time connect (no existing account) with no refresh token in Google's response: nothing is inserted. */
+export class MissingRefreshTokenError extends Error {
+  constructor() {
+    super("Google did not send a refresh token for a new YouTube connection");
+    this.name = "MissingRefreshTokenError";
+  }
+}
+
 /**
- * Upsert the connected account after a successful OAuth exchange. Keeps the previous refresh token
- * when Google sends none (it only resends one when `prompt=consent` forces re-authorization).
+ * Upsert the connected account after a successful OAuth exchange, with a single aggregation-pipeline
+ * update so every field reacts atomically to the account's state *before* this write, with no
+ * read-then-write race:
+ * - Keeps the previous refresh token when Google sends none (it only resends one when
+ *   `prompt=consent` forces re-authorization); refuses to insert a brand-new account with none.
+ * - Drops `channelHandle`/`thumbnailUrl` (`$$REMOVE`) when the new channel has none, instead of
+ *   leaving the previous channel's behind.
+ * - Preserves the §4.6 private-lock pause: status becomes `paused` (not `active`) when the stored
+ *   `warning` is still `"private_lock"`; only `setAccountStatus`'s "Resume posting" clears it.
  * `channelChanged` tells the callback route whether to cancel posts queued for a different channel.
  */
 export async function saveConnectedAccount(userId: string, tokens: Tokens, channel: Channel): Promise<{ channelChanged: boolean }> {
+  if (tokens.refreshToken === undefined && !(await getAccount(userId))) {
+    throw new MissingRefreshTokenError();
+  }
   const now = new Date();
-  const set: MatchKeysAndValues<YoutubeAccountDoc> = {
-    channelId: channel.channelId,
-    channelTitle: channel.title,
-    accessToken: encryptSetting(tokens.accessToken),
-    accessTokenExpiresAt: tokens.expiresAt,
-    scopes: tokens.scopes,
-    status: "active",
-    connectedAt: now,
-    updatedAt: now,
-    ...(channel.handle !== undefined && { channelHandle: channel.handle }),
-    ...(channel.thumbnailUrl !== undefined && { thumbnailUrl: channel.thumbnailUrl }),
-    ...(tokens.refreshToken !== undefined && { refreshToken: encryptSetting(tokens.refreshToken) }),
-  };
-  const before = await collections().youtubeAccounts.findOneAndUpdate(
-    { _id: userId },
-    { $set: set, $setOnInsert: { autoPost: true, privacy: "public", madeForKids: false, createdAt: now } },
-    { upsert: true, returnDocument: "before" },
-  );
+  const pipeline: Document[] = [
+    {
+      $set: {
+        channelId: { $literal: channel.channelId },
+        channelTitle: { $literal: channel.title },
+        channelHandle: channel.handle !== undefined ? { $literal: channel.handle } : "$$REMOVE",
+        thumbnailUrl: channel.thumbnailUrl !== undefined ? { $literal: channel.thumbnailUrl } : "$$REMOVE",
+        accessToken: { $literal: encryptSetting(tokens.accessToken) },
+        accessTokenExpiresAt: { $literal: tokens.expiresAt },
+        scopes: { $literal: tokens.scopes },
+        refreshToken: tokens.refreshToken !== undefined ? { $literal: encryptSetting(tokens.refreshToken) } : "$refreshToken",
+        status: { $cond: [{ $eq: ["$warning", "private_lock"] }, "paused", "active"] },
+        connectedAt: { $literal: now },
+        updatedAt: { $literal: now },
+        autoPost: { $ifNull: ["$autoPost", true] },
+        privacy: { $ifNull: ["$privacy", "public"] },
+        madeForKids: { $ifNull: ["$madeForKids", false] },
+        createdAt: { $ifNull: ["$createdAt", now] },
+      },
+    },
+  ];
+  const before = await collections().youtubeAccounts.findOneAndUpdate({ _id: userId }, pipeline, { upsert: true, returnDocument: "before" });
   return { channelChanged: Boolean(before && before.channelId !== channel.channelId) };
 }
 
@@ -113,22 +135,29 @@ export async function setAccountStatus(userId: string, status: YoutubeAccountDoc
  * persists the new token so the next call does not re-refresh. `invalid_grant` means the refresh
  * token itself is dead: the account moves to `reauth_required` and the error is re-thrown so the
  * caller blocks the post (design §4.3, §4.5).
+ *
+ * Both writes are fenced on `{_id, refreshToken: account.refreshToken}`, the caller's own snapshot:
+ * a stale caller (an in-flight refresh racing a reconnect, or a revoked old token after the user
+ * reconnected) matches no document once the refresh token has changed, so its write is a silent
+ * no-op instead of overwriting the newly connected account's token or status. The encrypted
+ * refresh token has a random nonce, so a reconnect that brings a *new* token (or even re-sends the
+ * same raw token) never matches the old ciphertext.
  */
 export async function getAccessToken(account: YoutubeAccountDoc, fetchImpl: typeof fetch = fetch): Promise<string> {
   const expiresAt = account.accessTokenExpiresAt?.getTime() ?? 0;
   if (account.accessToken && expiresAt - Date.now() > REFRESH_MARGIN_MS) {
     return decryptSetting(account.accessToken);
   }
+  const fence = { _id: account._id, refreshToken: account.refreshToken };
   try {
     const refreshed = await refreshAccessToken(decryptSetting(account.refreshToken), fetchImpl);
-    await collections().youtubeAccounts.updateOne(
-      { _id: account._id },
-      { $set: { accessToken: encryptSetting(refreshed.accessToken), accessTokenExpiresAt: refreshed.expiresAt, updatedAt: new Date() } },
-    );
+    await collections().youtubeAccounts.updateOne(fence, {
+      $set: { accessToken: encryptSetting(refreshed.accessToken), accessTokenExpiresAt: refreshed.expiresAt, updatedAt: new Date() },
+    });
     return refreshed.accessToken;
   } catch (error) {
     if (error instanceof GoogleApiError && error.reason === "invalid_grant") {
-      await setAccountStatus(account._id, "reauth_required");
+      await collections().youtubeAccounts.updateOne(fence, { $set: { status: "reauth_required", updatedAt: new Date() } });
     }
     throw error;
   }
