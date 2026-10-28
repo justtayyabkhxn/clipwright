@@ -5,6 +5,7 @@ import { ApiError } from "./http";
 import { enqueueJob, newJobId, requestCancel } from "./jobs";
 import { getStorage, storageKeys, uploadKeys } from "./storage";
 import type { ClipDoc, ClipLength, JobDoc, OutputFormat, SourceRange, TaskDoc, TaskSettings, TaskStatus } from "./types";
+import { disconnectAccount } from "./youtube/accounts";
 
 // --- Normalisers (ports of tasks.py:186-207, clip_cleanup.py, clip_duration.py) ---
 
@@ -573,9 +574,13 @@ export async function deleteTaskCompletely(taskId: string): Promise<void> {
   }
 }
 
-/** Account deletion (Better Auth `beforeDelete`): every task, job, draft and font of the user. */
+/**
+ * Account deletion (Better Auth `beforeDelete`): every task, job, draft and font of the user, plus
+ * their YouTube account (deleted, then best-effort revoked, as `disconnectAccount` does), posts and
+ * OAuth states (design §4.3).
+ */
 export async function deleteAllUserData(userId: string): Promise<void> {
-  const { tasks, clipDrafts, jobs } = collections();
+  const { tasks, clipDrafts, jobs, youtubePosts, oauthStates } = collections();
   for (const task of await tasks.find({ userId }, { projection: { _id: 1 } }).toArray()) {
     await deleteTaskCompletely(task._id);
   }
@@ -583,6 +588,9 @@ export async function deleteAllUserData(userId: string): Promise<void> {
   await jobs.deleteMany({ userId, status: { $ne: "running" } });
   await clipDrafts.deleteMany({ userId });
   await getStorage().deletePrefix(storageKeys.userFontsDir(userId));
+  await disconnectAccount(userId);
+  await youtubePosts.deleteMany({ userId });
+  await oauthStates.deleteMany({ userId });
 }
 
 export const WORKER_STOPPED_TASK_MESSAGE = "The worker stopped while processing this video. Resume to try again.";

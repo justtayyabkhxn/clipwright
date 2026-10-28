@@ -113,3 +113,28 @@ uploads every clip of a finished video to the user's channel as a public Short.
   `maxResults`; tests for the secret-free error and the no-channel case). The partial edit is stashed,
   nothing half-done is committed.
 - Next: redo those fixes, then Task 5 (accounts, tokens and OAuth state), then Tasks 6–14.
+
+### 2026-10-28 11:49 — Task 5: Accounts, tokens and OAuth state
+- Added `server/youtube/accounts.ts`: single-use, user-bound PKCE OAuth state (`createOAuthState`/
+  `consumeOAuthState`, 10 min TTL, `findOneAndDelete`); the account repository
+  (`getAccount`/`saveConnectedAccount`/`updateAccountPrefs`/`disconnectAccount`/`setAccountStatus`),
+  tokens always stored via `encryptSetting`; `getAccessToken` (refreshes within 5 min of expiry,
+  persists the new token, sets `reauth_required` on `invalid_grant`); `serializeAccount` (never
+  tokens; a `setup_hint` when the OAuth env vars are unset).
+- `deleteAllUserData` (`tasks.ts`) now also disconnects the YouTube account (delete-then-
+  best-effort-revoke, same as `disconnectAccount`) and deletes the user's posts and OAuth states.
+- Tests (TDD): `accounts.test.ts` written first; RED confirmed by moving `accounts.ts` aside
+  (`Cannot find module ./youtube/accounts`), then restored and GREEN, 15/15 passing. Covers
+  single-use/user-bound/expiring state, encrypted-at-rest tokens never present in
+  `JSON.stringify(serializeAccount(...))`, keeping the old refresh token when Google omits it,
+  `channelChanged` on a different channel, the 5-minute refresh window (and not refreshing early),
+  `invalid_grant` -> `reauth_required`, and `deleteAllUserData` removing the account/posts/states
+  (an msw handler on the revoke endpoint keeps the best-effort revoke from logging a warning).
+- `npx vitest run --maxWorkers=2` 641/694 in one pass (3 suites hit the documented
+  MongoMemoryServer-under-load hook timeout, unrelated to this change); re-run alone,
+  `drafts.test.ts` + `accounts.test.ts` + `restyle-task.test.ts` all pass, 52/52. `tsc --noEmit` 0
+  errors; `pnpm lint` clean.
+- Concern: `setAccountStatus`'s `warning` parameter is a tri-state (omitted keeps it, `null` clears
+  it, a string replaces it) so the private-lock circuit breaker's warning survives an unrelated
+  status change (e.g. a later `reauth_required`); the brief's signature did not say which, so this is
+  a judgment call for the route tasks (6+) to follow.
