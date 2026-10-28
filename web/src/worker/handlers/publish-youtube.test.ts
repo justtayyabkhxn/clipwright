@@ -9,10 +9,16 @@ import { encryptSetting } from "../../server/settings";
 import { getStorage } from "../../server/storage";
 import type { TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../../server/types";
 import { nextMidnightPacific } from "../../server/youtube/google";
-import { claimPost } from "../../server/youtube/posts";
+import { claimPost, markUploaded } from "../../server/youtube/posts";
 import { FAILURE_HOOKS, runJob } from "../run-job";
 import { claimed, clipFixture, fakeEngine, seedTask, setupWorkerTestEnv, writeFile } from "../test-utils";
 import { uploadTiming } from "./publish-youtube";
+
+// The real repository, with markUploaded spied so one test can make the database fail after the PUT.
+vi.mock("../../server/youtube/posts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../server/youtube/posts")>();
+  return { ...actual, markUploaded: vi.fn(actual.markUploaded) };
+});
 
 setupWorkerTestEnv("publish", { env: { ANTHROPIC_API_KEY: "sk-ant-test-key-1234" } });
 
@@ -238,7 +244,7 @@ describe("publish_youtube", () => {
     expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 1 });
   });
 
-  it("starts a new session when the saved one is gone or belongs to an older render", async () => {
+  it("starts a new session when the saved one belongs to an older render", async () => {
     await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: { ...SAVED_SESSION, storageKey: "clips/t1/c1.mp4" } } });
     const fake = services();
 
@@ -246,6 +252,65 @@ describe("publish_youtube", () => {
 
     expect(fake.kinds()).toEqual(["initiate", "upload"]);
     expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 2 });
+  });
+
+  it.each([404, 410])("starts a new session when the saved one is gone (%i)", async (status) => {
+    await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: SAVED_SESSION } });
+    const fake = services({ query: () => new Response(null, { status }) });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["query", "initiate", "upload"]);
+    expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 2 });
+  });
+
+  it.each([
+    ["a rate limit", () => googleError(403, "rateLimitExceeded"), "rateLimitExceeded"],
+    ["a 429", () => new Response(null, { status: 429 }), "HTTP 429"],
+    ["a 5xx", () => new Response(null, { status: 503 }), "HTTP 503"],
+    ["a network error", () => Promise.reject(new TypeError("fetch failed")), "TypeError"],
+  ] as const)("a failed session start (%s) goes back to the queue without a second insert", async (_name, initiate, code) => {
+    const sleep = vi.spyOn(uploadTiming, "sleep").mockResolvedValue(undefined);
+    await setup({ post: { metadata: STORED_METADATA } });
+    const fake = services({ initiate });
+    const before = Date.now();
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["initiate"]);
+    expect(sleep).not.toHaveBeenCalled();
+    const post = await storedPost();
+    expect(post).toMatchObject({ state: "queued", waitReason: "retry", attempts: 1, insertCalls: 1, error: `YouTube could not be reached (${code}).` });
+    expectWait(post.notBefore, MINUTE, before);
+  });
+
+  it("a 5xx on the upload is retried in the job on the same session", async () => {
+    const sleep = vi.spyOn(uploadTiming, "sleep").mockResolvedValue(undefined);
+    await setup({ post: { metadata: STORED_METADATA } });
+    const fake = services({
+      upload: (_call, index) => (index === 0 ? new Response(null, { status: 503 }) : json(200, video())),
+      query: () => new Response(null, { status: 308 }),
+    });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["initiate", "upload", "query", "upload"]);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([1000]);
+    expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 1 });
+  });
+
+  it("a rate limit on the upload goes back to the queue, keeping the session", async () => {
+    const sleep = vi.spyOn(uploadTiming, "sleep").mockResolvedValue(undefined);
+    await setup({ post: { metadata: STORED_METADATA } });
+    const fake = services({ upload: () => googleError(403, "userRateLimitExceeded") });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["initiate", "upload"]);
+    expect(sleep).not.toHaveBeenCalled();
+    const post = await storedPost();
+    expect(post).toMatchObject({ state: "queued", waitReason: "retry", insertCalls: 1, error: "YouTube could not be reached (userRateLimitExceeded)." });
+    expect(post.upload?.sessionUri).toBe(SESSION);
   });
 
   it("never initiates more than the insert cap", async () => {
@@ -343,6 +408,54 @@ describe("publish_youtube", () => {
     expect(fake.kinds()).toEqual(["initiate", "token", "initiate"]);
     expect(await storedPost()).toMatchObject({ state: "blocked", waitReason: "reconnect" });
     expect((await storedAccount()).status).toBe("reauth_required");
+  });
+
+  it("later session starts in the job reuse the token a 401 refreshed", async () => {
+    await setup({ post: { metadata: STORED_METADATA } });
+    const fake = services({
+      initiate: (call, index) =>
+        index === 0 ? googleError(401, "authError") : index === 1 ? googleError(400, "invalidTitle") : DEFAULTS.initiate(call, index),
+    });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["initiate", "token", "initiate", "claude", "initiate", "upload"]);
+    expect(fake.of("initiate")[2].headers.get("authorization")).toBe("Bearer fresh-token");
+    expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 3 });
+  });
+
+  it.each([
+    ["the saved session's query", { query: () => new Response(null, { status: 401 }) }, { upload: SAVED_SESSION, insertCalls: 1 }, ["query"]],
+    ["the upload", { upload: () => new Response(null, { status: 401 }) }, {}, ["initiate", "upload"]],
+  ] as const)("a 401 from %s fails the post without a refresh or a reconnect", async (_name, overrides, post, kinds) => {
+    await setup({ post: { metadata: STORED_METADATA, ...post } });
+    const fake = services(overrides);
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(kinds);
+    const stored = await storedPost();
+    expect(stored).toMatchObject({ state: "failed", errorReason: "HTTP 401", insertCalls: 1 });
+    // Kept, so a manual "Try again" asks this session before spending another insert call.
+    expect(stored.upload?.sessionUri).toBe(SESSION);
+    expect((await storedAccount()).status).toBe("active");
+  });
+
+  it("a database error after the upload re-queues the post, and the next run recovers the video from the session", async () => {
+    await setup({ post: { metadata: STORED_METADATA } });
+    vi.mocked(markUploaded).mockRejectedValueOnce(Object.assign(new Error("connection reset"), { name: "MongoNetworkError" }));
+    const fake = services({ query: () => json(200, video()) });
+
+    expect(await run(fake)).toMatchObject({ status: "failed" });
+    const requeued = await storedPost();
+    expect(requeued).toMatchObject({ state: "queued", waitReason: "retry", attempts: 1, insertCalls: 1 });
+    expect(requeued.upload?.sessionUri).toBe(SESSION);
+
+    await collections().youtubePosts.updateOne({ _id: "p1" }, { $set: { notBefore: new Date(0) } });
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["initiate", "upload", "query"]);
+    expect(await storedPost()).toMatchObject({ state: "uploaded", videoId: "VID", insertCalls: 1 });
   });
 
   it("invalidTitle clears metadata and retries once, then fails", async () => {

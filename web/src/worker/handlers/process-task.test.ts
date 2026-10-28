@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import path from "node:path";
 import type { Timestamp } from "mongodb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { errorResponse, fakeFetch, messageResponse } from "../../server/ai/__fixtures__/fake-anthropic";
 import { collections, getDb } from "../../server/db";
 import { EngineError } from "../../server/engine";
@@ -9,6 +9,7 @@ import { paths, resetEnv } from "../../server/env";
 import { requestCancel } from "../../server/jobs";
 import { getStorage, storageKeys } from "../../server/storage";
 import { casStatus } from "../../server/tasks";
+import { createPostsForTask } from "../../server/youtube/posts";
 import { runJob } from "../run-job";
 import {
   claimed,
@@ -29,6 +30,12 @@ import {
   NO_CLIPS_RENDERED,
   processingCacheKey,
 } from "./process-task";
+
+// The real repository, with createPostsForTask spied so one test can make it fail after the completion CAS.
+vi.mock("../../server/youtube/posts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../server/youtube/posts")>();
+  return { ...actual, createPostsForTask: vi.fn(actual.createPostsForTask) };
+});
 
 setupWorkerTestEnv("process", {
   replSet: true,
@@ -406,6 +413,23 @@ describe("process_task", () => {
       expect(posts.map((post) => post.lineageId)).toEqual(done.clips.map((clip) => clip.id));
       expect(posts.map((post) => post.lineageId)).not.toContain("partial");
       expect(await publishJobsOf(seeded._id)).toHaveLength(2);
+    });
+
+    it("a failure creating the posts leaves the task completed and pending for the cron", async () => {
+      await connectYoutube();
+      vi.mocked(createPostsForTask).mockRejectedValueOnce(new Error("connection reset"));
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { task: seeded, job } = await queuedTask();
+
+      try {
+        expect(await runJob(job, { runEngine: uploadEngine().runEngine, fetch: claude().fetch })).toMatchObject({ status: "succeeded" });
+        expect(logged).toHaveBeenCalledWith(expect.stringContaining("could not create the YouTube posts"), expect.any(Error));
+      } finally {
+        logged.mockRestore();
+      }
+      expect((await task(seeded._id))!).toMatchObject({ status: "completed", progressMessage: "Complete!", autopost: "pending" });
+      expect(await postsOf(seeded._id)).toHaveLength(0);
+      expect(await publishJobsOf(seeded._id)).toHaveLength(0);
     });
   });
 

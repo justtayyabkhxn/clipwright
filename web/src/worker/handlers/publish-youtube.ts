@@ -57,6 +57,7 @@ const FILE_MISSING = "The clip's video file is missing.";
 const METADATA_FAILED = "Claude could not write the title and description.";
 const INSERT_CAP_REACHED =
   "Stopped after repeated upload attempts so the clip is never posted twice. Check your channel before trying again.";
+const SESSION_REFUSED = "YouTube refused the upload session (HTTP 401).";
 const WORKER_STOPPED = "The upload stopped unexpectedly.";
 
 const DONE: JobOutcome = { status: "succeeded" };
@@ -67,7 +68,19 @@ async function settle(write: Promise<unknown>): Promise<JobOutcome> {
   return DONE;
 }
 
-class InsertCapReached extends Error {}
+/** Ends the upload as `failed` with our words, outside the §4.5 table: the insert cap, or a refused session. */
+class PostFailed extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+  }
+}
+
+/** §4.5 step 4: the job itself retries a network error, a 5xx or a 308 mid-upload; rate limits wait in the queue. */
+const retryInJob = (error: unknown) =>
+  classify(error) === "transient" && (!(error instanceof GoogleApiError) || error.status >= 500 || error.status === 308);
 
 export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
   const post = await claimPost(String(ctx.job.payload.postId), ctx.job._id);
@@ -117,6 +130,10 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
       return DONE;
     } catch (error) {
       if (ctx.stopReason) throw error;
+      // The table is for Google's answers and network failures. Anything else (MongoDB failing in
+      // markUploaded after the video went up, say) fails the job: the failure hook re-queues the post
+      // in 2 min, and the kept session then recovers the video through the status query.
+      if (!(error instanceof PostFailed || error instanceof GoogleApiError || classify(error) === "transient")) throw error;
       if (classify(error) === "invalid_metadata") {
         // Google refused Claude's text: never reuse it. Ask once more, then give up.
         await clearMetadata(post._id);
@@ -131,48 +148,56 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
 /**
  * §4.5 steps 1–4. A saved session for this exact file is queried first (a 200 there recovers a lost
  * response without a second insert); otherwise one insert call is spent and a session started and
- * saved. The rest of the file then goes up in one PUT. Transient failures go back to step 1 within the
- * job, and a 401 refreshes the token once before it may count as a reconnect.
+ * saved. The rest of the file then goes up in one PUT. Once a session exists, a network error, 5xx or
+ * 308 goes back to step 1 within the job. A failed start is never retried here (each try would spend
+ * an insert call): it goes to the error table, except that a 401 refreshes the token once per job.
  */
 function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccountDoc, storageKey: string, size: number) {
   const fetchImpl = ctx.deps.fetch ?? fetch;
   let session = post.upload?.storageKey === storageKey && post.upload.size === size ? post.upload.sessionUri : undefined;
-  let refreshed = false;
-  // After a 401 the claim-time token counts as expired; the snapshot's refresh token still fences the write.
-  const accessToken = () => getAccessToken(refreshed ? { ...account, accessTokenExpiresAt: undefined } : account, fetchImpl);
+  /** The token the one 401-driven refresh returned; every later start in this job reuses it. */
+  let freshToken: string | undefined;
 
-  async function attempt(metadata: YoutubeMetadata): Promise<VideoResource> {
-    let start = 0;
-    if (session) {
-      const state = await querySession(session, size, fetchImpl);
-      if ("done" in state) return state.done;
-      if ("gone" in state) session = undefined;
-      else start = state.nextByte;
-    }
-    if (!session) {
-      const token = await accessToken();
+  async function initiate(metadata: YoutubeMetadata): Promise<string> {
+    for (;;) {
+      const token = freshToken ?? (await getAccessToken(account, fetchImpl));
       // ponytail: claimedBy is the job id, which a re-claimed attempt of this job shares; this lease check
       // narrows that race before an insert, and the insert cap bounds it. A claim token in the fence would close it.
       ctx.throwIfStopped();
-      if (!(await takeInsertCall(post))) throw new InsertCapReached();
-      session = await startUploadSession(token, insertBody(post, metadata), size, post.notifySubscribers, fetchImpl);
-      await saveSession(post._id, { sessionUri: session, storageKey, size, startedAt: new Date() });
+      if (!(await takeInsertCall(post))) throw new PostFailed(INSERT_CAP_REACHED, "insertCap");
+      try {
+        return await startUploadSession(token, insertBody(post, metadata), size, post.notifySubscribers, fetchImpl);
+      } catch (error) {
+        if (freshToken !== undefined || !(error instanceof GoogleApiError && error.status === 401)) throw error;
+        // The claim-time token counts as expired; the snapshot's refresh token still fences the write.
+        freshToken = await getAccessToken({ ...account, accessTokenExpiresAt: undefined }, fetchImpl);
+      }
     }
-    const body = getStorage().createReadStream(storageKey, { start, end: size - 1 });
-    return uploadFrom(session, size, start, body, ctx.signal, fetchImpl);
   }
 
   return async (metadata: YoutubeMetadata): Promise<VideoResource> => {
     for (let tries = 1; ; tries++) {
       try {
-        return await attempt(metadata);
-      } catch (error) {
-        if (ctx.stopReason) throw error;
-        if (error instanceof GoogleApiError && error.status === 401 && !error.tokenEndpoint && !refreshed) {
-          refreshed = true;
-          continue;
+        let start = 0;
+        if (session) {
+          const state = await querySession(session, size, fetchImpl);
+          if ("done" in state) return state.done;
+          if ("gone" in state) session = undefined;
+          else start = state.nextByte;
         }
-        if (classify(error) !== "transient" || tries >= UPLOAD_TRIES) throw error;
+        if (!session) {
+          session = await initiate(metadata);
+          await saveSession(post._id, { sessionUri: session, storageKey, size, startedAt: new Date() });
+        }
+        const body = getStorage().createReadStream(storageKey, { start, end: size - 1 });
+        return await uploadFrom(session, size, start, body, ctx.signal, fetchImpl);
+      } catch (error) {
+        // No session means the start itself failed: that goes to the table, never round this loop.
+        if (ctx.stopReason || !session) throw error;
+        // The session URI gets no token, so its 401 asks for neither a refresh nor a reconnect: it is
+        // §4.5's "any other 4xx". The session is kept, so "Try again" queries it before any new insert.
+        if (error instanceof GoogleApiError && error.status === 401) throw new PostFailed(SESSION_REFUSED, "HTTP 401");
+        if (!retryInJob(error) || tries >= UPLOAD_TRIES) throw error;
         await uploadTiming.sleep(1000 * 2 ** (tries - 1), ctx.signal);
       }
     }
@@ -201,7 +226,7 @@ function retryLater(post: YoutubePostDoc, message: string, errorReason?: string)
 
 /** The §4.5 error table. Stored text is ours plus the reason code: never Google's body, a header, a URL or a token. */
 async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDoc, error: unknown): Promise<unknown> {
-  if (error instanceof InsertCapReached) return failPost(post, INSERT_CAP_REACHED, "insertCap");
+  if (error instanceof PostFailed) return failPost(post, error.message, error.code);
   const code = error instanceof GoogleApiError ? (error.reason ?? `HTTP ${error.status}`) : error instanceof Error ? error.name : "unknown";
   const say = (words: string) => `${words} (${code}).`;
   console.warn(`[youtube] Post ${post._id}: upload failed (${code})`);

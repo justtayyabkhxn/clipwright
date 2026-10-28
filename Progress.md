@@ -231,3 +231,9 @@ uploads every clip of a finished video to the user's channel as a public Short.
   session, the failure hook, and no secret in any log line), 3 trigger tests, 3 repository tests;
   RED first, then GREEN. Full `npx vitest run --maxWorkers=2`: 785 passed / 1 skipped; `tsc --noEmit`
   and `pnpm lint` clean.
+- 2026-10-28 14:27 review fix round 1: the in-job 1/2/4/8 s loop now covers only a live session (query
+  and PUT: network, 5xx, 308), so a failed session start (rate limit, 429, 5xx, network) spends one
+  insert call and goes to the 1/5/15 min table; the 401 refresh applies only to the start and its
+  token is reused for the job; a session-URI 401 fails the post (no reconnect); non-Google errors
+  (e.g. MongoDB in `markUploaded`) fail the job so the hook re-queues it and the kept session
+  recovers the video. 13 new tests; full `npx vitest run`: 798 passed / 1 skipped.
