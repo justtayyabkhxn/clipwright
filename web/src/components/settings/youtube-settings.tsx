@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, ExternalLink, Loader2, TriangleAlert, Youtube } from "lucide-react";
+import { AlertCircle, Loader2, TriangleAlert, Youtube } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SOURCE_CODE_URL } from "@/lib/site";
 
 /** `GET /api/youtube/account` (design §4.8). Tokens never appear here. */
 type YoutubeAccount = {
@@ -37,10 +36,6 @@ type YoutubeAccount = {
 };
 
 const ERROR_CODES = ["denied", "expired", "missing_scope", "no_channel", "exchange_failed", "not_configured"] as const;
-// Our fork's own clone of this repo may use a different default branch; this follows the only
-// existing convention for linking into the repo (NEXT_PUBLIC_SOURCE_CODE_URL) rather than inventing one.
-// Exported so the task page's "Private on YouTube" chip (design §4.6) can link to the same doc.
-export const SETUP_DOC_URL = `${SOURCE_CODE_URL.replace(/\/+$/, "")}/blob/main/docs/youtube.md`;
 
 /** Settings → YouTube auto-post (design §4.8), shown to every user. */
 export function YoutubeSettings() {
@@ -145,9 +140,6 @@ export function YoutubeSettings() {
           <p>
             {t.rich("setupHint", { code: (chunks) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{chunks}</code> })}
           </p>
-          <a href={SETUP_DOC_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-medium text-brand underline-offset-2 hover:underline">
-            {t("setupLink")} <ExternalLink className="size-3" />
-          </a>
         </div>
       )}
 

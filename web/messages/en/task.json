@@ -142,7 +142,7 @@
     "posted": "Posted",
     "privateOnYoutube": "Private on YouTube",
     "privateOnYoutubeLine": "YouTube made this video private",
-    "auditLink": "See the setup guide",
+    "manageInSettings": "Manage in Settings",
     "warningUnknown": "YouTube flagged this upload ({code})",
     "warnings": {
       "duplicate": "YouTube flagged this video as a duplicate upload"

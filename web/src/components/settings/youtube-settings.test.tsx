@@ -53,8 +53,8 @@ it("shows the setup hint when not configured", async () => {
 
   expect(await screen.findByText(/GOOGLE_OAUTH_CLIENT_ID/)).toBeInTheDocument();
   expect(screen.getByText(/GOOGLE_OAUTH_CLIENT_SECRET/)).toBeInTheDocument();
-  const link = screen.getByRole("link", { name: /setup guide/i });
-  expect(link.getAttribute("href")).toContain("docs/youtube.md");
+  expect(screen.getByText("docs/youtube.md")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /setup guide/i })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /connect/i })).not.toBeInTheDocument();
 });
 

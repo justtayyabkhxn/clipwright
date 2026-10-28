@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { ClipCover, ScoreRing } from "@/components/app/clip-cover";
 import DynamicVideoPlayer from "@/components/dynamic-video-player";
-import { SETUP_DOC_URL } from "@/components/settings/youtube-settings";
 import { TranscriptPreview } from "@/components/transcript-preview";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -105,7 +104,7 @@ function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePost; ret
         <span className={pillClass("warn")}>{t("youtube.privateOnYoutube")}</span>
         <p className="text-[10px] leading-snug text-muted-foreground">
           {t("youtube.privateOnYoutubeLine")}{" "}
-          <a href={SETUP_DOC_URL} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">{t("youtube.auditLink")}</a>
+          <Link href="/settings#youtube" className="underline-offset-2 hover:underline">{t("youtube.manageInSettings")}</Link>
         </p>
       </div>
     );

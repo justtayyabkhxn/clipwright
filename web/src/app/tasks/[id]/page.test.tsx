@@ -192,6 +192,36 @@ it("shows a status chip per clip", async () => {
   expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
 });
 
+it("shows the blocked chip for a reconnect wait, linking to Settings", async () => {
+  clips = [clip("c-blocked", 1)];
+  youtubePosts = [post({ id: "p-blocked", clip_id: "c-blocked", state: "blocked", wait_reason: "reconnect" })];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("Reconnect YouTube to post")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Reconnect in Settings" })).toHaveAttribute("href", "/settings#youtube");
+});
+
+it("shows the blocked chip for a private lock, with the paused copy and a Settings link", async () => {
+  clips = [clip("c-paused", 1)];
+  youtubePosts = [post({ id: "p-paused", clip_id: "c-paused", state: "blocked", wait_reason: "private_lock" })];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("Posting paused")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Resume posting in Settings" })).toHaveAttribute("href", "/settings#youtube");
+});
+
+it("names an unrecognized warning code in a plain text line, never as raw HTML", async () => {
+  clips = [clip("c-warned", 1)];
+  youtubePosts = [post({
+    id: "p-warned", clip_id: "c-warned", state: "uploaded", video_url: "https://youtu.be/xyz",
+    warning: "<b>age_restricted</b>",
+  })];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("YouTube flagged this upload (<b>age_restricted</b>)")).toBeInTheDocument();
+  expect(document.querySelector("b")).not.toBeInTheDocument();
+});
+
 it("Try again posts to the retry route", async () => {
   clips = [clip("c-failed", 1)];
   youtubePosts = [post({ id: "p-failed", clip_id: "c-failed", state: "failed", error: "YouTube rejected the upload.", insert_cap_reached: true })];

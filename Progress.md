@@ -334,3 +334,7 @@ uploads every clip of a finished video to the user's channel as a public Short.
   `retry`, `restyle`, the generic warning-code line) is my own wording, not spec text. The "Private on
   YouTube" chip links to the setup doc itself (no `#audit` anchor) since `docs/youtube.md` doesn't
   exist in the repo yet; once it's written, point the link at its audit section.
+- 2026-10-28 17:01 review fix round 1: dropped the `SETUP_DOC_URL` link (it 404'd against upstream's
+  repo) for inline `docs/youtube.md` text in Settings and a `/settings#youtube` link on the task
+  page's private-lock chip; added tests for the `blocked` chip (reconnect/private_lock) and the
+  generic unknown-warning-code line.
