@@ -108,7 +108,7 @@ docs/      user docs; docs/port/ holds the design spec and the maps of the origi
 
 ---
 
-## Branch `youtube-autopost`: YouTube Shorts auto-post (paused 2026-10-28 18:56)
+## Branch `youtube-autopost`: YouTube Shorts auto-post (final review done 2026-10-29)
 
 Claude writes each clip's title, description, tags and hashtags, and the worker uploads every clip of a finished video to the user's connected channel as a public Short.
 
@@ -116,7 +116,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
 - **Plan:** `docs/superpowers/plans/2026-10-27-youtube-autopost.md` (14 tasks).
 - **Per-task log:** `Progress.md`.
 - **User guide:** `docs/youtube.md`.
-- The branch starts from `clipwright` at `8300730`; head is `04cb93d`; the tree is clean.
+- The branch starts from `clipwright` at `8300730`; head is `0566175`. The only uncommitted change is the user's own `CLAUDE_METADATA_MODEL=claude-haiku-4-5` in `web/.env.example`.
 
 **Done (each task implemented test-first, then independently reviewed and fixed until clean):**
 1. Data model.
@@ -134,30 +134,36 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
 13. End-to-end test with a fake Google.
 14. Docs.
 
-**Last full verification (Task 14, 2026-10-28):**
+**Final whole-branch review (2026-10-29):**
+- 4 reviewers (Fable), each with an Opus verifier: 33 findings, 27 confirmed, 6 refuted.
+- Fixed: 1 Critical, 2 Important and every confirmed Minor, in `fad4609..0566175` (13 commits). The 3 non-minors:
+  - **dup-1 (Critical):** a saved session for an older render is now queried before any new insert, so a lost upload response followed by a restyle can no longer post the clip twice.
+  - **dup-2:** a channel upload limit now holds every queued post of that channel, and a start refused for quota or the channel limit refunds its insert call.
+  - **fail-1:** a cron step releases a `working` post whose job is gone.
+- Two scoped re-reviews with verifiers: no Critical or Important left; their Minors fixed.
+- Rulings for this round are in the ledger (`progress.md`, "Final review" section).
+
+**Verification at `0566175`:**
 
 | Check | Result |
 |---|---|
 | tsc | 0 errors |
 | lint | clean |
-| vitest | 837 passed, 1 skipped |
-| `next build` | OK |
-| Playwright | passed, including the YouTube step |
+| vitest (`--maxWorkers=2`) | 863 passed, 1 skipped (one earlier run hit the known mongodb-memory-server load flake; the rerun was clean) |
+| `next build` | OK (in the worktree `C:/cw-verify`) |
+| Playwright | passed in 4.7 min (worktree `C:/cw-verify`), including the YouTube step. Two earlier runs timed out: one on cold caches, one on CPU load from the user's real render running at the same time. |
 | Engine pytest | 362 passed, 1 skipped |
 
+**First live run (2026-10-29):**
+- **Connect:** the first attempts failed with `youtube_error=exchange_failed`; the YouTube Data API was not enabled yet. Connected `@justtayyabkhanai` at 11:24 IST.
+- **Generation:** the first 10-clip run died because the fix agents' edits restarted `tsx watch`; the second run completed.
+- **Upload:** all 10 posts uploaded within about 90 s of completion, public, 1 insert call each; the first is `ZJYWDE10Ra4`. The verification pass, which watches for a later forced-private switch, was still pending when this was written.
+- **Follow-up (not fixed; the user asked only for a diagnosis):** the callback reports token-exchange, channel-lookup and unexpected failures all as `exchange_failed` ("Please try again"), so a disabled API looks retryable.
+
 **Left to do:**
-- [ ] **Final whole-branch review.** It was launched and then stopped by the user before any reviewer finished, so nothing came of it.
-  - The package is already built: `.superpowers/sdd/2026-10-27-youtube-autopost/review-8300730..04cb93d.diff`. Rebuild it if HEAD moves.
-  - The workflow script is saved at `C:\Users\wefor\.claude\projects\C--other-projects-supoclip\5b25db19-79cd-4b3d-85fe-b98a85eb689a\workflows\scripts\final-review-youtube-autopost-wf_8b110748-30a.js`. It runs 4 Fable reviewers (spec plus triage of parked items, duplicates/concurrency, security/secrets, failure handling and UI), each followed by an Opus verifier that tries to refute its findings.
-  - Then: one fix agent with the confirmed findings, one scoped re-review, and an adjudication of the leftovers.
-- [ ] **Known doc minors to include in that fix wave** (from Task 14's review):
-  - `docs/port/DESIGN.md`: the `GET /api/tasks/[id]/youtube` row lacks `autopost_pending` and the post `id`; the PATCH row should say turning auto-post off also cancels `failed` posts.
-  - `docs/youtube.md`: the troubleshooting table lacks the "Waiting to retry" and "Waiting for the new style" chips, and merges the quota row (which shows a time) with the channel-limit row (which doesn't).
 - [ ] Finish the branch: merge into `clipwright`, or open a PR.
-- [ ] **Manual steps for the user:**
-  - The Google Cloud setup in `docs/youtube.md` (an OAuth client, then `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `web/.env.local`).
-  - The first live upload check.
-  - Requesting YouTube's API audit, because unverified projects get their uploads forced to private.
+- [ ] Delete the local ledger workspace `.superpowers/sdd/2026-10-27-youtube-autopost/` once the user has read the rulings.
+- [ ] **Manual steps for the user:** request YouTube's API audit; until it passes, uploads are forced private and posting pauses.
 
 **Decisions taken during the build on the user's behalf.** The full list, with what each costs if wrong, is in the local ledger `.superpowers/sdd/2026-10-27-youtube-autopost/progress.md` (git-ignored; delete it after the final review). The main ones:
 - **Private lock.** A video YouTube forced to private pauses the account. The pause survives reconnects and token failures, and only "Resume posting" releases it.
@@ -176,12 +182,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
   - A re-claimed run of the same job id; the insert cap bounds it.
   - The delete routes' check-then-cancel window.
 
-**How to resume:**
-1. `git checkout youtube-autopost`.
-2. Re-run the final review (re-launch the saved script, or write a new one over the package).
-3. Run the fix wave and re-review.
-4. Run the full verification above.
-5. Finish the branch.
+**How to resume:** `git checkout youtube-autopost`, then finish the branch.
 
 ---
 
@@ -191,7 +192,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
    `git -c safe.directory=C:/other-projects/supoclip log --oneline` (the branch is `clipwright`).
    - **Why the flag:** the folder is owned by another Windows account ("Tayyab Khan"), so every git command needs `-c safe.directory=...`. The global git config was intentionally left unchanged.
    - **Repo-local identity:** user.name `nakul`, user.email `nakul.volume@gmail.com`.
-2. **Next step:** the final review of branch `youtube-autopost` (see above), then the rest of Phase 5. Everything is committed.
+2. **Next step:** on branch `youtube-autopost`, finish the branch (see above), then the rest of Phase 5.
 3. **Install dependencies:**
    - `cd web && npx -y pnpm@10 install`
    - `cd engine && uv sync`
