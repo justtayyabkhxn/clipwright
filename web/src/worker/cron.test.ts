@@ -469,6 +469,34 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     expect((await storedPost("old-channel")).verifiedAt).toBeUndefined();
   });
 
+  it("does not verify for an account that needs a reconnect", async () => {
+    const now = new Date();
+    // Expired token, dead refresh token: every pass would hit the token endpoint for 48 h.
+    await seedAccount({ status: "reauth_required", accessTokenExpiresAt: new Date(now.getTime() - MINUTE) });
+    await seedPost({ _id: "p1", state: "uploaded", videoId: "VID1", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("must not be called");
+    }) as unknown as typeof fetch;
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(0);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect((await storedPost("p1")).verifiedAt).toBeUndefined();
+  });
+
+  it("clears a stale warning once the video matches the requested privacy and has no rejection", async () => {
+    const now = new Date();
+    await seedAccount();
+    // Pass 1 saw the video private while it processed; the user has made it public again since.
+    await seedPost({ _id: "p1", state: "uploaded", videoId: "VID1", privacyStatus: "private", warning: "private_lock", uploadedAt: new Date(now.getTime() - 20 * MINUTE) });
+    const fetchImpl = videoStatusFetch({ VID1: { privacyStatus: "public", uploadStatus: "processed" } });
+
+    expect(await verifyUploads(now, fetchImpl)).toBe(1);
+
+    const p1 = await storedPost("p1");
+    expect(p1).toMatchObject({ privacyStatus: "public", uploadStatus: "processed" });
+    expect(p1.warning).toBeUndefined();
+  });
+
   it("stores a video missing from videos.list as deleted and finalizes it", async () => {
     const now = new Date();
     await seedAccount();

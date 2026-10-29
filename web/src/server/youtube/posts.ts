@@ -391,7 +391,8 @@ export async function resumePosting(userId: string): Promise<YoutubeAccountDoc |
   if (!account) return null;
   const locked = { userId, state: "blocked", waitReason: "private_lock" } as const;
   if (account.status === "active") {
-    await youtubePosts.updateMany(locked, { $set: { state: "queued", updatedAt: now }, $unset: { waitReason: "" } });
+    // A wait from before the lock (quota, say) is dropped too: the first post re-defers if it still holds.
+    await youtubePosts.updateMany(locked, { $set: { state: "queued", updatedAt: now }, $unset: { waitReason: "", notBefore: "" } });
     await enqueueQueued({ userId });
   } else {
     await youtubePosts.updateMany(locked, { $set: { waitReason: "reconnect", updatedAt: now } });

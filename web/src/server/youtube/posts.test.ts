@@ -503,7 +503,8 @@ describe("transitions of a claimed post", () => {
 describe("account-wide transitions", () => {
   it("tripPrivateLock pauses the account and blocks queued posts; resumePosting undoes it", async () => {
     await seedAccount();
-    await seedPost({ _id: "q", lineageId: "c1" });
+    // Waiting for the quota when the lock trips: resumed with no stale wait left over.
+    await seedPost({ _id: "q", lineageId: "c1", notBefore: new Date(Date.now() + 3_600_000), waitReason: "quota" });
     await seedPost({ _id: "b", lineageId: "c2", state: "blocked", waitReason: "reconnect" });
     await seedPost({ _id: "u", lineageId: "c3", state: "uploaded" });
 
@@ -526,6 +527,7 @@ describe("account-wide transitions", () => {
       const resumed = await storedPost(id);
       expect(resumed.state).toBe("queued");
       expect(resumed.waitReason).toBeUndefined();
+      expect(resumed.notBefore).toBeUndefined();
     }
     expect((await publishJobs()).map((job) => job.payload.postId).sort()).toEqual(["b", "q"]);
   });

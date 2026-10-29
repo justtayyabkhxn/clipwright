@@ -200,7 +200,8 @@ export async function verifyUploads(now = new Date(), fetchImpl: typeof fetch = 
 /** One user's share of `verifyUploads`: one token, one `videos.list` call, posts on another channel left untouched. */
 async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchImpl: typeof fetch): Promise<number> {
   const account = await getAccount(userId);
-  if (!account) return 0;
+  // A reconnect is needed first: its refresh token would only fail again every pass. Verification resumes after it.
+  if (!account || account.status === "reauth_required") return 0;
   // A video on a channel that is no longer connected cannot be read with the current token (§4.6).
   const matching = posts.filter((post) => post.channelId === account.channelId && post.videoId);
   if (!matching.length) return 0;
@@ -216,6 +217,7 @@ async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchI
     // §4.6 "the first time": a video already stored as locked must not re-trip the breaker on every
     // later pass while it stays non-final, which would re-block posts "Resume posting" just released.
     let trip = false;
+    let clearWarning = false;
     if (!status) {
       // Absent from the list: the video is gone from YouTube.
       set.uploadStatus = "deleted";
@@ -227,13 +229,18 @@ async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchI
         set.warning = PRIVATE_LOCK;
         trip = status.privacyStatus !== post.privacyStatus;
       } else if (status.rejectionReason) set.warning = status.rejectionReason;
+      // As requested and not rejected: a warning an earlier pass stored no longer holds.
+      else clearWarning = post.warning !== undefined;
     }
     if (FINAL_UPLOAD_STATUSES.has(set.uploadStatus!)) set.verifiedAt = updatedAt;
 
     // Trip before the write: if this throws, the post stays unwritten and the next run retries.
     if (trip) await tripPrivateLock(userId);
     const result = await collections()
-      .youtubePosts.updateOne({ _id: post._id, state: "uploaded", verifiedAt: { $exists: false } }, { $set: set });
+      .youtubePosts.updateOne(
+        { _id: post._id, state: "uploaded", verifiedAt: { $exists: false } },
+        { $set: set, ...(clearWarning && { $unset: { warning: "" } }) },
+      );
     if (!result.matchedCount) continue;
     if (set.verifiedAt) verified++;
   }

@@ -62,6 +62,8 @@ const INSERT_CAP_REACHED =
   "Stopped after repeated upload attempts so the clip is never posted twice. Check your channel before trying again.";
 const SESSION_REFUSED = "YouTube refused the upload session (HTTP 401).";
 const WORKER_STOPPED = "The upload stopped unexpectedly.";
+/** Names the settings to check, never their values. */
+const CHECK_OAUTH_CLIENT = "Check GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.";
 
 const DONE: JobOutcome = { status: "succeeded" };
 const later = (ms: number) => new Date(Date.now() + ms);
@@ -272,6 +274,10 @@ async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDo
     case "invalid_metadata":
       return failPost(post, say("YouTube rejected the title, description or tags"), code);
     default:
+      // The token endpoint refusing our client (invalid_client, say) is the server's setup, not this clip.
+      if (error instanceof GoogleApiError && error.tokenEndpoint) {
+        return failPost(post, `${say("Google rejected the server's OAuth client")} ${CHECK_OAUTH_CLIENT}`, code);
+      }
       return failPost(post, say("YouTube rejected the upload"), code);
   }
 }

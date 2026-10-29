@@ -457,6 +457,22 @@ describe("publish_youtube", () => {
     expect(await storedPost()).toMatchObject({ state: "cancelled", error: "YouTube account was disconnected.", insertCalls: 0 });
   });
 
+  it("a refused OAuth client is worded as the server's configuration, not the clip's upload", async () => {
+    await setup({ post: { metadata: STORED_METADATA }, account: { accessTokenExpiresAt: new Date(Date.now() - 1000) } });
+    const fake = services({ token: () => json(401, { error: "invalid_client", error_description: "The OAuth client was not found." }) });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["token"]);
+    expect(await storedPost()).toMatchObject({
+      state: "failed",
+      errorReason: "invalid_client",
+      insertCalls: 0,
+      error: "Google rejected the server's OAuth client (invalid_client). Check GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.",
+    });
+    expect((await storedAccount()).status).toBe("active");
+  });
+
   it("a 401 refreshes the token once and retries", async () => {
     await setup({ post: { metadata: STORED_METADATA } });
     const fake = services({ initiate: (call, index) => (index === 0 ? googleError(401, "authError") : DEFAULTS.initiate(call, index)) });
