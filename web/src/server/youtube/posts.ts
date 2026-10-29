@@ -474,6 +474,8 @@ export type SerializedPost = {
   hashtags: string[];
   video_url: string | null;
   privacy_status: string | null;
+  /** YouTube's `status.uploadStatus` from the last verify (§4.6): "deleted", "rejected" and "failed" change the chip. */
+  upload_status: string | null;
   warning: string | null;
   error: string | null;
   not_before: string | null;
@@ -497,6 +499,7 @@ export function serializePosts(task: Pick<TaskDoc, "clips">, posts: YoutubePostD
       hashtags: post.metadata?.hashtags ?? [],
       video_url: post.videoUrl ?? null,
       privacy_status: post.privacyStatus ?? null,
+      upload_status: post.uploadStatus ?? null,
       warning: post.warning ?? null,
       error: post.error ?? null,
       not_before: post.notBefore?.toISOString() ?? null,

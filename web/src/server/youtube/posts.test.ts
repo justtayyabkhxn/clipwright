@@ -659,8 +659,9 @@ describe("serializePosts", () => {
       upload: { sessionUri: "https://upload.example/session?upload_id=SESSIONSECRET", storageKey: "clips/t1/c2.mp4", size: 10, startedAt: new Date() },
     });
     const orphan = post({ _id: "p2", lineageId: "gone", state: "cancelled" });
+    const removed = post({ _id: "p3", state: "uploaded", videoId: "VID", privacyStatus: "public", uploadStatus: "deleted" });
 
-    const out = serializePosts(task, [working, orphan]);
+    const out = serializePosts(task, [working, orphan, removed]);
 
     expect(out.posts[0]).toEqual({
       id: "p1",
@@ -675,12 +676,14 @@ describe("serializePosts", () => {
       hashtags: ["investing"],
       video_url: null,
       privacy_status: null,
+      upload_status: null,
       warning: null,
       error: null,
       not_before: notBefore.toISOString(),
       insert_cap_reached: true,
     });
     expect(out.posts[1]).toMatchObject({ id: "p2", clip_id: null, title: null, tags: [], hashtags: [], insert_cap_reached: false });
+    expect(out.posts[2]).toMatchObject({ id: "p3", state: "uploaded", privacy_status: "public", upload_status: "deleted" });
     const json = JSON.stringify(out);
     for (const secret of ["upload_id", "SESSIONSECRET", "sessionUri", "clips/t1", "storageKey", "job-holding-claim", "claimed", "token", "Token"]) {
       expect(json).not.toContain(secret);

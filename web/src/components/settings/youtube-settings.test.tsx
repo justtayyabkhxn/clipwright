@@ -4,7 +4,8 @@ import { vi } from "vitest";
 
 import { YoutubeSettings } from "./youtube-settings";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+vi.mock("sonner", () => ({ toast }));
 
 const searchParams = new URLSearchParams();
 vi.mock("next/navigation", () => ({ useSearchParams: () => searchParams }));
@@ -43,6 +44,7 @@ function mockFetch({ account = disconnected, connectResponse, resumeResponse }: 
 }
 
 beforeEach(() => {
+  Object.values(toast).forEach((fn) => fn.mockClear());
   for (const key of [...searchParams.keys()]) searchParams.delete(key);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -97,6 +99,18 @@ it("shows the reconnect prompt and the private-lock warning with Resume posting"
   const user = userEvent.setup({ delay: null });
   await user.click(screen.getByRole("button", { name: "Resume posting" }));
   await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/youtube/account/resume" && init?.method === "POST")).toBe(true));
+  expect(toast.warning).not.toHaveBeenCalled();
+});
+
+it("warns when Resume posting succeeds but no worker is running", async () => {
+  const locked = connectedAccount({ status: "paused", warning: "private_lock" });
+  mockFetch({ account: locked, resumeResponse: { ...locked, status: "active", warning: null, worker_online: false } });
+  render(<YoutubeSettings />);
+  const user = userEvent.setup({ delay: null });
+  await user.click(await screen.findByRole("button", { name: "Resume posting" }));
+
+  await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining("worker isn't running"), expect.anything()));
+  expect(screen.queryByRole("button", { name: "Resume posting" })).not.toBeInTheDocument();
 });
 
 it.each([

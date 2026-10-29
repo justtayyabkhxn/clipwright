@@ -103,7 +103,7 @@
   },
   "youtube": {
     "title": "YouTube auto-post",
-    "description": "Claude writes a title, description, tags and hashtags for every finished clip, and it posts to your own channel as a public Short.",
+    "description": "Claude writes a title, description, tags and hashtags for every finished clip, and it posts to your own channel as a Short with the visibility you choose below.",
     "loading": "Loading…",
     "setupHint": "Set <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> in the server environment to turn this on. See <code>docs/youtube.md</code> in this repo for how to get them.",
     "connect": "Connect YouTube",

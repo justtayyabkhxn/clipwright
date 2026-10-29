@@ -30,7 +30,7 @@ function post(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "post-1", clip_id: "old", state: "queued", phase: null, progress: null, wait_reason: null,
     title: null, description: null, tags: [] as string[], hashtags: [] as string[], video_url: null,
-    privacy_status: null, warning: null, error: null, not_before: null, insert_cap_reached: false,
+    privacy_status: null, upload_status: null, warning: null, error: null, not_before: null, insert_cap_reached: false,
     ...overrides,
   };
 }
@@ -222,6 +222,62 @@ it("names an unrecognized warning code in a plain text line, never as raw HTML",
 
   expect(await screen.findByText("YouTube flagged this upload (<b>age_restricted</b>)")).toBeInTheDocument();
   expect(document.querySelector("b")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Flagged by YouTube" })).toHaveAttribute("href", "https://youtu.be/xyz");
+  expect(screen.queryByRole("link", { name: "Posted" })).not.toBeInTheDocument();
+});
+
+it("says why a cancelled post was not posted, and shows nothing for one cancelled without a reason", async () => {
+  clips = [clip("c-other-channel", 1), clip("c-deleted-run", 2)];
+  youtubePosts = [
+    post({ id: "p-other-channel", clip_id: "c-other-channel", state: "cancelled", error: "Not posted: a different channel was connected." }),
+    post({ id: "p-deleted-run", clip_id: "c-deleted-run", state: "cancelled" }),
+  ];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("Not posted: a different channel was connected.")).toBeInTheDocument();
+  expect(screen.getAllByText("Not posted")).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+});
+
+it("does not call an upload YouTube removed, rejected or failed Posted", async () => {
+  clips = [clip("c-removed", 1), clip("c-rejected", 2), clip("c-yt-failed", 3), clip("c-dup", 4)];
+  youtubePosts = [
+    post({ id: "p-removed", clip_id: "c-removed", state: "uploaded", video_url: "https://youtu.be/gone", upload_status: "deleted" }),
+    post({ id: "p-rejected", clip_id: "c-rejected", state: "uploaded", video_url: "https://youtu.be/rej", upload_status: "rejected", warning: "copyright" }),
+    post({ id: "p-yt-failed", clip_id: "c-yt-failed", state: "uploaded", video_url: "https://youtu.be/fail", upload_status: "failed" }),
+    post({ id: "p-dup", clip_id: "c-dup", state: "uploaded", video_url: "https://youtu.be/dup", upload_status: "processed", warning: "duplicate" }),
+  ];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("Removed from YouTube")).toBeInTheDocument();
+  expect(document.querySelector('a[href="https://youtu.be/gone"]')).not.toBeInTheDocument();
+  const flagged = screen.getAllByRole("link", { name: "Flagged by YouTube" }).map((link) => link.getAttribute("href"));
+  expect(flagged).toEqual(["https://youtu.be/rej", "https://youtu.be/fail", "https://youtu.be/dup"]);
+  expect(screen.getByText("YouTube flagged this upload (copyright)")).toBeInTheDocument();
+  expect(screen.getByText("YouTube flagged this video as a duplicate upload")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Posted" })).not.toBeInTheDocument();
+});
+
+it("shows the stored reason for a retry wait and for a blocked post, unless the pill already says it", async () => {
+  clips = [clip("c-retry", 1), clip("c-signup", 2), clip("c-reconnect", 3), clip("c-reauth", 4), clip("c-paused", 5)];
+  youtubePosts = [
+    post({ id: "p-retry", clip_id: "c-retry", state: "queued", wait_reason: "retry", error: "YouTube could not be reached (ECONNRESET)." }),
+    post({ id: "p-signup", clip_id: "c-signup", state: "blocked", wait_reason: "reconnect", error: "Create a YouTube channel, then reconnect (youtubeSignupRequired)." }),
+    post({ id: "p-reconnect", clip_id: "c-reconnect", state: "blocked", wait_reason: "reconnect", error: "Reconnect YouTube to post." }),
+    post({ id: "p-reauth", clip_id: "c-reauth", state: "blocked", wait_reason: "reconnect", error: "Reconnect YouTube to post (authError)." }),
+    post({
+      id: "p-paused", clip_id: "c-paused", state: "blocked", wait_reason: "private_lock",
+      error: "Posting is paused because YouTube made an upload private. Resume posting in Settings.",
+    }),
+  ];
+  render(<TaskPage />, { wrapper: TooltipProvider });
+
+  expect(await screen.findByText("Waiting to retry the upload")).toBeInTheDocument();
+  expect(screen.getByText("YouTube could not be reached (ECONNRESET).")).toBeInTheDocument();
+  expect(screen.getByText("Create a YouTube channel, then reconnect (youtubeSignupRequired).")).toBeInTheDocument();
+  expect(screen.queryByText("Reconnect YouTube to post.")).not.toBeInTheDocument();
+  expect(screen.queryByText("Reconnect YouTube to post (authError).")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Posting is paused because/)).not.toBeInTheDocument();
 });
 
 it("Try again posts to the retry route", async () => {

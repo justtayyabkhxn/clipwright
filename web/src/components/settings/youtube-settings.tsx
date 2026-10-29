@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { warnIfWorkerOffline } from "@/lib/worker-notice";
 
 /** `GET /api/youtube/account` (design §4.8). Tokens never appear here. */
 type YoutubeAccount = {
@@ -81,6 +82,7 @@ export function YoutubeSettings() {
       const data = await response.json().catch(() => null);
       if (!response.ok || !data) throw new Error();
       setAccount(data);
+      warnIfWorkerOffline(data);
     } catch {
       toast.error(t("resumeFailed"));
     } finally {
