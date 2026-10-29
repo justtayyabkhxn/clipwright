@@ -108,6 +108,26 @@ describe("parseYoutubeMetadata", () => {
     expect(Buffer.byteLength(youtubeDescription(result), "utf8")).toBeLessThanOrEqual(5000);
   });
 
+  it.each([
+    ["a link", "Watch this https://example.com"],
+    ["a bare www link", "More at www.example.com"],
+    ["a leading hashtag", "#shorts The habit that doubled my output"],
+    ["a hashtag after a word", "The habit that doubled my output #productivity"],
+    ["a line break", "The habit\nthat doubled my output"],
+  ])("rejects a title with %s, for the repair turn", (_name, title) => {
+    expect(() => parseYoutubeMetadata({ ...VALID_OUTPUT, title })).toThrow(OutputValidationError);
+  });
+
+  it("allows a '#' inside a word, as in C#", () => {
+    expect(parseYoutubeMetadata({ ...VALID_OUTPUT, title: "Why C# beats Java for games" }).title).toBe("Why C# beats Java for games");
+  });
+
+  it("uploads the description alone when no hashtag survives cleaning", () => {
+    const result = parseYoutubeMetadata({ ...VALID_OUTPUT, hashtags: ["bad tag", "#"] });
+    expect(result.hashtags).toEqual([]);
+    expect(youtubeDescription(result)).toBe(VALID_OUTPUT.description);
+  });
+
   it("drops an invalid language instead of rejecting the metadata", () => {
     const result = parseYoutubeMetadata({ ...VALID_OUTPUT, language: "not a real language tag!" });
     expect(result.language).toBeUndefined();

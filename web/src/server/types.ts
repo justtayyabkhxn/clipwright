@@ -194,7 +194,6 @@ export type YoutubeAccountDoc = {
   accessTokenExpiresAt?: Date;
   scopes: string[];
   status: "active" | "reauth_required" | "paused";
-  lastError?: string;
   warning?: string;
   autoPost: boolean;
   privacy: "public" | "unlisted" | "private";

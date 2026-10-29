@@ -124,15 +124,22 @@ function cleanLanguage(raw: unknown): string | undefined {
   return LANGUAGE_PATTERN.test(value) ? value : undefined;
 }
 
-/** What gets uploaded as the YouTube description: the body, then the hashtags on their own line. */
+/** What gets uploaded as the YouTube description: the body, then the hashtags (if any) on their own line. */
 export function youtubeDescription(m: Pick<YoutubeMetadata, "description" | "hashtags">): string {
+  if (!m.hashtags.length) return m.description;
   return `${m.description}\n\n${m.hashtags.map((h) => `#${h}`).join(" ")}`;
 }
 
+/** The §4.5 prompt rule, enforced too: a transcript written as instructions must not get these into the title. */
+const TITLE_LINK = /https?:\/\/|www\./i;
+/** A '#' starting a word, as YouTube links it; "C#" stays a title. */
+const TITLE_HASHTAG = /(^|\s)#[\p{L}\p{N}_]/u;
+
 /**
  * Validate and clean one Claude response. Throws `OutputValidationError` (triggering a repair
- * turn) for an empty or over-long title, or a description that cannot fit its hashtags in the
- * 5000-byte budget. Tags and hashtags are cleaned and clipped, never rejected.
+ * turn) for an empty or over-long title, a title with a link, hashtag or line break, or a
+ * description that cannot fit its hashtags in the 5000-byte budget. Tags and hashtags are cleaned
+ * and clipped, never rejected.
  */
 export function parseYoutubeMetadata(value: unknown): Omit<YoutubeMetadata, "model"> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -145,6 +152,9 @@ export function parseYoutubeMetadata(value: unknown): Omit<YoutubeMetadata, "mod
   const title = stripAngleBrackets(typeof obj.title === "string" ? obj.title : "").trim();
   if (title.length < 1 || title.length > TITLE_MAX_CHARS) {
     issues.push(issue("value_error", ["title"], `Title must be 1-${TITLE_MAX_CHARS} characters, got ${title.length}`));
+  }
+  if (TITLE_LINK.test(title) || TITLE_HASHTAG.test(title) || /[\r\n]/.test(title)) {
+    issues.push(issue("value_error", ["title"], "Title must not contain links, hashtags or line breaks"));
   }
 
   if (typeof obj.description !== "string") {
