@@ -110,9 +110,9 @@ export async function updateAccountPrefs(
 /**
  * Deletes the account doc and returns a thunk that best-effort revokes its token (logged-only,
  * never thrown), or `null` when there was no account. The revoke is a separate step, not awaited
- * here, so a caller can cancel the user's queued/blocked posts *before* the network call: a hung or
- * slow revoke (60 s `CALL_TIMEOUT_MS`) must never delay that cancel (design §4.3: delete → cancel →
- * best-effort revoke).
+ * here, so a caller can cancel the user's queued/blocked/failed posts *before* the network call: a
+ * hung or slow revoke (60 s `CALL_TIMEOUT_MS`) must never delay that cancel (design §4.3: delete →
+ * cancel → best-effort revoke).
  */
 export async function disconnectAccount(userId: string): Promise<(() => Promise<void>) | null> {
   const account = await collections().youtubeAccounts.findOneAndDelete({ _id: userId });

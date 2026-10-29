@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getClipUrl } from "@/lib/clip-actions";
 import { formatClipDuration } from "@/lib/generations";
+import { PAUSED, RECONNECT } from "@/lib/youtube-blocked";
 import { cn } from "@/lib/utils";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
 
@@ -41,10 +42,10 @@ export interface YoutubePost {
 const KNOWN_WARNING_CODES: Record<string, string> = { duplicate: "youtube.warnings.duplicate" };
 
 /**
- * A blocked post's stored sentence that the pill already says: publish-youtube.ts RECONNECT (with or
- * without a reason code) and PAUSED. Anything else, such as "Create a YouTube channel, then reconnect", is shown.
+ * A blocked post's stored sentence that the pill already says: RECONNECT (with or without a reason
+ * code) and PAUSED. Anything else, such as "Create a YouTube channel, then reconnect", is shown.
  */
-const BLOCKED_PILL_SAYS = /^(Reconnect YouTube to post|Posting is paused)/;
+const BLOCKED_PILL_SAYS = [RECONNECT, PAUSED];
 
 function formatLocalTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
@@ -96,7 +97,8 @@ function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePost; ret
   if (post.state === "blocked") {
     const locked = post.wait_reason === "private_lock";
     // A locked post's error is the pause sentence or a wait from before the lock: never news.
-    const reason = !locked && post.error && !BLOCKED_PILL_SAYS.test(post.error) ? post.error : null;
+    const error = post.error;
+    const reason = !locked && error && !BLOCKED_PILL_SAYS.some((said) => error.startsWith(said)) ? error : null;
     return (
       <div className="space-y-0.5">
         <div className="flex flex-wrap items-center gap-1">
@@ -127,18 +129,23 @@ function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePost; ret
   // state === "uploaded"
   // Deleted in Studio: the link would be dead.
   if (post.upload_status === "deleted") return <span className={pillClass("muted")}>{t("youtube.removed")}</span>;
-  if (post.warning === "private_lock") {
+  // A rejection outranks the lock: on a private-locked project it gets the Flagged pill, with the lock's line under it.
+  const rejected = post.upload_status === "rejected" || post.upload_status === "failed";
+  const privateLine = post.warning === "private_lock" && (
+    <p className="text-[10px] leading-snug text-muted-foreground">
+      {t("youtube.privateOnYoutubeLine")}{" "}
+      <Link href="/settings#youtube" className="underline-offset-2 hover:underline">{t("youtube.manageInSettings")}</Link>
+    </p>
+  );
+  if (privateLine && !rejected) {
     return (
       <div className="space-y-0.5">
         <span className={pillClass("warn")}>{t("youtube.privateOnYoutube")}</span>
-        <p className="text-[10px] leading-snug text-muted-foreground">
-          {t("youtube.privateOnYoutubeLine")}{" "}
-          <Link href="/settings#youtube" className="underline-offset-2 hover:underline">{t("youtube.manageInSettings")}</Link>
-        </p>
+        {privateLine}
       </div>
     );
   }
-  const flagged = post.upload_status === "rejected" || post.upload_status === "failed" || Boolean(post.warning);
+  const flagged = rejected || Boolean(post.warning);
   const tone = flagged ? "warn" : "success";
   const label = flagged ? t("youtube.flagged") : t("youtube.posted");
   return (
@@ -150,11 +157,11 @@ function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePost; ret
       ) : (
         <span className={pillClass(tone)}>{label}</span>
       )}
-      {post.warning && (
+      {privateLine || (post.warning && (
         <p className="text-[10px] leading-snug text-muted-foreground">
           {t(KNOWN_WARNING_CODES[post.warning] ?? "youtube.warningUnknown", { code: post.warning })}
         </p>
-      )}
+      ))}
     </div>
   );
 }

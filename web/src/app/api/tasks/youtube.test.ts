@@ -268,7 +268,7 @@ describe("DELETE /api/tasks/[id]/clips/[clipId]", () => {
   it("puts the post back as it was when a restyle starting meanwhile refuses the delete", async () => {
     const task = await completedTask(["a"]);
     const notBefore = new Date(Date.now() + 60 * 60_000);
-    await seedPost(task._id, { _id: "p1", lineageId: "a", state: "queued", waitReason: "quota", notBefore, error: "Quota used up (quotaExceeded)." });
+    await seedPost(task._id, { _id: "p1", lineageId: "a", state: "queued", waitReason: "quota", notBefore, error: "Quota used up (quotaExceeded).", errorReason: "quotaExceeded" });
     const { removeClip: realRemoveClip } = await vi.importActual<typeof import("@/server/tasks")>("@/server/tasks");
     vi.mocked(removeClip).mockImplementationOnce(async (taskId, clipId) => {
       // A restyle's start CAS lands between the route's status check and removeClip's own CAS.
@@ -284,6 +284,7 @@ describe("DELETE /api/tasks/[id]/clips/[clipId]", () => {
       waitReason: "quota",
       notBefore,
       error: "Quota used up (quotaExceeded).",
+      errorReason: "quotaExceeded",
     });
     expect((await collections().tasks.findOne({ _id: task._id }))?.clips.map((c) => c.id)).toEqual(["a"]);
   });

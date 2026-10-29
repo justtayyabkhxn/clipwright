@@ -14,7 +14,7 @@ export const GET = handle(async (request: Request) => {
   return json(serializeAccount(await getAccount(user.id)));
 });
 
-/** Partial update of `{auto_post, privacy, made_for_kids}`. Turning auto-post off cancels posts that are queued or blocked (design §4.3). */
+/** Partial update of `{auto_post, privacy, made_for_kids}`. Turning auto-post off cancels posts that are queued, blocked or failed (design §4.3). */
 export const PATCH = handle(async (request: Request) => {
   const user = await requireUser(request);
   const { auto_post, privacy, made_for_kids } = await readJsonObject(request);
@@ -32,7 +32,7 @@ export const PATCH = handle(async (request: Request) => {
   return json(serializeAccount(account));
 });
 
-/** Disconnects the channel: the account doc goes first, then queued/blocked posts are cancelled, then a best-effort revoke (design §4.3). */
+/** Disconnects the channel: the account doc goes first, then queued/blocked/failed posts are cancelled, then a best-effort revoke (design §4.3). */
 export const DELETE = handle(async (request: Request) => {
   const user = await requireUser(request);
   const revoke = await disconnectAccount(user.id);

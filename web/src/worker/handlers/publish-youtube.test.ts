@@ -575,7 +575,7 @@ describe("publish_youtube", () => {
     ["the private lock is set", { status: "active", warning: "private_lock" }, { state: "blocked", waitReason: "private_lock" }],
     ["the lock is set on a reauth_required account", { status: "reauth_required", warning: "private_lock" }, { state: "blocked", waitReason: "private_lock" }],
     ["the account is paused", { status: "paused" }, { state: "blocked", waitReason: "private_lock" }],
-    ["a different channel is connected", { channelId: "UC2" }, { state: "cancelled", error: "Not posted: a different channel was connected." }],
+    ["a different channel is connected", { channelId: "UC2" }, { state: "cancelled", error: "A different channel was connected." }],
     ["auto-post was turned off", { autoPost: false }, { state: "cancelled", error: "Auto-post was turned off." }],
   ] as const)("does not upload when %s", async (_name, account, expected) => {
     await setup({ account: account as Partial<YoutubeAccountDoc> | null });

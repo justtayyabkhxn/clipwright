@@ -25,7 +25,7 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 
 /** `videos.insert` session starts allowed per post before a manual retry (§4.5). */
 export const INSERT_CAP = 3;
-export const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
+export const CHANNEL_CHANGED_ERROR = "A different channel was connected.";
 export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
 export const DISCONNECTED_ERROR = "YouTube account was disconnected.";
 /** §4.7: clip delete and task delete 409 while the lineage's post is mid-upload. */
@@ -272,9 +272,10 @@ export async function clearMetadata(postId: string): Promise<void> {
 
 // --- Cancelling (§4.3, §4.7) ---
 
+/** No `error` (a delete): the old one goes too, so the chip never shows a stale wait or failure as the reason. */
 const cancel = (error?: string): UpdateFilter<YoutubePostDoc> => ({
   $set: { state: "cancelled", updatedAt: new Date(), ...(error !== undefined && { error }) },
-  $unset: { notBefore: "", waitReason: "", ...(error !== undefined && { errorReason: "" }) },
+  $unset: { notBefore: "", waitReason: "", errorReason: "", ...(error === undefined && { error: "" }) },
 });
 
 /**
@@ -315,7 +316,7 @@ export async function cancelPostForLineage(
   return { result: post?.state === "working" ? "working" : "none" };
 }
 
-/** Undo `cancelPostForLineage` for a refused clip delete: a post still cancelled gets its state and wait back. */
+/** Undo `cancelPostForLineage` for a refused clip delete: a post still cancelled gets its state, wait and error back. */
 export async function restoreCancelledPost(previous: YoutubePostDoc): Promise<void> {
   await collections().youtubePosts.updateOne(
     { _id: previous._id, state: "cancelled" },
@@ -325,6 +326,8 @@ export async function restoreCancelledPost(previous: YoutubePostDoc): Promise<vo
         updatedAt: new Date(),
         ...(previous.waitReason && { waitReason: previous.waitReason }),
         ...(previous.notBefore && { notBefore: previous.notBefore }),
+        ...(previous.error && { error: previous.error }),
+        ...(previous.errorReason && { errorReason: previous.errorReason }),
       },
     },
   );
@@ -395,7 +398,8 @@ export async function resumePosting(userId: string): Promise<YoutubeAccountDoc |
     await youtubePosts.updateMany(locked, { $set: { state: "queued", updatedAt: now }, $unset: { waitReason: "", notBefore: "" } });
     await enqueueQueued({ userId });
   } else {
-    await youtubePosts.updateMany(locked, { $set: { waitReason: "reconnect", updatedAt: now } });
+    // The same reset as `unblockAfterReconnect`'s locked branch: no wait or error from before the lock.
+    await youtubePosts.updateMany(locked, { $set: { waitReason: "reconnect", updatedAt: now }, $unset: { error: "", errorReason: "", notBefore: "" } });
   }
   return account;
 }

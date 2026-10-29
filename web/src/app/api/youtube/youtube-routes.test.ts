@@ -353,7 +353,7 @@ describe("GET /api/youtube/callback", () => {
     expect(locationQuery(response).has("youtube_error")).toBe(false);
     const cancelled = await collections().youtubePosts.findOne({ _id: "post-1" });
     expect(cancelled?.state).toBe("cancelled");
-    expect(cancelled?.error).toBe("Not posted: a different channel was connected.");
+    expect(cancelled?.error).toBe("A different channel was connected.");
     const survived = await collections().youtubePosts.findOne({ _id: "post-new-channel" });
     expect(survived?.state).toBe("queued");
   });

@@ -14,6 +14,7 @@ import {
   cancelPostForLineage,
   cancelPostsForTask,
   cancelPostsForUser,
+  CHANNEL_CHANGED_ERROR,
   claimPost,
   clearMetadata,
   createPostsForTask,
@@ -344,11 +345,24 @@ describe("claim and cancel", () => {
     expect(await cancelPostForLineage("t1", "u")).toEqual({ result: "none" });
   });
 
+  it("a cancel without a reason drops the old error, so a refused task delete shows no stale reason", async () => {
+    await seedPost({
+      waitReason: "retry", notBefore: new Date(Date.now() + 60_000),
+      error: "YouTube could not be reached (ECONNRESET).", errorReason: "ECONNRESET",
+    });
+
+    expect(await cancelPostsForTask("t1")).toEqual({ cancelled: 1, working: 0 });
+
+    const cancelled = await storedPost("p1");
+    expect(cancelled.state).toBe("cancelled");
+    for (const field of ["error", "errorReason", "waitReason", "notBefore"] as const) expect(cancelled[field]).toBeUndefined();
+  });
+
   it("cancelPostsForUser with exceptChannelId spares posts already on that channel", async () => {
     await seedPost({ _id: "old", lineageId: "old", userId: "u3", channelId: "UC-old", state: "queued" });
     await seedPost({ _id: "new", lineageId: "new", userId: "u3", channelId: "UC-new", state: "queued" });
 
-    expect(await cancelPostsForUser("u3", "Not posted: a different channel was connected.", { exceptChannelId: "UC-new" })).toBe(1);
+    expect(await cancelPostsForUser("u3", CHANNEL_CHANGED_ERROR, { exceptChannelId: "UC-new" })).toBe(1);
 
     expect((await storedPost("old")).state).toBe("cancelled");
     expect((await storedPost("new")).state).toBe("queued");
@@ -459,12 +473,12 @@ describe("transitions of a claimed post", () => {
 
   it("cancelClaimedPost cancels with an error for the claim holder only", async () => {
     const post = await claimed({ phase: "writing", errorReason: "backendError" });
-    expect(await cancelClaimedPost({ ...post, claimedBy: "stale-job" }, "Not posted: a different channel was connected.")).toBe(false);
+    expect(await cancelClaimedPost({ ...post, claimedBy: "stale-job" }, CHANNEL_CHANGED_ERROR)).toBe(false);
     expect((await storedPost("p1")).state).toBe("working");
 
-    expect(await cancelClaimedPost(post, "Not posted: a different channel was connected.")).toBe(true);
+    expect(await cancelClaimedPost(post, CHANNEL_CHANGED_ERROR)).toBe(true);
     const stored = await storedPost("p1");
-    expect(stored).toMatchObject({ state: "cancelled", error: "Not posted: a different channel was connected." });
+    expect(stored).toMatchObject({ state: "cancelled", error: CHANNEL_CHANGED_ERROR });
     for (const field of ["claimedBy", "phase", "errorReason", "waitReason", "notBefore"] as const) expect(stored[field]).toBeUndefined();
   });
 
@@ -551,7 +565,11 @@ describe("account-wide transitions", () => {
 
   it("keeps a reauth_required account's status through the lock, and its posts wait for a reconnect", async () => {
     await seedAccount({ status: "reauth_required" });
-    await seedPost({ _id: "q" });
+    // Waiting for the quota when the lock trips: that wait must not show under "Reconnect" later.
+    await seedPost({
+      _id: "q", waitReason: "quota", notBefore: new Date(Date.now() + 3_600_000),
+      error: "YouTube's daily upload quota is used up (quotaExceeded).", errorReason: "quotaExceeded",
+    });
 
     await tripPrivateLock(USER);
     expect(await collections().youtubeAccounts.findOne({ _id: USER })).toMatchObject({ status: "reauth_required", warning: "private_lock" });
@@ -560,7 +578,9 @@ describe("account-wide transitions", () => {
     const account = await resumePosting(USER);
     expect(account).toMatchObject({ status: "reauth_required" });
     expect(account?.warning).toBeUndefined();
-    expect(await storedPost("q")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
+    const relabelled = await storedPost("q");
+    expect(relabelled).toMatchObject({ state: "blocked", waitReason: "reconnect" });
+    for (const field of ["error", "errorReason", "notBefore"] as const) expect(relabelled[field]).toBeUndefined();
     expect(await publishJobs()).toHaveLength(0);
 
     expect(await unblockAfterReconnect(USER)).toBe(1);

@@ -3,6 +3,7 @@
 // Every post transition is fenced on this job's claim. Nothing is ever posted with fallback text.
 
 import { setTimeout as sleep } from "node:timers/promises";
+import { PAUSED, RECONNECT } from "../../lib/youtube-blocked";
 import { writeYoutubeMetadata, youtubeDescription, type YoutubeMetadata } from "../../server/ai/youtube-metadata";
 import { collections } from "../../server/db";
 import { env } from "../../server/env";
@@ -53,8 +54,6 @@ const UPLOAD_TRIES = 5;
 /** Backoff seam, replaced in tests. */
 export const uploadTiming = { sleep: (ms: number, signal: AbortSignal) => sleep(ms, undefined, { signal }) };
 
-const RECONNECT = "Reconnect YouTube to post";
-const PAUSED = "Posting is paused because YouTube made an upload private. Resume posting in Settings.";
 const CLIP_GONE = "Not posted: the clip no longer exists.";
 const FILE_MISSING = "The clip's video file is missing.";
 const METADATA_FAILED = "Claude could not write the title and description.";
