@@ -2,6 +2,11 @@
   "title": "YouTube",
   "description": "Every clip auto-post has sent to your channel, or is about to.",
   "loadError": "Could not load your YouTube posts",
+  "signInRequired": {
+    "title": "Sign in required",
+    "body": "Sign in to see your YouTube posts.",
+    "action": "Sign in"
+  },
   "settings": "Settings",
   "openSettings": "Open Settings",
   "notConfiguredTitle": "YouTube isn't set up",

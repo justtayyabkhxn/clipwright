@@ -6,6 +6,8 @@ import YoutubePage from "./page";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
+const auth = vi.hoisted(() => ({ session: { data: { user: { id: "user-1" } } as unknown, isPending: false } }));
+vi.mock("@/lib/auth-client", () => ({ useSession: () => auth.session }));
 
 /** A `GET /api/youtube/posts` item, with every field defaulted. */
 function post(overrides: Partial<Record<string, unknown>> = {}) {
@@ -34,6 +36,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   Object.values(toast).forEach((fn) => fn.mockClear());
+  auth.session = { data: { user: { id: "user-1" } }, isPending: false };
   account = CONNECTED;
   posts = [];
   truncated = false;
@@ -68,7 +71,6 @@ it("shows the channel, the counts, and the posts grouped by task, newest group f
     post({ id: "p-queued", clip_title: null }),
     post({ id: "p-failed", state: "failed", error: "YouTube rejected the upload.", clip_title: "Hook three" }),
     post({ id: "p-cancelled", state: "cancelled", error: "Auto-post was turned off.", clip_title: "Hook four" }),
-    post({ id: "p-deleted", state: "cancelled", clip_id: null, clip_title: null }),
   ];
   render(<YoutubePage />);
 
@@ -96,7 +98,6 @@ it("shows the channel, the counts, and the posts grouped by task, newest group f
   expect(screen.getByText("Waiting to post")).toBeInTheDocument();
   expect(screen.getByText("YouTube rejected the upload.")).toBeInTheDocument();
   expect(screen.getByText("Auto-post was turned off.")).toBeInTheDocument();
-  // Cancelled by a delete: no reason, so no row (the task page shows nothing for it either).
   expect(screen.getAllByRole("listitem").filter((item) => item.closest("section"))).toHaveLength(5);
   expect(screen.queryByText("Showing the latest 200 posts")).not.toBeInTheDocument();
 });
@@ -113,15 +114,29 @@ it("says so when the list is truncated, and shows the private-lock warning", asy
   expect(screen.getByText("Auto-post off")).toBeInTheDocument();
 });
 
-it("shows a Settings link instead of the list when no channel is connected", async () => {
+it("with no channel connected, shows a Settings link and still lists what was posted", async () => {
   account = { ...CONNECTED, connected: false, channel: null, status: null, auto_post: false };
-  posts = [post()];
+  posts = [
+    post({ id: "p-up", state: "uploaded", video_url: "https://youtu.be/v1" }),
+    post({ id: "p-off", state: "cancelled", error: "YouTube account was disconnected.", clip_title: "Hook two" }),
+  ];
   render(<YoutubePage />);
 
   expect(await screen.findByText("No channel connected")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open Settings" })).toHaveAttribute("href", "/settings#youtube");
-  expect(screen.queryByRole("list", { name: "Summary" })).not.toBeInTheDocument();
-  expect(screen.queryByText("Waiting to post")).not.toBeInTheDocument();
+  const counts = within(screen.getByRole("list", { name: "Summary" })).getAllByRole("listitem").map((item) => item.textContent);
+  expect(counts).toEqual(["1Posted", "0Waiting", "0Uploading", "0Failed", "1Not posted"]);
+  expect(screen.getByRole("link", { name: "Posted" })).toHaveAttribute("href", "https://youtu.be/v1");
+  expect(screen.getByText("YouTube account was disconnected.")).toBeInTheDocument();
+  expect(screen.queryByText("Nothing posted yet")).not.toBeInTheDocument();
+});
+
+it("asks a signed-out visitor to sign in, without calling the API", async () => {
+  auth.session = { data: null, isPending: false };
+  render(<YoutubePage />);
+
+  expect(await screen.findByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/sign-in");
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 it("explains when YouTube is not configured on the server", async () => {
@@ -142,10 +157,13 @@ it("shows the next scheduled try for a queued post that waits, and none once it 
   posts = [
     post({ id: "p-limit", wait_reason: "channel_limit", not_before: later, clip_title: "Held" }),
     post({ id: "p-due", wait_reason: "retry", not_before: "2020-01-01T00:00:00.000Z", clip_title: "Due" }),
+    // The quota chip already says until when.
+    post({ id: "p-quota", wait_reason: "quota", not_before: later, clip_title: "Quota" }),
   ];
   render(<YoutubePage />);
 
   expect(await screen.findByText("Waiting for YouTube's channel upload limit")).toBeInTheDocument();
+  expect(screen.getByText(/^Waiting for YouTube's daily limit \(until /)).toBeInTheDocument();
   expect(screen.getByText(`Next try ${when(later)}`)).toBeInTheDocument();
   expect(screen.getAllByText(/^Next try/)).toHaveLength(1);
 });
@@ -168,28 +186,60 @@ it("Try again asks first after the upload cap, then posts to the task's retry ro
   expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining("worker isn't running"), expect.anything());
 });
 
-it("polls every 4 s while a post is working, every 30 s while one is queued, and stops after", async () => {
+it("names the Try again button while it retries", async () => {
+  posts = [post({ state: "failed", error: "Nope" })];
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/youtube/account") return Response.json(account);
+    if (url === "/api/youtube/posts") return Response.json({ posts, truncated });
+    return new Promise<Response>(() => {});
+  });
+  render(<YoutubePage />);
+  const user = userEvent.setup({ delay: null });
+
+  await user.click(await screen.findByRole("button", { name: "Try again" }));
+  expect(await screen.findByRole("button", { name: "Retrying…" })).toBeDisabled();
+});
+
+it("polls every 4 s while a post is working or due, every 30 s while one waits or auto-post is on, and stops after", async () => {
   vi.useFakeTimers();
+  const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
   try {
     posts = [post({ state: "working", phase: "writing" })];
     const { unmount } = render(<YoutubePage />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await advance(0);
     expect(screen.getByText("Writing title…")).toBeInTheDocument();
 
+    // Queued and due (a Try again, the next clip of a batch): the worker claims it within seconds.
     posts = [post({ state: "queued" })];
-    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    await advance(4000);
     expect(screen.getByText("Waiting to post")).toBeInTheDocument();
+    posts = [post({ state: "queued", wait_reason: "channel_limit", not_before: new Date(Date.now() + 3_600_000).toISOString() })];
+    let calls = postFetches();
+    await advance(4000);
+    expect(postFetches()).toBe(calls + 1);
+    expect(screen.getByText("Waiting for YouTube's channel upload limit")).toBeInTheDocument();
 
-    const queuedCalls = postFetches();
-    await act(async () => { await vi.advanceTimersByTimeAsync(29_000); });
-    expect(postFetches()).toBe(queuedCalls);
+    // Only a post with a wait: 30 s.
+    calls = postFetches();
+    await advance(29_000);
+    expect(postFetches()).toBe(calls);
     posts = [post({ state: "uploaded", video_url: "https://youtu.be/v1" })];
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(postFetches()).toBe(queuedCalls + 1);
+    await advance(1000);
+    expect(postFetches()).toBe(calls + 1);
     expect(screen.getByRole("link", { name: "Posted" })).toBeInTheDocument();
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
-    expect(postFetches()).toBe(queuedCalls + 1);
+    // Nothing moving, but auto-post is on: a finishing generation adds posts, so 30 s.
+    calls = postFetches();
+    await advance(30_000);
+    expect(postFetches()).toBe(calls + 1);
+
+    // Auto-post off: polling stops once the page sees it.
+    account = { ...CONNECTED, auto_post: false };
+    await advance(30_000);
+    calls = postFetches();
+    await advance(120_000);
+    expect(postFetches()).toBe(calls);
 
     // A page left while a post is working stops polling.
     unmount();

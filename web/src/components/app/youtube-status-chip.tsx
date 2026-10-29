@@ -122,7 +122,14 @@ export function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePo
           <span className={pillClass("error")}>{t("youtube.failed")}</span>
           <span className="text-[10px] text-muted-foreground">{post.error || t("youtube.failedGeneric")}</span>
         </div>
-        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onRetry} disabled={retrying}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[10px]"
+          onClick={onRetry}
+          disabled={retrying}
+          aria-label={retrying ? t("youtube.retrying") : undefined}
+        >
           {retrying ? <Loader2 className="size-3 animate-spin" /> : t("youtube.tryAgain")}
         </Button>
       </div>
