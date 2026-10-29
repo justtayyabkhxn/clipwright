@@ -56,3 +56,13 @@ it("leaves the notice to the home page's own content on /", async () => {
   await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/tasks"))).toBe(true));
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/health"))).toBe(false);
 });
+
+it("links to the YouTube page from the sidebar and the mobile tab bar", async () => {
+  pathname = "/youtube";
+  render(<AppShell><p>page</p></AppShell>, { wrapper: TooltipProvider });
+  const links = await screen.findAllByRole("link", { name: "YouTube" });
+  expect(links.map((link) => [link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
+    ["/youtube", "page"],
+    ["/youtube", "page"],
+  ]);
+});

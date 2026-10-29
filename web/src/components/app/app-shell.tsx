@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sparkles, X,
+  CornerDownLeft, Film, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, Sparkles, X, Youtube,
 } from "lucide-react";
 import { modelLabel, useAiProvider } from "@/hooks/use-ai-provider";
 import { toast } from "sonner";
@@ -18,11 +18,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; labelKey: "create" | "library" | "settings"; icon: typeof Film; match: (path: string) => boolean };
+type NavItem = { href: string; labelKey: "create" | "library" | "youtube" | "settings"; icon: typeof Film; match: (path: string) => boolean };
 
 const NAV: NavItem[] = [
   { href: "/", labelKey: "create", icon: Sparkles, match: (p) => p === "/" },
   { href: "/list", labelKey: "library", icon: Film, match: (p) => p.startsWith("/list") || p.startsWith("/tasks") },
+  { href: "/youtube", labelKey: "youtube", icon: Youtube, match: (p) => p === "/youtube" },
   { href: "/settings", labelKey: "settings", icon: Settings, match: (p) => p === "/settings" },
 ];
 
@@ -344,6 +345,7 @@ function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const actions: PaletteEntry[] = [
       { id: "new", label: t("nav.newGeneration"), hint: t("palette.newHint"), href: "/", icon: Plus },
       { id: "library", label: t("palette.library"), href: "/list", icon: Film },
+      { id: "youtube", label: t("nav.youtube"), href: "/youtube", icon: Youtube },
       { id: "settings", label: t("nav.settings"), href: "/settings", icon: Settings },
     ].filter((entry) => !q || entry.label.toLowerCase().includes(q));
     const matches = generations
