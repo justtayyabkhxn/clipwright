@@ -111,8 +111,8 @@ forth to pass. Until it does, you have two options:
 - **Stopping.** Turning auto-post off, or disconnecting the channel, cancels every clip that has
   not uploaded yet (one already uploading may still finish). Deleting a clip or a task never
   removes a video already on YouTube; it is refused for a moment if that clip is mid-upload. A
-  task delete refused that way still cancels the task's other waiting clips (they then show no
-  chip). Connecting a different channel cancels clips still waiting for the old one ("Not posted",
+  task delete refused that way still cancels the task's other clips that have not uploaded, waiting or failed
+  (they then show no chip). Connecting a different channel cancels clips still waiting for the old one ("Not posted",
   with the reason "A different channel was connected."); they are not redirected to the new channel.
 - **What's not included (v1).** No review step before posting. No scheduling. One channel per
   user. No TikTok/Instagram. No thumbnails, playlists or view/like metrics. Tasks completed before

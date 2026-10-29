@@ -201,9 +201,9 @@ Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1}`, `{state:1, notBefor
   5. Upsert the account, with tokens encrypted. Keep the old refresh token if Google sends none.
   6. Move this user's `blocked` posts back to `queued`. Skip posts blocked by the `private_lock`
      circuit breaker, which only "Resume posting" releases.
-     - **If the connected channel differs from the previous one** (our call): cancel the `queued` and
-       `blocked` posts whose `channelId` is the old channel. Set their `error` to "Not posted: a
-       different channel was connected."
+     - **If the connected channel differs from the previous one** (our call): cancel the `queued`,
+       `blocked` and `failed` posts whose `channelId` is the old channel. Set their `error` to "A
+       different channel was connected." (the chip adds "Not posted"; amended after the final review)
      - Clips are never moved silently to a channel they weren't meant for.
   7. Redirect to `/settings?youtube=connected`, or to `/settings?youtube_error=<code>`. The codes
      are `denied`, `expired`, `missing_scope`, `no_channel` and `exchange_failed`. The UI maps codes
