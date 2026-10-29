@@ -95,10 +95,12 @@ forth to pass. Until it does, you have two options:
   the title, description, tags and hashtags that were posted.
 - **Seeing every post.** The **YouTube** page (in the sidebar, between Library and Settings) lists
   the newest 200 posts from every generation, grouped by generation. It shows your channel, its
-  status and whether auto-post is on, counts of Posted, Waiting, Uploading and Failed clips, and each clip's
-  chip from the task page, with the same **Try again**. A waiting clip also shows its next
-  scheduled try, and a posted one when it uploaded. The next try is when Clipwright will try
-  again, not when YouTube's limit lifts: for the channel limit that time is not published.
+  status and whether auto-post is on, counts of Posted, Waiting, Uploading and Failed clips, and
+  each clip's chip from the task page, with the same **Try again**. A waiting clip also shows its
+  next scheduled try (a clip held for the daily quota shows it in its chip), and a posted one when
+  it uploaded. The page refreshes on its own while clips are moving or auto-post is on, and keeps
+  your history after you disconnect the channel. The next try is when Clipwright will try again, not
+  when YouTube's limit lifts: for the channel limit that time is not published.
 - **Quota.** `videos.insert` has its own 100-call/day bucket per Google Cloud project, reset at
   midnight Pacific. A generation makes at most `MAX_CLIPS` clips, so this allows about 10
   generations a day. When the quota is used up, every waiting clip is held until the reset; when a

@@ -458,3 +458,21 @@ uploads every clip of a finished video to the user's channel as a public Short.
   files: the new page, the task page, shell, YouTube and task YouTube routes, posts, db, i18n,
   settings) 130 passed; full `vitest run --maxWorkers=2` 877 passed / 1 skipped (68 files + 1
   skipped).
+
+### 2026-10-29 14:45 — YouTube overview page review fixes (branch `youtube-posts-page`)
+- Startup drops the old `youtube_posts {userId:1}` index (`createIndex` never removes it), so a
+  database from the `youtube-autopost` branch ends up with only `{userId:1, createdAt:-1}`. Codes
+  26/27 (fresh database, already dropped) are ignored.
+- `GET /api/youtube/posts` leaves out posts cancelled without a reason (a clip delete), so they no
+  longer take slots in the 200 cap; the page's own filter is gone.
+- `/youtube` polls every 4 s while a post is working or queued and due (a Try again, the next clip
+  of a batch), every 30 s while a post waits or auto-post is on (so a finishing generation's posts
+  appear without a reload), and stops otherwise.
+- With no channel connected the page keeps the Settings card and still lists the history
+  (uploaded links, cancellation reasons). Signed out, it shows a sign-in prompt instead of a 401
+  error page.
+- A quota-held post no longer repeats its time as "Next try …" under the chip.
+- The chip's Try again button is named "Retrying…" while its spinner shows (task page too).
+- Tests first (RED then GREEN): db (old index dropped, restart without it), posts route (hidden
+  posts take no cap slot), page (sign-in, disconnected history, quota line, Retrying name, poll
+  cadence).

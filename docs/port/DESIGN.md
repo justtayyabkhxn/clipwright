@@ -260,7 +260,7 @@ type YoutubePostDoc = {
   createdAt: Date; updatedAt: Date;
 };
 ```
-Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1, createdAt:-1}` (for `GET /api/youtube/posts`; its prefix serves the userId-only queries), `{state:1, notBefore:1}`.
+Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1, createdAt:-1}` (for `GET /api/youtube/posts`; its prefix serves the userId-only queries; it replaced `{userId:1}`, which startup drops), `{state:1, notBefore:1}`.
 
 ## 6. Jobs and the worker
 
@@ -433,7 +433,7 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `GET /api/youtube/callback` | Consumes the state, exchanges the code, requires both scopes, looks up the channel, upserts the account (tokens encrypted), unblocks or cancels posts per a channel change, then redirects to `/settings?youtube=connected` or `/settings?youtube_error=<code>` (`denied`, `expired`, `missing_scope`, `no_channel`, `exchange_failed`, `not_configured`). Never echoes Google's own error text |
 | `GET`/`PATCH`/`DELETE /api/youtube/account` | GET: `{configured, connected, channel, status, warning, auto_post, privacy, made_for_kids}`, never tokens. PATCH: partial `{auto_post, privacy, made_for_kids}`; turning `auto_post` off cancels `queued`/`blocked`/`failed` posts. DELETE: disconnects, cancels the same posts, then best-effort revokes |
 | `POST /api/youtube/account/resume` | "Resume posting": clears the forced-private lock and requeues the posts it was holding, dropping any wait they had from before the lock (a limit still in force re-defers them on the first upload). A `reauth_required` account keeps that status, and those posts wait for a reconnect instead. Returns the account plus `worker_online` |
-| `GET /api/youtube/posts` | The `/youtube` page: `{posts, truncated}`, the user's newest 200 posts by `createdAt` (`truncated` true when older ones exist). Each item is the `GET /api/tasks/[id]/youtube` post plus `task_id`, `task_title` (the task's source title; null once the task is gone), `clip_title` (the lineage's current clip's hook title, else null), `created_at` and `uploaded_at` (ISO or null). Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
+| `GET /api/youtube/posts` | The `/youtube` page: `{posts, truncated}`, the user's newest 200 posts by `createdAt` (`truncated` true when older ones exist), leaving out posts cancelled without an `error` (a clip delete), which show nothing. Each item is the `GET /api/tasks/[id]/youtube` post plus `task_id`, `task_title` (the task's source title; null once the task is gone), `clip_title` (the lineage's current clip's hook title, else null), `created_at` and `uploaded_at` (ISO or null). Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
 | `GET /api/tasks/[id]/youtube` | `{posts:[{id, clip_id, state, phase, progress, title, description, tags, hashtags, video_url, privacy_status, upload_status, warning, error, not_before, wait_reason, insert_cap_reached}], autopost_pending}`. `clip_id` is the lineage's current clip (null once it is gone); `autopost_pending` is true while the task's posts are not created yet, so the page keeps polling. Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
 | `POST /api/tasks/[id]/youtube/[postId]/retry` | Retries a `failed`/`blocked` post (404 if gone, 409 if `uploaded` or still `queued`/`working`): resets the automatic retry count, raises the post's `insertCap` to `max(insertCap, insertCalls + 1)`, enqueues `publish_youtube`, returns `worker_online` |
 
@@ -449,7 +449,7 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 - Add a "Based on SupoClip (AGPL-3.0) · Source" footer link in the shell's user area and on the auth frame.
 - New logo: an SVG mark plus a wordmark (a component), replacing `logo.png`.
 - The design tokens from the previous redesign stay.
-- `/youtube` (sidebar, tab bar and palette, between Library and Settings): the connected channel, counts, and every post from `GET /api/youtube/posts` grouped by task, with the task page's chip and Try again (`components/app/youtube-status-chip.tsx`). It polls every 4 s while a post is `working`, every 30 s while one is `queued`, and stops otherwise.
+- `/youtube` (sidebar, tab bar and palette, between Library and Settings): the connected channel, counts, and every post from `GET /api/youtube/posts` grouped by task, with the task page's chip and Try again (`components/app/youtube-status-chip.tsx`). It polls every 4 s while a post is `working` or `queued` and due (no `not_before`, or one in the past), every 30 s while a post waits or auto-post is on (a finishing generation adds posts), and stops otherwise. With no channel connected it shows the Settings card and still lists the history. Signed out, it shows a sign-in prompt.
 
 ## 11. Testing
 - `web`: vitest. Mongo-backed tests use `mongodb-memory-server` (dev dependency), with one in-memory server per test file. Storage tests use a temp `DATA_DIR`. Engine-dependent worker code is tested with a fake `runEngine`.
