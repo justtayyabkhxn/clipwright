@@ -53,7 +53,8 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Link from "next/link";
-import { ClipTile, ClipFocus, ProcessingPanel, EmptyState, type YoutubePost } from "@/components/app/clip-wall";
+import { ClipTile, ClipFocus, ProcessingPanel, EmptyState } from "@/components/app/clip-wall";
+import { useYoutubeRetry, type YoutubePost } from "@/components/app/youtube-status-chip";
 import { timeAgo } from "@/lib/generations";
 import { VIDEO_SOURCE_LABELS, VideoSourceIcon, videoSourceKind, type VideoSourceKind } from "@/components/video-source-icon";
 import { cn } from "@/lib/utils";
@@ -167,8 +168,6 @@ export default function TaskPage() {
   // inserted its posts yet) — kept separate from `youtubePosts` so an empty posts array during that
   // window doesn't read as "nothing to post" (review round 2 finding).
   const [autopostPending, setAutopostPending] = useState(false);
-  const [retryingPostId, setRetryingPostId] = useState<string | null>(null);
-  const [capConfirmPost, setCapConfirmPost] = useState<YoutubePost | null>(null);
 
   const taskApiUrl = "/api/tasks";
   // The last status this page saw, and whether it started a restyle, so a finished job is announced once.
@@ -332,31 +331,9 @@ export default function TaskPage() {
     return () => window.clearInterval(timer);
   }, [youtubePostsPending, fetchYoutubePosts]);
 
-  const retryYoutubePost = async (post: YoutubePost) => {
-    if (!params.id) return;
-    setRetryingPostId(post.id);
-    try {
-      const response = await fetch(`${taskApiUrl}/${params.id}/youtube/${post.id}/retry`, { method: "POST" });
-      if (!response.ok) {
-        toast.error(await buildSupportError(response, t("youtube.retryFailed")));
-        return;
-      }
-      const data = await response.json();
-      warnIfWorkerOffline(data);
-      setYoutubePosts((current) => current.map((p) => (p.id === post.id ? { ...p, ...data } : p)));
-      setCapConfirmPost(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("youtube.retryFailed"));
-    } finally {
-      setRetryingPostId(null);
-    }
-  };
-
-  const handleRetryPost = (post: YoutubePost) => {
-    if (retryingPostId) return;
-    if (post.insert_cap_reached) { setCapConfirmPost(post); return; }
-    void retryYoutubePost(post);
-  };
+  const { retryingPostId, requestRetry, confirmDialog: retryConfirmDialog } = useYoutubeRetry((postId, updated) =>
+    setYoutubePosts((current) => current.map((p) => (p.id === postId ? { ...p, ...updated } : p))));
+  const handleRetryPost = (post: YoutubePost) => requestRetry(String(params.id), post);
 
   const youtubePostByClipId = new Map(youtubePosts.filter((post) => post.clip_id).map((post) => [post.clip_id as string, post]));
 
@@ -964,20 +941,7 @@ export default function TaskPage() {
       </AlertDialog>
 
       {/* "Try again" on a post that already used up its upload-insert cap (design §4.8) */}
-      <AlertDialog open={capConfirmPost !== null} onOpenChange={(open) => { if (!open) setCapConfirmPost(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("youtube.retryConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("youtube.retryConfirmBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={retryingPostId !== null}>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => capConfirmPost && void retryYoutubePost(capConfirmPost)} disabled={retryingPostId !== null}>
-              {retryingPostId ? t("youtube.retrying") : t("youtube.tryAgain")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {retryConfirmDialog}
     </main>
   );
 }
