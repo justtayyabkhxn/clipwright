@@ -158,6 +158,8 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
 - **Connect:** the first attempts failed with `youtube_error=exchange_failed`; the YouTube Data API was not enabled yet. Connected `@justtayyabkhanai` at 11:24 IST.
 - **Generation:** the first 10-clip run died because the fix agents' edits restarted `tsx watch`; the second run completed.
 - **Upload:** all 10 posts uploaded within about 90 s of completion, public, 1 insert call each; the first is `ZJYWDE10Ra4`. Verification about 10 min later: all 10 `processed` and still public, so the private lock did not trip. On this project uploads are not forced private, at least for now.
+- **Second generation (10 clips):** YouTube refused the first upload with `uploadLimitExceeded` (the channel's unpublished daily cap, after the morning's 10). The channel hold and the refund worked as designed: all 10 posts held 6 h, 0 insert calls spent. A manual retry after the user verified the channel by phone was refused again; the next automatic try is 20:14 IST.
+- **`/youtube` overview page** added (route `GET /api/youtube/posts`, sidebar entry, shared status chip; `36d1538..ded0c5e`). It was built in a worktree, reviewed by 2 reviewers with verifiers, 7 Minors fixed, and fast-forwarded in. On startup the app drops the old `youtube_posts {userId:1}` index.
 - **Follow-up (not fixed; the user asked only for a diagnosis):** the callback reports token-exchange, channel-lookup and unexpected failures all as `exchange_failed` ("Please try again"), so a disabled API looks retryable.
 
 **Left to do:**
