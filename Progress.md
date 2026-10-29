@@ -432,3 +432,29 @@ uploads every clip of a finished video to the user's channel as a public Short.
   chip share the RECONNECT/PAUSED sentences (`web/src/lib/youtube-blocked.ts`); the guide and spec
   say "Removed from YouTube" only catches deletions before verification finished; three stale
   cancel comments fixed.
+
+### 2026-10-29 14:25 — YouTube overview page (branch `youtube-posts-page`, from `b1ab65d`)
+- Asked for by the user: one page showing every clip's posting status, instead of only the chip on
+  each task page.
+- API (`36d1538`): `GET /api/youtube/posts` returns the user's newest 200 posts, newest first, with
+  `truncated` when older ones exist. Each item is the task route's post plus `task_id`,
+  `task_title`, `clip_title`, `created_at` and `uploaded_at`. It runs one projected query for the
+  tasks (`listPostsForUser` in `server/youtube/posts.ts`). The `youtube_posts {userId:1}` index is
+  now `{userId:1, createdAt:-1}`.
+- Refactor (`3761082`): `YoutubeStatusChip` and the task page's Try again logic (cap confirm,
+  retry route, worker-offline toast) moved to `components/app/youtube-status-chip.tsx`
+  (`useYoutubeRetry`). The task page behaves as before.
+- Page (`9d56225`): `/youtube` shows:
+  - the channel (link, status, auto-post, private-lock warning, Settings link);
+  - Posted/Waiting/Uploading/Failed counts, plus Not posted when any exist;
+  - the posts grouped by task, each with its chip, "Next try …" for a queued post that has a wait,
+    and "Uploaded …" for a posted one.
+  It polls every 4 s while a post is working, every 30 s while one is queued, and stops
+  otherwise. Its copy is in the new `youtube` message namespace. Nav (`223d2fd`): sidebar, tab bar
+  and palette, between Library and Settings.
+- Docs: `docs/port/DESIGN.md` (route row, index, §10 bullet) and `docs/youtube.md` §3 ("Seeing
+  every post").
+- Verification (from `web/`): `tsc --noEmit` 0 errors; `pnpm lint` clean; focused vitest (11
+  files: the new page, the task page, shell, YouTube and task YouTube routes, posts, db, i18n,
+  settings) 130 passed; full `vitest run --maxWorkers=2` 877 passed / 1 skipped (68 files + 1
+  skipped).
