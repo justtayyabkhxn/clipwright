@@ -64,7 +64,7 @@ describe("YouTube indexes", () => {
     const lineageIdIndex = postIndexes.find((index) => JSON.stringify(index.key) === JSON.stringify({ lineageId: 1 }));
     expect(lineageIdIndex?.unique).toBe(true);
     expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ taskId: 1 }))).toBe(true);
-    expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ userId: 1 }))).toBe(true);
+    expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ userId: 1, createdAt: -1 }))).toBe(true);
     expect(postIndexes.some((index) => JSON.stringify(index.key) === JSON.stringify({ state: 1, notBefore: 1 }))).toBe(true);
 
     const oauthStateIndexes = await db.collection("oauth_states").indexes();

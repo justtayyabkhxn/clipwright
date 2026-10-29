@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-// YouTube auto-post connection routes (design §4.3): connect, callback, account, account/resume.
+// YouTube auto-post routes (design §4.3): connect, callback, account, account/resume, and the posts overview.
 // Real Better Auth sessions on a standalone mongod, msw for Google.
 
 import { MongoMemoryServer } from "mongodb-memory-server";
@@ -10,13 +10,15 @@ import { getAuth } from "@/server/auth";
 import { closeDb, collections, ensureIndexes } from "@/server/db";
 import { resetEnv } from "@/server/env";
 import { decryptSetting } from "@/server/settings";
-import type { YoutubePostDoc } from "@/server/types";
+import { settingsFromCreateRequest } from "@/server/tasks";
+import type { ClipDoc, YoutubePostDoc } from "@/server/types";
 import * as posts from "@/server/youtube/posts";
 
 import * as connectRoute from "./connect/route";
 import * as callbackRoute from "./callback/route";
 import * as accountRoute from "./account/route";
 import * as resumeRoute from "./account/resume/route";
+import * as postsRoute from "./posts/route";
 
 let mongod: MongoMemoryServer;
 const baseEnv = { ...process.env };
@@ -552,5 +554,116 @@ describe("POST /api/youtube/account/resume", () => {
   it("404s when no account is connected", async () => {
     const response = await call(resumeRoute.POST, "/api/youtube/account/resume", { method: "POST" });
     expect(response.status).toBe(404);
+  });
+});
+
+describe("GET /api/youtube/posts", () => {
+  beforeEach(async () => {
+    await collections().tasks.deleteMany({});
+  });
+
+  function clipDoc(id: string, hookTitle: string | null, lineageId?: string): ClipDoc {
+    const now = new Date();
+    return {
+      id, filename: `${id}.mp4`, storageKey: `clips/t/${id}.mp4`, startTime: "00:00", endTime: "00:30", duration: 30,
+      text: "words", relevanceScore: 0.9, reasoning: "", viralityScore: 70, hookScore: 18, engagementScore: 17,
+      valueScore: 18, shareabilityScore: 17, hookType: "question", hookTitle, sourceRanges: [{ start: 0, end: 30 }],
+      ...(lineageId && { lineageId }), createdAt: now, updatedAt: now,
+    };
+  }
+
+  async function insertTask(id: string, userId: string, title: string, clips: ClipDoc[]) {
+    const now = new Date();
+    await collections().tasks.insertOne({
+      _id: id, userId, status: "completed", progress: 100, progressMessage: "Complete!",
+      source: { type: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title, videoId: "dQw4w9WgXcQ" },
+      settings: settingsFromCreateRequest({}), clips, createdAt: now, updatedAt: now,
+    });
+  }
+
+  function postDoc(id: string, overrides: Partial<YoutubePostDoc> = {}): YoutubePostDoc {
+    return {
+      _id: id, userId: users.alice.id, taskId: "task-1", lineageId: id, channelId: "UC1", state: "queued",
+      attempts: 0, insertCalls: 0, insertCap: 3, privacy: "public", madeForKids: false, notifySubscribers: false,
+      createdAt: new Date("2026-10-29T10:00:00Z"), updatedAt: new Date("2026-10-29T10:00:00Z"), ...overrides,
+    };
+  }
+
+  it("requires a session", async () => {
+    const response = await call(postsRoute.GET, "/api/youtube/posts", { as: null });
+    expect(response.status).toBe(401);
+  });
+
+  it("lists only the caller's posts, newest first, with their task and clip titles", async () => {
+    // A restyled clip keeps its lineage under a new id: the post resolves to the current clip.
+    await insertTask("task-1", users.alice.id, "Talk", [clipDoc("clip-2", "Why it works", "lin-a"), clipDoc("clip-b", null, "lin-b")]);
+    await insertTask("task-2", users.alice.id, "Podcast", [clipDoc("clip-c", "Big idea", "lin-c")]);
+    await insertTask("task-bob", users.bob.id, "Bob's", [clipDoc("clip-bob", "Not yours", "lin-bob")]);
+    await collections().youtubePosts.insertMany([
+      postDoc("p-old", { lineageId: "lin-a", createdAt: new Date("2026-10-28T10:00:00Z") }),
+      postDoc("p-new", {
+        taskId: "task-2", lineageId: "lin-c", state: "uploaded", videoUrl: "https://www.youtube.com/watch?v=v1",
+        uploadedAt: new Date("2026-10-29T11:00:00Z"), createdAt: new Date("2026-10-29T10:00:00Z"),
+        metadata: { title: "Claude's title", description: "d", tags: ["t"], hashtags: ["h"], model: "m" },
+      }),
+      postDoc("p-mid", { lineageId: "lin-b", state: "failed", error: "Nope", createdAt: new Date("2026-10-28T12:00:00Z") }),
+      postDoc("p-bob", { userId: users.bob.id, taskId: "task-bob", lineageId: "lin-bob" }),
+    ]);
+
+    const response = await call(postsRoute.GET, "/api/youtube/posts");
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.truncated).toBe(false);
+    expect(body.posts.map((post: { id: string }) => post.id)).toEqual(["p-new", "p-mid", "p-old"]);
+    expect(body.posts[0]).toMatchObject({
+      task_id: "task-2", task_title: "Podcast", clip_id: "clip-c", clip_title: "Big idea", title: "Claude's title",
+      state: "uploaded", video_url: "https://www.youtube.com/watch?v=v1",
+      created_at: "2026-10-29T10:00:00.000Z", uploaded_at: "2026-10-29T11:00:00.000Z",
+    });
+    expect(body.posts[1]).toMatchObject({ task_id: "task-1", task_title: "Talk", clip_id: "clip-b", clip_title: null, error: "Nope", uploaded_at: null });
+    expect(body.posts[2]).toMatchObject({ task_title: "Talk", clip_id: "clip-2", clip_title: "Why it works", title: null });
+  });
+
+  it("never exposes the upload session, tokens or the claim", async () => {
+    await insertTask("task-1", users.alice.id, "Talk", [clipDoc("clip-1", "Hook", "lin-1")]);
+    await collections().youtubePosts.insertOne(postDoc("p-1", {
+      lineageId: "lin-1", state: "working", claimedBy: "job-secret",
+      upload: { sessionUri: "https://upload.example/session-secret", storageKey: "clips/t/clip-1.mp4", size: 10, startedAt: new Date() },
+    }));
+
+    const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
+
+    expect(Object.keys(body.posts[0]).sort()).toEqual([
+      "clip_id", "clip_title", "created_at", "description", "error", "hashtags", "id", "insert_cap_reached", "not_before",
+      "phase", "privacy_status", "progress", "state", "tags", "task_id", "task_title", "title", "upload_status",
+      "uploaded_at", "video_url", "wait_reason", "warning",
+    ]);
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("session-secret");
+    expect(text).not.toContain("job-secret");
+    expect(text).not.toContain("clips/t/clip-1.mp4");
+  });
+
+  it("caps the list at the newest 200 and says so", async () => {
+    const base = Date.parse("2026-10-01T00:00:00Z");
+    await collections().youtubePosts.insertMany(
+      Array.from({ length: 201 }, (_, i) => postDoc(`p-${i}`, { createdAt: new Date(base + i * 60_000) })),
+    );
+
+    const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
+
+    expect(body.truncated).toBe(true);
+    expect(body.posts).toHaveLength(200);
+    expect(body.posts[0].id).toBe("p-200");
+    expect(body.posts.at(-1).id).toBe("p-1");
+  });
+
+  it("returns null titles and clip for a post whose task is gone", async () => {
+    await collections().youtubePosts.insertOne(postDoc("p-orphan", { taskId: "task-gone" }));
+
+    const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
+
+    expect(body.posts[0]).toMatchObject({ id: "p-orphan", task_id: "task-gone", task_title: null, clip_id: null, clip_title: null });
   });
 });

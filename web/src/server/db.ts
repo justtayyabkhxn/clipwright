@@ -87,7 +87,8 @@ async function createIndexes() {
     db.collection("jobs").createIndex({ status: 1, expiresAt: 1 }),
     db.collection("youtube_posts").createIndex({ lineageId: 1 }, { unique: true }),
     db.collection("youtube_posts").createIndex({ taskId: 1 }),
-    db.collection("youtube_posts").createIndex({ userId: 1 }),
+    // The prefix also serves every userId-only query (account-wide cancels, the private lock).
+    db.collection("youtube_posts").createIndex({ userId: 1, createdAt: -1 }),
     db.collection("youtube_posts").createIndex({ state: 1, notBefore: 1 }),
     db.collection("oauth_states").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);

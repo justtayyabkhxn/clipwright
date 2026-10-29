@@ -511,3 +511,46 @@ export function serializePosts(task: Pick<TaskDoc, "clips">, posts: YoutubePostD
     })),
   };
 }
+
+/** One `GET /api/youtube/posts` item: a `SerializedPost` plus where it came from. */
+export type OverviewPost = SerializedPost & {
+  task_id: string;
+  /** The task's source title; null once the task is gone. */
+  task_title: string | null;
+  /** The lineage's current clip's hook title; null once that clip is gone. */
+  clip_title: string | null;
+  created_at: string;
+  uploaded_at: string | null;
+};
+
+/**
+ * The user's newest `limit` posts, newest first, for the YouTube overview page. `truncated` says
+ * older ones exist. One query for the posts and one for their tasks (titles and clips only).
+ */
+export async function listPostsForUser(userId: string, limit: number): Promise<{ posts: OverviewPost[]; truncated: boolean }> {
+  const { youtubePosts, tasks } = collections();
+  const found = await youtubePosts.find({ userId }).sort({ createdAt: -1 }).limit(limit + 1).toArray();
+  const posts = found.slice(0, limit);
+  const taskDocs = await tasks
+    .find(
+      { _id: { $in: [...new Set(posts.map((post) => post.taskId))] }, userId },
+      { projection: { "source.title": 1, "clips.id": 1, "clips.lineageId": 1, "clips.hookTitle": 1 } },
+    )
+    .toArray();
+  const taskById = new Map(taskDocs.map((task) => [task._id, task]));
+  return {
+    truncated: found.length > limit,
+    posts: posts.map((post) => {
+      const task = taskById.get(post.taskId);
+      const [serialized] = serializePosts(task ?? { clips: [] }, [post]).posts;
+      return {
+        ...serialized,
+        task_id: post.taskId,
+        task_title: task?.source.title ?? null,
+        clip_title: task?.clips.find((clip) => clip.id === serialized.clip_id)?.hookTitle ?? null,
+        created_at: post.createdAt.toISOString(),
+        uploaded_at: post.uploadedAt?.toISOString() ?? null,
+      };
+    }),
+  };
+}
