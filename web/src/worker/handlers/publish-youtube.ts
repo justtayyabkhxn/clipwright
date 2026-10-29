@@ -29,11 +29,13 @@ import {
   CHANNEL_CHANGED_ERROR,
   claimPost,
   clearMetadata,
+  deferAllQueuedForChannel,
   deferAllQueuedForQuota,
   deferPost,
   failPost,
   lineageOf,
   markUploaded,
+  refundInsertCall,
   saveMetadata,
   saveSession,
   setPhase,
@@ -174,6 +176,9 @@ function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccount
       try {
         return await startUploadSession(token, insertBody(post, metadata), size, post.notifySubscribers, fetchImpl);
       } catch (error) {
+        // An explicit limit refused the start: nothing exists to duplicate, so the call is not counted.
+        const refused = classify(error);
+        if (refused === "quota" || refused === "channel_limit") await refundInsertCall(post);
         if (freshToken !== undefined || !(error instanceof GoogleApiError && error.status === 401)) throw error;
         // The claim-time token counts as expired; the snapshot's refresh token still fences the write.
         freshToken = await getAccessToken({ ...account, accessTokenExpiresAt: undefined }, fetchImpl);
@@ -249,8 +254,12 @@ async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDo
       await deferPost(post, "quota", until, say("YouTube's daily upload quota is used up"));
       return deferAllQueuedForQuota(until);
     }
-    case "channel_limit":
-      return deferPost(post, "channel_limit", later(6 * 60 * MINUTE), say("The channel reached YouTube's upload limit"));
+    case "channel_limit": {
+      // The limit belongs to the channel: hold its other queued posts so none spends a refused call.
+      const until = later(6 * 60 * MINUTE);
+      await deferPost(post, "channel_limit", until, say("The channel reached YouTube's upload limit"));
+      return deferAllQueuedForChannel(post.userId, post.channelId, until);
+    }
     case "transient":
       return retryLater(post, say("YouTube could not be reached"), code);
     case "reauth":

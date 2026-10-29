@@ -367,23 +367,41 @@ describe("publish_youtube", () => {
 
     const until = new Date(nextMidnightPacific(new Date()).getTime() + 5 * MINUTE);
     const post = await storedPost();
-    expect(post).toMatchObject({ state: "queued", waitReason: "quota", notBefore: until, attempts: 0 });
+    // Refused with an explicit limit: no session, so no video, can exist, and the call is given back.
+    expect(post).toMatchObject({ state: "queued", waitReason: "quota", notBefore: until, attempts: 0, insertCalls: 0 });
     expect(post.error).toContain("quotaExceeded");
     expect(post.error).not.toContain("Google's own words");
     expect(await storedPost("p2")).toMatchObject({ state: "queued", waitReason: "quota", notBefore: until });
     expect(fake.of("initiate")).toHaveLength(1);
   });
 
-  it("uploadLimitExceeded defers 6 h", async () => {
+  it("uploadLimitExceeded holds every queued post of the channel 6 h, giving the refused call back", async () => {
     await setup({ post: { metadata: STORED_METADATA } });
+    await collections().youtubePosts.insertMany([
+      postDoc({ _id: "p2", lineageId: "c2", metadata: STORED_METADATA }),
+      postDoc({ _id: "p3", lineageId: "c3", metadata: STORED_METADATA }),
+      postDoc({ _id: "elsewhere", lineageId: "c4", userId: "user-2", channelId: "UC9" }),
+    ]);
     const fake = services({ initiate: () => googleError(400, "uploadLimitExceeded") });
     const before = Date.now();
 
     await run(fake);
+    // The siblings' jobs then find their posts not due: none spends a refused call.
+    for (const id of ["p2", "p3"]) {
+      const job = await claimed({ type: "publish_youtube", taskId: "t1", userId: USER, activeKey: `youtube:${id}`, payload: { postId: id } });
+      expect(await runJob(job, { runEngine: fakeEngine({}).runEngine, fetch: fake.fetch })).toEqual({ status: "cancelled" });
+    }
 
+    expect(fake.of("initiate")).toHaveLength(1);
     const post = await storedPost();
-    expect(post).toMatchObject({ state: "queued", waitReason: "channel_limit", attempts: 0 });
+    expect(post).toMatchObject({ state: "queued", waitReason: "channel_limit", attempts: 0, insertCalls: 0 });
     expectWait(post.notBefore, 6 * 60 * MINUTE, before);
+    for (const id of ["p2", "p3"]) {
+      expect(await storedPost(id)).toMatchObject({ state: "queued", waitReason: "channel_limit", notBefore: post.notBefore, insertCalls: 0 });
+    }
+    const elsewhere = await storedPost("elsewhere");
+    expect(elsewhere.waitReason).toBeUndefined();
+    expect(elsewhere.notBefore).toBeUndefined();
   });
 
   it("transient errors back off 1, 5, 15 min, then fail", async () => {

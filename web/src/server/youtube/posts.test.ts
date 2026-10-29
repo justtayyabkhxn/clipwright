@@ -17,10 +17,12 @@ import {
   claimPost,
   clearMetadata,
   createPostsForTask,
+  deferAllQueuedForChannel,
   deferAllQueuedForQuota,
   deferPost,
   failPost,
   markUploaded,
+  refundInsertCall,
   resumePosting,
   retryPost,
   saveMetadata,
@@ -420,6 +422,14 @@ describe("transitions of a claimed post", () => {
     expect((await storedPost("p1")).insertCalls).toBe(4);
   });
 
+  it("refundInsertCall gives one call back to the claim holder, never below zero", async () => {
+    const post = await claimed({ insertCalls: 1 });
+    expect(await refundInsertCall({ ...post, claimedBy: "stale-job" })).toBe(false);
+    expect(await refundInsertCall(post)).toBe(true);
+    expect(await refundInsertCall(post)).toBe(false);
+    expect((await storedPost("p1")).insertCalls).toBe(0);
+  });
+
   it("setPhase marks what the claim holder is doing", async () => {
     const post = await claimed();
     expect(await setPhase({ ...post, claimedBy: "stale-job" }, "writing")).toBe(false);
@@ -571,6 +581,22 @@ describe("account-wide transitions", () => {
     expect(await storedPost("q")).toMatchObject({ notBefore: until, waitReason: "quota" });
     expect(await storedPost("other-user")).toMatchObject({ notBefore: until, waitReason: "quota" });
     expect(await storedPost("limited")).toMatchObject({ notBefore: later, waitReason: "channel_limit" });
+    expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
+  });
+
+  it("holds every queued post of one user's channel for its upload limit without shortening a longer wait", async () => {
+    const until = new Date(Date.now() + 6 * 3_600_000);
+    const later = new Date(Date.now() + 24 * 3_600_000);
+    await seedPost({ _id: "q" });
+    await seedPost({ _id: "other-channel", lineageId: "c2", channelId: "UC2" });
+    await seedPost({ _id: "other-user", lineageId: "c3", userId: "u2" });
+    await seedPost({ _id: "quota", lineageId: "c4", notBefore: later, waitReason: "quota" });
+    await seedPost({ _id: "b", lineageId: "c5", state: "blocked", waitReason: "reconnect" });
+
+    expect(await deferAllQueuedForChannel(USER, "UC1", until)).toBe(1);
+    expect(await storedPost("q")).toMatchObject({ notBefore: until, waitReason: "channel_limit" });
+    for (const id of ["other-channel", "other-user"]) expect((await storedPost(id)).notBefore).toBeUndefined();
+    expect(await storedPost("quota")).toMatchObject({ notBefore: later, waitReason: "quota" });
     expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
   });
 });

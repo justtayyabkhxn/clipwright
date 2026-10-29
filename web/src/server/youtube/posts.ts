@@ -201,13 +201,26 @@ export async function setPhase(post: YoutubePostDoc, phase: NonNullable<YoutubeP
 }
 
 /**
- * Spend one `videos.insert` session start, counted *before* the call (§4.5). False when the post's
- * `insertCap` is used up (or the claim was lost): the caller must not initiate.
+ * Spend one `videos.insert` session start, counted *before* the call (§4.5); only an explicit quota
+ * or channel limit gives it back (`refundInsertCall`). False when the post's `insertCap` is used up
+ * (or the claim was lost): the caller must not initiate.
  */
 export async function takeInsertCall(post: YoutubePostDoc): Promise<boolean> {
   const result = await collections().youtubePosts.updateOne(
     { ...held(post), $expr: { $lt: ["$insertCalls", "$insertCap"] } },
     { $inc: { insertCalls: 1 }, $set: { updatedAt: new Date() } },
+  );
+  return result.matchedCount > 0;
+}
+
+/**
+ * Give back the call `takeInsertCall` counted, when the start was refused with an explicit quota or
+ * channel limit: Google sent no Location, so no session, and no video, can exist. Never below zero.
+ */
+export async function refundInsertCall(post: YoutubePostDoc): Promise<boolean> {
+  const result = await collections().youtubePosts.updateOne(
+    { ...held(post), insertCalls: { $gt: 0 } },
+    { $inc: { insertCalls: -1 }, $set: { updatedAt: new Date() } },
   );
   return result.matchedCount > 0;
 }
@@ -356,13 +369,23 @@ export async function resumePosting(userId: string): Promise<YoutubeAccountDoc |
   return account;
 }
 
-/** `quotaExceeded`: hold every queued post (the quota is per project) until `until`, never shortening a longer wait. */
-export async function deferAllQueuedForQuota(until: Date): Promise<number> {
+/** Hold every queued post matching `filter` until `until`, never shortening a longer wait. */
+async function holdQueued(filter: Filter<YoutubePostDoc>, waitReason: YoutubeWaitReason, until: Date): Promise<number> {
   const result = await collections().youtubePosts.updateMany(
-    { state: "queued", $or: [{ notBefore: { $exists: false } }, { notBefore: { $lt: until } }] },
-    { $set: { notBefore: until, waitReason: "quota", updatedAt: new Date() } },
+    { ...filter, state: "queued", $or: [{ notBefore: { $exists: false } }, { notBefore: { $lt: until } }] },
+    { $set: { notBefore: until, waitReason, updatedAt: new Date() } },
   );
   return result.modifiedCount;
+}
+
+/** `quotaExceeded`: the quota is per project, so every queued post waits. */
+export function deferAllQueuedForQuota(until: Date): Promise<number> {
+  return holdQueued({}, "quota", until);
+}
+
+/** `uploadLimitExceeded`: the limit is per channel, so that user's queued posts for it wait. */
+export function deferAllQueuedForChannel(userId: string, channelId: string, until: Date): Promise<number> {
+  return holdQueued({ userId, channelId }, "channel_limit", until);
 }
 
 // --- Manual retry (§4.8) ---
