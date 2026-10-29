@@ -2,7 +2,7 @@ import { ApiError, handle, json, readJsonObject } from "@/server/http";
 import { requireUser } from "@/server/session";
 import type { YoutubeAccountDoc } from "@/server/types";
 import { disconnectAccount, getAccount, serializeAccount, updateAccountPrefs } from "@/server/youtube/accounts";
-import { AUTO_POST_OFF_ERROR, cancelPostsForUser } from "@/server/youtube/posts";
+import { AUTO_POST_OFF_ERROR, cancelPostsForUser, DISCONNECTED_ERROR } from "@/server/youtube/posts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export const PATCH = handle(async (request: Request) => {
 export const DELETE = handle(async (request: Request) => {
   const user = await requireUser(request);
   const revoke = await disconnectAccount(user.id);
-  await cancelPostsForUser(user.id, "YouTube account was disconnected.");
+  await cancelPostsForUser(user.id, DISCONNECTED_ERROR);
   if (revoke) await revoke();
   return json({ message: "YouTube account disconnected" });
 });

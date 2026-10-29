@@ -32,6 +32,7 @@ import {
   deferAllQueuedForChannel,
   deferAllQueuedForQuota,
   deferPost,
+  DISCONNECTED_ERROR,
   failPost,
   lineageOf,
   markUploaded,
@@ -91,7 +92,8 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
 
   // §4.5 checks, in order. This account snapshot also fences every token write.
   const account = await getAccount(post.userId);
-  if (!account) return settle(blockPost(post, "reconnect", `${RECONNECT}.`));
+  // No account doc: the user disconnected while this post was working, which cancels it (§7.9).
+  if (!account) return settle(cancelClaimedPost(post, DISCONNECTED_ERROR));
   // Never upload to a channel the post wasn't meant for (§4.3 step 6).
   if (account.channelId !== post.channelId) return settle(cancelClaimedPost(post, CHANNEL_CHANGED_ERROR));
   if (!account.autoPost) return settle(cancelClaimedPost(post, AUTO_POST_OFF_ERROR));
@@ -263,6 +265,8 @@ async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDo
     case "transient":
       return retryLater(post, say("YouTube could not be reached"), code);
     case "reauth":
+      // A disconnect mid-run revokes the grant: cancel as the disconnect would have, never wait for a reconnect.
+      if (!(await getAccount(post.userId))) return cancelClaimedPost(post, DISCONNECTED_ERROR);
       await markReauthRequired(account);
       return blockPost(post, "reconnect", say(code === "youtubeSignupRequired" ? "Create a YouTube channel, then reconnect" : RECONNECT));
     case "invalid_metadata":

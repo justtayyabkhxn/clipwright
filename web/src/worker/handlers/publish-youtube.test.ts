@@ -440,6 +440,23 @@ describe("publish_youtube", () => {
     expect((await storedAccount()).status).toBe("reauth_required");
   });
 
+  it("a revoked grant after a disconnect mid-run cancels the post instead of waiting for a reconnect", async () => {
+    await setup({ account: { accessTokenExpiresAt: new Date(Date.now() - 1000) } });
+    const fake = services({
+      // The user disconnects while Claude writes the metadata: the account doc goes, the grant is revoked.
+      claude: async (call, index) => {
+        await collections().youtubeAccounts.deleteOne({ _id: USER });
+        return DEFAULTS.claude(call, index);
+      },
+      token: () => json(400, { error: "invalid_grant" }),
+    });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["claude", "token"]);
+    expect(await storedPost()).toMatchObject({ state: "cancelled", error: "YouTube account was disconnected.", insertCalls: 0 });
+  });
+
   it("a 401 refreshes the token once and retries", async () => {
     await setup({ post: { metadata: STORED_METADATA } });
     const fake = services({ initiate: (call, index) => (index === 0 ? googleError(401, "authError") : DEFAULTS.initiate(call, index)) });
@@ -537,7 +554,7 @@ describe("publish_youtube", () => {
   });
 
   it.each([
-    ["the account is gone", null, { state: "blocked", waitReason: "reconnect" }],
+    ["the account is gone", null, { state: "cancelled", error: "YouTube account was disconnected." }],
     ["the account needs a reconnect", { status: "reauth_required" }, { state: "blocked", waitReason: "reconnect" }],
     ["the private lock is set", { status: "active", warning: "private_lock" }, { state: "blocked", waitReason: "private_lock" }],
     ["the lock is set on a reauth_required account", { status: "reauth_required", warning: "private_lock" }, { state: "blocked", waitReason: "private_lock" }],

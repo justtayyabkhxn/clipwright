@@ -27,6 +27,7 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 export const INSERT_CAP = 3;
 export const CHANNEL_CHANGED_ERROR = "Not posted: a different channel was connected.";
 export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
+export const DISCONNECTED_ERROR = "YouTube account was disconnected.";
 /** §4.7: clip delete and task delete 409 while the lineage's post is mid-upload. */
 export const POST_UPLOADING_MESSAGE = "This clip is uploading to YouTube. Try again in a minute.";
 /** §4.7: the restyle route's 409 while any of the task's posts is mid-upload. */
