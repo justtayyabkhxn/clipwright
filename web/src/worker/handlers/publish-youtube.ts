@@ -146,15 +146,21 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
 }
 
 /**
- * §4.5 steps 1–4. A saved session for this exact file is queried first (a 200 there recovers a lost
- * response without a second insert); otherwise one insert call is spent and a session started and
- * saved. The rest of the file then goes up in one PUT. Once a session exists, a network error, 5xx or
- * 308 goes back to step 1 within the job. A failed start is never retried here (each try would spend
- * an insert call): it goes to the error table, except that a 401 refreshes the token once per job.
+ * §4.5 steps 1–4. A saved session is always queried first: a 200 there recovers a lost response
+ * without a second insert. One saved for this exact file is resumed from its offset. One saved for an
+ * older render (a restyle changed the file) is queried once with its own size: a 200 means that render
+ * is already the lineage's video; gone or incomplete, it is dropped, never resumed or fed the new file.
+ * Otherwise one insert call is spent and a session started and saved. The rest of the file then goes
+ * up in one PUT. A network error, 5xx or 308 on a query or the PUT goes back to step 1 within the job.
+ * A failed start is never retried here (each try would spend an insert call): it goes to the error
+ * table, except that a 401 refreshes the token once per job.
  */
 function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccountDoc, storageKey: string, size: number) {
   const fetchImpl = ctx.deps.fetch ?? fetch;
-  let session = post.upload?.storageKey === storageKey && post.upload.size === size ? post.upload.sessionUri : undefined;
+  const current = post.upload?.storageKey === storageKey && post.upload.size === size;
+  let session = current ? post.upload?.sessionUri : undefined;
+  /** An older render's session: until it answers, no new session may start (it may hold the video). */
+  let stale = current ? undefined : post.upload;
   /** The token the one 401-driven refresh returned; every later start in this job reuses it. */
   let freshToken: string | undefined;
 
@@ -179,6 +185,11 @@ function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccount
     for (let tries = 1; ; tries++) {
       try {
         let start = 0;
+        if (stale) {
+          const state = await querySession(stale.sessionUri, stale.size, fetchImpl);
+          if ("done" in state) return state.done;
+          stale = undefined;
+        }
         if (session) {
           const state = await querySession(session, size, fetchImpl);
           if ("done" in state) return state.done;
@@ -192,8 +203,9 @@ function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccount
         const body = getStorage().createReadStream(storageKey, { start, end: size - 1 });
         return await uploadFrom(session, size, start, body, ctx.signal, fetchImpl);
       } catch (error) {
-        // No session means the start itself failed: that goes to the table, never round this loop.
-        if (ctx.stopReason || !session) throw error;
+        // No session (and no older one still to read) means the start itself failed: that goes to
+        // the table, never round this loop.
+        if (ctx.stopReason || (!session && !stale)) throw error;
         // The session URI gets no token, so its 401 asks for neither a refresh nor a reconnect: it is
         // §4.5's "any other 4xx". The session is kept, so "Try again" queries it before any new insert.
         if (error instanceof GoogleApiError && error.status === 401) throw new PostFailed(SESSION_REFUSED, "HTTP 401");

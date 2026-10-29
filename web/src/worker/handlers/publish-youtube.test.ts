@@ -244,14 +244,49 @@ describe("publish_youtube", () => {
     expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 1 });
   });
 
-  it("starts a new session when the saved one belongs to an older render", async () => {
-    await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: { ...SAVED_SESSION, storageKey: "clips/t1/c1.mp4" } } });
-    const fake = services();
+  // A session saved for an older render (a restyle changed the file since): queried once with its own size.
+  const OLDER_SESSION = { ...SAVED_SESSION, storageKey: "clips/t1/c1.mp4", size: 7 };
+
+  it.each([
+    ["is gone", () => new Response(null, { status: 404 })],
+    ["is incomplete", () => new Response(null, { status: 308, headers: { Range: "bytes=0-3" } })],
+  ] as const)("starts a new session for the current file when an older render's saved session %s", async (_name, query) => {
+    await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: OLDER_SESSION } });
+    const fake = services({ query });
 
     await run(fake);
 
-    expect(fake.kinds()).toEqual(["initiate", "upload"]);
+    expect(fake.kinds()).toEqual(["query", "initiate", "upload"]);
+    expect(fake.of("query")[0].headers.get("content-range")).toBe("bytes */7");
+    // Never resumed: the whole current file goes into the new session.
+    const [upload] = fake.of("upload");
+    expect(upload.bytes).toBe(FILE);
+    expect(upload.headers.has("content-range")).toBe(false);
     expect(await storedPost()).toMatchObject({ state: "uploaded", insertCalls: 2 });
+  });
+
+  it("recovers an older render that finished at Google from its saved session, without an insert", async () => {
+    await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: OLDER_SESSION } });
+    const fake = services({ query: () => json(200, video()) });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(["query"]);
+    expect(await storedPost()).toMatchObject({ state: "uploaded", videoId: "VID", insertCalls: 1 });
+  });
+
+  it("never initiates while an older render's saved session cannot be read", async () => {
+    const sleep = vi.spyOn(uploadTiming, "sleep").mockResolvedValue(undefined);
+    await setup({ post: { metadata: STORED_METADATA, insertCalls: 1, upload: OLDER_SESSION } });
+    const fake = services({ query: () => Promise.reject(new TypeError("fetch failed")) });
+
+    await run(fake);
+
+    expect(fake.kinds()).toEqual(Array(5).fill("query"));
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([1000, 2000, 4000, 8000]);
+    const post = await storedPost();
+    expect(post).toMatchObject({ state: "queued", waitReason: "retry", attempts: 1, insertCalls: 1 });
+    expect(post.upload).toEqual(OLDER_SESSION);
   });
 
   it.each([404, 410])("starts a new session when the saved one is gone (%i)", async (status) => {
@@ -426,6 +461,7 @@ describe("publish_youtube", () => {
 
   it.each([
     ["the saved session's query", { query: () => new Response(null, { status: 401 }) }, { upload: SAVED_SESSION, insertCalls: 1 }, ["query"]],
+    ["an older render's saved session", { query: () => new Response(null, { status: 401 }) }, { upload: OLDER_SESSION, insertCalls: 1 }, ["query"]],
     ["the upload", { upload: () => new Response(null, { status: 401 }) }, {}, ["initiate", "upload"]],
   ] as const)("a 401 from %s fails the post without a refresh or a reconnect", async (_name, overrides, post, kinds) => {
     await setup({ post: { metadata: STORED_METADATA, ...post } });
