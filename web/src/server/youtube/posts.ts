@@ -89,8 +89,14 @@ export async function createPostsForTask(taskId: string): Promise<number> {
 
   const { state, waitReason } = initialState(account);
   const now = new Date();
+  // A cron re-run sees the task's current clips. One that starts its own lineage after the run
+  // completed was combined in the editor, which never posts (§2); a restyled clip keeps an older lineage.
+  // ponytail: a restyle finishing in that window moves run.completedAt and gives the combined clip's
+  // re-render the combined lineage, so it would post; mark combined clips explicitly if that matters.
+  const completedAt = task.run?.completedAt;
+  const combined = (clip: ClipDoc) => completedAt !== undefined && lineageOf(clip) === clip.id && clip.createdAt > completedAt;
   const docs: YoutubePostDoc[] = task.clips
-    .filter((clip) => clip.hookType !== "fallback")
+    .filter((clip) => clip.hookType !== "fallback" && !combined(clip))
     .map((clip, index) => ({
       _id: randomUUID(),
       userId: task.userId,

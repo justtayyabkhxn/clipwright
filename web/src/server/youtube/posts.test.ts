@@ -191,6 +191,24 @@ describe("createPostsForTask", () => {
     expect(await autopostFlag()).toBe("done");
   });
 
+  it("never posts a clip combined in the editor after the run completed (a re-run from the cron)", async () => {
+    await seedAccount();
+    const completedAt = new Date(Date.now() - 60_000);
+    const rendered = new Date(completedAt.getTime() - 60_000);
+    const later = new Date(completedAt.getTime() + 30_000);
+    await seedTask(
+      [
+        clip("c1", { lineageId: "c1", createdAt: rendered }),
+        clip("c2v2", { lineageId: "c2", createdAt: later }), // restyled since: keeps its older lineage
+        clip("combined", { lineageId: "combined", hookType: null, createdAt: later }),
+      ],
+      { run: { jobId: "j1", type: "process_task", completedAt } },
+    );
+
+    expect(await createPostsForTask("t1")).toBe(2);
+    expect((await storedPosts()).map((p) => p.lineageId).sort()).toEqual(["c1", "c2"]);
+  });
+
   it("is idempotent across repeated calls", async () => {
     await seedAccount();
     await seedTask([clip("c1"), clip("c2")]);
