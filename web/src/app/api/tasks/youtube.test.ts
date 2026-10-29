@@ -6,11 +6,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuth } from "@/server/auth";
 import { closeDb, collections, ensureIndexes } from "@/server/db";
 import { resetEnv } from "@/server/env";
-import { casStatus, createTask, pushClip, settingsFromCreateRequest } from "@/server/tasks";
+import { casStatus, createTask, EDIT_LOCKED_MESSAGE, pushClip, removeClip, settingsFromCreateRequest } from "@/server/tasks";
 import type { ClipDoc, YoutubePostDoc } from "@/server/types";
 import { POST_UPLOADING_MESSAGE, RESTYLE_UPLOADING_MESSAGE } from "@/server/youtube/posts";
 
@@ -19,6 +19,12 @@ import * as taskRoute from "./[id]/route";
 import * as settingsRoute from "./[id]/settings/route";
 import * as youtubeRoute from "./[id]/youtube/route";
 import * as retryRoute from "./[id]/youtube/[postId]/retry/route";
+
+// The real tasks module, with removeClip spied so one test can start a restyle inside the delete.
+vi.mock("@/server/tasks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/tasks")>();
+  return { ...actual, removeClip: vi.fn(actual.removeClip) };
+});
 
 let mongod: MongoMemoryServer;
 let dataDir: string;
@@ -257,6 +263,29 @@ describe("DELETE /api/tasks/[id]/clips/[clipId]", () => {
     expect((await collections().youtubePosts.findOne({ _id: "p2" }))?.state).toBe("working");
     const stillThere = await collections().tasks.findOne({ _id: task._id });
     expect(stillThere?.clips.map((c) => c.id)).toEqual(["b"]);
+  });
+
+  it("puts the post back as it was when a restyle starting meanwhile refuses the delete", async () => {
+    const task = await completedTask(["a"]);
+    const notBefore = new Date(Date.now() + 60 * 60_000);
+    await seedPost(task._id, { _id: "p1", lineageId: "a", state: "queued", waitReason: "quota", notBefore, error: "Quota used up (quotaExceeded)." });
+    const { removeClip: realRemoveClip } = await vi.importActual<typeof import("@/server/tasks")>("@/server/tasks");
+    vi.mocked(removeClip).mockImplementationOnce(async (taskId, clipId) => {
+      // A restyle's start CAS lands between the route's status check and removeClip's own CAS.
+      await casStatus(taskId, ["completed"], { status: "processing" });
+      return realRemoveClip(taskId, clipId);
+    });
+
+    const response = await call(clipRoute.DELETE, `/api/tasks/${task._id}/clips/a`, { method: "DELETE", params: { id: task._id, clipId: "a" } });
+
+    expect([response.status, await response.json()]).toEqual([400, { detail: EDIT_LOCKED_MESSAGE }]);
+    expect(await collections().youtubePosts.findOne({ _id: "p1" })).toMatchObject({
+      state: "queued",
+      waitReason: "quota",
+      notBefore,
+      error: "Quota used up (quotaExceeded).",
+    });
+    expect((await collections().tasks.findOne({ _id: task._id }))?.clips.map((c) => c.id)).toEqual(["a"]);
   });
 });
 

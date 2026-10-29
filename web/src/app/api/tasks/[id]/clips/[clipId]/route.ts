@@ -1,7 +1,7 @@
 import { ApiError, handle, json } from "@/server/http";
 import { requireUser } from "@/server/session";
 import { ACTIVE_STATUSES, EDIT_LOCKED_MESSAGE, getTaskForUser, removeClip } from "@/server/tasks";
-import { cancelPostForLineage, lineageOf, POST_UPLOADING_MESSAGE } from "@/server/youtube/posts";
+import { cancelPostForLineage, lineageOf, POST_UPLOADING_MESSAGE, restoreCancelledPost } from "@/server/youtube/posts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,12 +19,16 @@ export const DELETE = handle(async (request: Request, { params }: Params) => {
   const task = await getTaskForUser(id, user.id);
   if (ACTIVE_STATUSES.includes(task.status)) throw new ApiError(400, EDIT_LOCKED_MESSAGE);
   const clip = task.clips.find((candidate) => candidate.id === clipId);
-  // ponytail: the status check above and removeClip's own edit-lock CAS are separate writes, so a
-  // restyle starting in between can cancel the post of a delete that then 400s. Needs a
-  // transaction to close; the user just presses "Try again" on the post.
-  if (clip && (await cancelPostForLineage(id, lineageOf(clip))) === "working") {
-    throw new ApiError(409, POST_UPLOADING_MESSAGE);
+  const cancelled = clip ? await cancelPostForLineage(id, lineageOf(clip)) : undefined;
+  if (cancelled?.result === "working") throw new ApiError(409, POST_UPLOADING_MESSAGE);
+  try {
+    await removeClip(id, clipId);
+  } catch (error) {
+    // ponytail: the status check above and removeClip's own edit-lock CAS are separate writes, so a
+    // restyle starting in between refuses the delete after the post was cancelled; the post gets its
+    // state back here. A crash between the two leaves it cancelled; a transaction would close that.
+    if (cancelled?.result === "cancelled") await restoreCancelledPost(cancelled.previous);
+    throw error;
   }
-  await removeClip(id, clipId);
   return json({ message: "Clip deleted successfully" });
 });

@@ -268,14 +268,15 @@ describe("claim and cancel", () => {
       await seedPost();
       const claim = claimPost("p1", "job1");
       const cancel = cancelPostForLineage("t1", "c1");
-      const [claimed, cancelled] = i % 2 ? await Promise.all([claim, cancel]) : (await Promise.all([cancel, claim])).reverse();
+      const [claimed, cancelled] =
+        i % 2 ? await Promise.all([claim, cancel]) : await Promise.all([cancel, claim]).then(([c, k]) => [k, c] as const);
 
       const final = await storedPost("p1");
       if (claimed) {
-        expect(cancelled).toBe("working");
+        expect(cancelled.result).toBe("working");
         expect(final).toMatchObject({ state: "working", claimedBy: "job1" });
       } else {
-        expect(cancelled).toBe("cancelled");
+        expect(cancelled.result).toBe("cancelled");
         expect(final.state).toBe("cancelled");
       }
     }
@@ -322,7 +323,7 @@ describe("claim and cancel", () => {
     expect((await storedPost("other-q")).error).toBe("Auto-post was turned off.");
     expect((await storedPost("other-f")).errorReason).toBeUndefined();
     expect((await storedPost("other-w")).errorReason).toBe("backendError");
-    expect(await cancelPostForLineage("t1", "u")).toBe("none");
+    expect(await cancelPostForLineage("t1", "u")).toEqual({ result: "none" });
   });
 
   it("cancelPostsForUser with exceptChannelId spares posts already on that channel", async () => {

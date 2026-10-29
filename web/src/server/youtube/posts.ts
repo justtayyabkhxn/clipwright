@@ -292,13 +292,36 @@ export async function cancelPostsForTask(taskId: string): Promise<{ cancelled: n
   return { cancelled: result.modifiedCount, working: await youtubePosts.countDocuments({ taskId, state: "working" }) };
 }
 
-/** Clip delete. The same post doc as `claimPost`'s CAS, so exactly one of the two wins. */
-export async function cancelPostForLineage(taskId: string, lineageId: string): Promise<"cancelled" | "working" | "none"> {
+/**
+ * Clip delete. The same post doc as `claimPost`'s CAS, so exactly one of the two wins. A cancel
+ * returns the post as it was, for `restoreCancelledPost` if the delete is then refused.
+ */
+export async function cancelPostForLineage(
+  taskId: string,
+  lineageId: string,
+): Promise<{ result: "cancelled"; previous: YoutubePostDoc } | { result: "working" | "none" }> {
   const { youtubePosts } = collections();
-  const result = await youtubePosts.updateOne({ taskId, lineageId, state: { $in: CANCELLABLE } }, cancel());
-  if (result.matchedCount) return "cancelled";
+  const previous = await youtubePosts.findOneAndUpdate({ taskId, lineageId, state: { $in: CANCELLABLE } }, cancel(), {
+    returnDocument: "before",
+  });
+  if (previous) return { result: "cancelled", previous };
   const post = await youtubePosts.findOne({ taskId, lineageId }, { projection: { state: 1 } });
-  return post?.state === "working" ? "working" : "none";
+  return { result: post?.state === "working" ? "working" : "none" };
+}
+
+/** Undo `cancelPostForLineage` for a refused clip delete: a post still cancelled gets its state and wait back. */
+export async function restoreCancelledPost(previous: YoutubePostDoc): Promise<void> {
+  await collections().youtubePosts.updateOne(
+    { _id: previous._id, state: "cancelled" },
+    {
+      $set: {
+        state: previous.state,
+        updatedAt: new Date(),
+        ...(previous.waitReason && { waitReason: previous.waitReason }),
+        ...(previous.notBefore && { notBefore: previous.notBefore }),
+      },
+    },
+  );
 }
 
 /** Restyle guard (§4.7): true while any of the task's posts is mid-upload. */
