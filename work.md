@@ -157,7 +157,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
 **First live run (2026-10-29):**
 - **Connect:** the first attempts failed with `youtube_error=exchange_failed`; the YouTube Data API was not enabled yet. Connected `@justtayyabkhanai` at 11:24 IST.
 - **Generation:** the first 10-clip run died because the fix agents' edits restarted `tsx watch`; the second run completed.
-- **Upload:** all 10 posts uploaded within about 90 s of completion, public, 1 insert call each; the first is `ZJYWDE10Ra4`. The verification pass, which watches for a later forced-private switch, was still pending when this was written.
+- **Upload:** all 10 posts uploaded within about 90 s of completion, public, 1 insert call each; the first is `ZJYWDE10Ra4`. Verification about 10 min later: all 10 `processed` and still public, so the private lock did not trip. On this project uploads are not forced private, at least for now.
 - **Follow-up (not fixed; the user asked only for a diagnosis):** the callback reports token-exchange, channel-lookup and unexpected failures all as `exchange_failed` ("Please try again"), so a disabled API looks retryable.
 
 **Left to do:**
