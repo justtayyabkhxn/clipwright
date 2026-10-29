@@ -22,8 +22,10 @@ original SupoClip system; the original code is in git history at commit `1dbb178
 web/                 Next.js 15 app, package "clipwright"
   src/app/           pages and API route handlers (src/app/api/**/route.ts)
   src/server/        server modules shared by routes and the worker: env, db, auth, session, http,
-                     storage, settings, jobs, tasks, drafts, engine, fonts, caption-templates, ai/
-  src/server/ai/     Claude clip selection (TypeScript port of SupoClip's ai.py)
+                     storage, settings, jobs, tasks, drafts, engine, fonts, caption-templates, ai/,
+                     youtube/
+  src/server/ai/     Claude clip selection (TypeScript port of SupoClip's ai.py), YouTube metadata
+  src/server/youtube/  YouTube auto-post: accounts (OAuth, tokens), google (API calls), posts
   src/worker/        worker entry (main.ts), run-job, cron, handlers/ (one per job type)
   src/components, src/hooks, src/lib   client code (shadcn/Radix UI, Tailwind v4)
   messages/en/       UI copy (next-intl, English only)

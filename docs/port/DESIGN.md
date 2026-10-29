@@ -231,7 +231,7 @@ type YoutubeAccountDoc = {
   _id: string; channelId: string; channelTitle: string; channelHandle?: string; thumbnailUrl?: string;
   refreshToken: string; accessToken?: string; accessTokenExpiresAt?: Date;   // encryptSetting
   scopes: string[];
-  status: "active" | "reauth_required" | "paused"; lastError?: string; warning?: string;
+  status: "active" | "reauth_required" | "paused"; warning?: string;
   autoPost: boolean; privacy: "public" | "unlisted" | "private"; madeForKids: boolean;
   connectedAt: Date; createdAt: Date; updatedAt: Date;
 };
@@ -251,7 +251,7 @@ type YoutubePostDoc = {
   phase?: "writing" | "uploading"; progress?: number; claimedBy?: string;   // the holding job's id
   notBefore?: Date;
   waitReason?: "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock";
-  attempts: number; insertCalls: number; insertCap: number;   // insertCap: default 3, +1 per manual retry
+  attempts: number; insertCalls: number; insertCap: number;   // insertCap: default 3; a manual retry raises it to max(insertCap, insertCalls + 1)
   privacy: "public" | "unlisted" | "private"; madeForKids: boolean; notifySubscribers: boolean;   // snapshotted at creation
   metadata?: { title: string; description: string; tags: string[]; hashtags: string[]; language?: string; model: string };
   upload?: { sessionUri: string; storageKey: string; size: number; startedAt: Date };   // never serialized or logged
@@ -274,7 +274,8 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 - prepare: draft status `failed`.
 - exports and combine: job status `failed`.
 - `publish_youtube`: the post goes back to `queued` with `notBefore` 2 minutes later while it has
-  attempts left (`attempts < 3`), otherwise `failed`.
+  attempts left (`attempts < 3`), otherwise `failed`. The cron applies the same transition to a
+  `working` post whose job is no longer queued or running (a hook that never completed).
 
 ### 6.2 Job handlers (`web/src/worker/handlers/*.ts`)
 
@@ -319,9 +320,9 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 
 **`publish_youtube`** (YouTube auto-post, `docs/youtube.md`): payload `{postId}`.
 1. CAS the post `queued` (due) → `working, claimedBy: job._id` (also accepts `working` already claimed by this job id, for a re-run). No match → nothing to do.
-2. Check in order: the account exists, is active and matches the post's snapshotted `channelId`; the task exists and is not mid-restyle (else defer 2 min); a clip with this `lineageId` is still on the task (else cancel the post); the clip's file passes `stat` (else fail).
-3. If `metadata` isn't stored yet, write it with Claude (`web/src/server/ai/youtube-metadata.ts`, model `CLAUDE_METADATA_MODEL`) and save it on the post before any upload, so a retry never re-asks Claude.
-4. Upload with YouTube's resumable protocol: query a saved session first (recovers a lost response without a duplicate `videos.insert`); otherwise spend one `insertCalls` and start a new session; then `PUT` the file in one request. A network error, 5xx or mid-upload 308 retries within the job (backoff 1/2/4/8 s); other failures classify by Google's `error.errors[0].reason` into a quota wait (next Pacific midnight), a channel-limit wait (6 h), a retry wait (1/5/15 min, then `failed`), a reconnect (`blocked`), or a permanent failure.
+2. Check in order: the account exists, matches the post's snapshotted `channelId` and has auto-post on (a missing account, a different channel or auto-post turned off cancels the post); it is not under the private lock (else `blocked`, `private_lock`) and is active (else `blocked`, `reconnect`); the task exists and is not mid-restyle (else defer 2 min); a clip with this `lineageId` is still on the task (else cancel the post); the clip's file passes `stat` (else fail).
+3. If `metadata` isn't stored yet, write it with Claude (`web/src/server/ai/youtube-metadata.ts`, model `CLAUDE_METADATA_MODEL`) and save it on the post before any upload, so a retry never re-asks Claude. The parser sends Claude a repair turn for a title with a link, a hashtag or a line break, as for one over 100 characters.
+4. Upload with YouTube's resumable protocol: query a saved session first (recovers a lost response without a duplicate `videos.insert`). A session saved for the current file resumes from its offset; one saved for an older render (a restyle changed the file) is queried once with its saved size: a 200 there is the lineage's video, a 308 or 404/410 drops it, and an error keeps it (no new session starts until it answers). Only then spend one `insertCalls` and start a new session; then `PUT` the file in one request. A network error, 5xx or mid-upload 308 retries within the job (backoff 1/2/4/8 s); other failures classify by Google's `error.errors[0].reason` into a quota wait (next Pacific midnight, for every queued post), a channel-limit wait (6 h, for every queued post of that user's channel), a retry wait (1/5/15 min, then `failed`), a reconnect (`blocked`; cancelled instead if the account was disconnected meanwhile), or a permanent failure. A start refused for quota or the channel limit gives its `insertCalls` back: no session, so no video, can exist.
 5. On success, record `videoId`, `videoUrl`, `privacyStatus`, `uploadStatus`, state `uploaded` (final). If the returned `privacyStatus` isn't the one requested, warn the post and trip the forced-private circuit breaker: pause the account and move its other queued posts to `blocked`.
 
 **Cron** (every 5 minutes in the worker):
@@ -330,7 +331,11 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 - Orphan sweep of `DATA_DIR/work/*` directories older than 24 h.
 - Delete `sources/youtube/{id}/source.mp4` files older than 24 h that no task references (by `source.videoId` or URL). Their `.transcript_cache.json` sidecars stay.
 - Delete `uploads/{uuid}{ext}` files older than 24 h that no task references (`source.url`), together with their `.transcript_cache.json` sidecar.
-- YouTube auto-post: re-run `createPostsForTask` for a task left `autopost: "pending"` for more than 2 minutes (covers a crash between the completion CAS and the enqueue); enqueue every `queued` post whose `notBefore` has passed; and re-read `videos.list?part=status` for posts uploaded at least 10 minutes ago to record their final status and trip the circuit breaker if YouTube locked one private.
+- YouTube auto-post, in this order:
+  - release every `working` post whose `claimedBy` job is no longer queued or running (its failure hook never completed), with the failure hook's own transition, fenced on the claim;
+  - enqueue every `queued` post whose `notBefore` has passed;
+  - re-run `createPostsForTask` for a task left `autopost: "pending"` for more than 2 minutes (covers a crash between the completion CAS and the enqueue). A clip that starts its own lineage after `run.completedAt` was combined in the editor and gets no post;
+  - re-read `videos.list?part=status` for posts uploaded at least 10 minutes ago (within 48 h) to record their final status, clear a post warning that no longer holds (the requested privacy and no rejection), and trip the circuit breaker if YouTube locked one private. An account that needs a reconnect is skipped until it is reconnected.
 
 ### 6.3 Status vocabularies at the API
 - Tasks: as stored.
@@ -407,9 +412,9 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `POST /api/tasks/create` | Body as SupoClip's. The route validates and normalises (port `tasks.py:186-207,419-470`, `clip_cleanup.py`). A YouTube URL must be http(s) on `youtube.com`, `m.youtube.com`, `music.youtube.com` or `youtu.be` (`www.` stripped; a scheme-less URL counts as https) with an 11-character id; no network. It is **stored as `https://www.youtube.com/watch?v={id}`** with `source.videoId`, so yt-dlp and the shared cache only ever see YouTube's own URL (closes an SSRF and cache-poisoning path). Other http(s) URLs → 422, anything else → 404. An `upload://` url must be in storage (stat), else 422 `{code: "VIDEO_METADATA_UNAVAILABLE"}`. It inserts a task (`queued`, title = the given title or "YouTube Video"/"Uploaded Video") and enqueues `process_task`. Returns `{task_id, job_id, message, worker_online}` |
 | `GET /api/tasks/[id]` | Task fields per the critique §3 list, plus the settings fields `output_format, add_subtitles, clip_length, cut_long_pauses, pause_threshold_ms, remove_filler_words, filtered_words`, `clips_count`, and `run_type` (`"process_task" \| "restyle_task"` while queued or processing, else null; the UI uses it for restyle-safe cancel). No `clips` array |
 | `PATCH /api/tasks/[id]` | `{title}` |
-| `DELETE /api/tasks/[id]` | 400 "Wait for processing to finish before editing this task" while queued or processing. Otherwise delete the task, its drafts, its jobs and all files (clips, editor media, exports; the upload source and its sidecar for uploads). YouTube sources are shared and are swept by the cron when unreferenced for 24 h |
+| `DELETE /api/tasks/[id]` | 400 "Wait for processing to finish before editing this task" while queued or processing. Then it cancels the task's YouTube posts: 409 "This clip is uploading to YouTube. Try again in a minute." while one is `working` (the others stay cancelled). Otherwise delete the task, its drafts, its jobs, its YouTube posts and all files (clips, editor media, exports; the upload source and its sidecar for uploads). YouTube sources are shared and are swept by the cron when unreferenced for 24 h |
 | `GET /api/tasks/[id]/clips` | `{task_id, clips, total_clips}`. Clip shape per the critique §3 list; `video_url` = `/api/tasks/{id}/clips/{clipId}/file` |
-| `DELETE /api/tasks/[id]/clips/[clipId]` | Same lock rule; deletes the file and the draft |
+| `DELETE /api/tasks/[id]/clips/[clipId]` | Same lock rule; cancels the lineage's YouTube post first (409 "This clip is uploading to YouTube. Try again in a minute." while it is `working`; a delete then refused puts the post back as it was); deletes the file and the draft |
 | `GET /api/tasks/[id]/clips/[clipId]/file` | `?download=true` → attachment. Range support |
 | `POST /api/tasks/[id]/cancel`, `POST /api/tasks/[id]/resume` | Semantics per `map-task-api.md` §3. Cancel of a pipeline run → `cancelled` "Cancelled by user"; cancel of a restyle (the run's job type is `restyle_task`) → `completed` with the old clips and `previousSettings` (§6.2 rollback), then flags the job. Resume re-enqueues `process_task` (409 if the activeKey is taken by a running job) and returns `{message, job_id, worker_online}` |
 | `POST /api/tasks/[id]/settings` | Normalise, save `settings`. With `apply_to_existing`, set processing and enqueue `restyle_task` with `{cleanupChanged, previousSettings}`. Returns `{task, message}`, plus `worker_online` when a restyle was enqueued |
@@ -426,10 +431,10 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `/api/auth/[...all]` | Better Auth |
 | `POST /api/youtube/connect` | Session required. Creates a single-use OAuth state (PKCE) and returns `{authorize_url}` for Google's consent screen. 409 `{code:"not_configured"}` unless both `GOOGLE_OAUTH_*` vars are set |
 | `GET /api/youtube/callback` | Consumes the state, exchanges the code, requires both scopes, looks up the channel, upserts the account (tokens encrypted), unblocks or cancels posts per a channel change, then redirects to `/settings?youtube=connected` or `/settings?youtube_error=<code>` (`denied`, `expired`, `missing_scope`, `no_channel`, `exchange_failed`, `not_configured`). Never echoes Google's own error text |
-| `GET`/`PATCH`/`DELETE /api/youtube/account` | GET: `{configured, connected, channel, status, warning, auto_post, privacy, made_for_kids}`, never tokens. PATCH: partial `{auto_post, privacy, made_for_kids}`; turning `auto_post` off cancels `queued`/`blocked` posts. DELETE: disconnects, cancels posts, then best-effort revokes |
-| `POST /api/youtube/account/resume` | "Resume posting": clears the forced-private lock and requeues the posts it was holding |
-| `GET /api/tasks/[id]/youtube` | `{posts:[{clip_id, state, phase, progress, title, description, tags, hashtags, video_url, privacy_status, warning, error, not_before, wait_reason, insert_cap_reached}]}`. Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
-| `POST /api/tasks/[id]/youtube/[postId]/retry` | Retries a `failed`/`blocked` post (404 if gone, 409 if `uploaded` or still `queued`/`working`): resets the automatic retry count, raises the post's `insertCap` to `insertCalls + 1`, enqueues `publish_youtube`, returns `worker_online` |
+| `GET`/`PATCH`/`DELETE /api/youtube/account` | GET: `{configured, connected, channel, status, warning, auto_post, privacy, made_for_kids}`, never tokens. PATCH: partial `{auto_post, privacy, made_for_kids}`; turning `auto_post` off cancels `queued`/`blocked`/`failed` posts. DELETE: disconnects, cancels the same posts, then best-effort revokes |
+| `POST /api/youtube/account/resume` | "Resume posting": clears the forced-private lock and requeues the posts it was holding, dropping any wait they had from before the lock (a limit still in force re-defers them on the first upload). A `reauth_required` account keeps that status, and those posts wait for a reconnect instead. Returns the account plus `worker_online` |
+| `GET /api/tasks/[id]/youtube` | `{posts:[{id, clip_id, state, phase, progress, title, description, tags, hashtags, video_url, privacy_status, upload_status, warning, error, not_before, wait_reason, insert_cap_reached}], autopost_pending}`. `clip_id` is the lineage's current clip (null once it is gone); `autopost_pending` is true while the task's posts are not created yet, so the page keeps polling. Owner-only; never `upload`, tokens, `claimedBy` or storage keys |
+| `POST /api/tasks/[id]/youtube/[postId]/retry` | Retries a `failed`/`blocked` post (404 if gone, 409 if `uploaded` or still `queued`/`working`): resets the automatic retry count, raises the post's `insertCap` to `max(insertCap, insertCalls + 1)`, enqueues `publish_youtube`, returns `worker_online` |
 
 ## 10. Frontend changes
 - Follow `map-frontend.md` §3 to cut every dropped dependency.

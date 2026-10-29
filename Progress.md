@@ -398,3 +398,28 @@ uploads every clip of a finished video to the user's channel as a public Short.
 - The final review was launched and then stopped before any reviewer finished; nothing was changed.
 - Next: re-run the final review over `review-8300730..04cb93d.diff`, one fix wave plus a re-review,
   then finish the branch. Details and the decisions taken are in `work.md`.
+
+### 2026-10-29 11:30 — Final review fix wave (backend B1–B13, UI, docs D1–D9)
+- Final whole-branch review: 33 findings, 27 confirmed (1 Critical, 2 Important, 24 Minor), 6
+  refuted. One fix wave from base `6fe272f`.
+- Backend (`fad4609..a1120a6`, 8 commits): a session saved for an older render is queried before
+  any new `videos.insert` (closes a lost-response-then-restyle duplicate); `uploadLimitExceeded`
+  holds every queued post of the channel, and a start refused for quota or the channel limit gives
+  its insert call back (ruling dup-2b); a cron step releases `working` posts whose job is gone; a
+  post whose account was disconnected mid-run is cancelled, not blocked; a refused clip delete puts
+  its post back; a clip combined after the run completed never gets a post; Resume posting drops
+  stale waits; verification skips reconnect-required accounts and clears a warning that no longer
+  holds; a refused OAuth client is worded as server setup; the title may not contain links,
+  hashtags or line breaks; no empty hashtag line; `YoutubeAccountDoc.lastError` deleted.
+- UI (`6db3afb`): task-page chips "Not posted" (+ reason), "Flagged by YouTube", "Removed from
+  YouTube"; the stored reason under retry waits and blocked posts; the posts route serializes
+  `upload_status`; Resume posting warns when the worker is offline; the Settings description no
+  longer promises a public Short.
+- Docs: `docs/port/DESIGN.md` (account doc, failure hook, `publish_youtube` steps 2–4, the cron's
+  YouTube steps in order, the delete/PATCH/resume/posts/retry route rows), `docs/youtube.md` (§2
+  private-lock copy and status, §3 duplicate wording, channel-limit hold, disconnect cancel, title
+  rule; troubleshooting rows for every chip), `CLAUDE.md` layout (`src/server/youtube/`),
+  `web/src/worker/README.md` cron bullets, and the design spec, each change marked "(amended after
+  the final review)".
+- Verification: see the backend report (`final-fix-backend.md`: full vitest 857 passed / 1
+  skipped); the docs commit ran tsc and lint.

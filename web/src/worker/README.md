@@ -38,12 +38,15 @@ What the worker does while running:
   - removes `work/` dirs older than 24 h;
   - deletes downloaded YouTube source videos that no task has used for 24 h. Their word timings stay;
   - deletes uploads older than 24 h that no task uses, with their word timings;
+  - releases a `working` YouTube post whose job is no longer queued or running (its failure hook
+    never completed) the way that hook would have: back in the queue in 2 minutes, or `failed`;
   - re-runs `createPostsForTask` for any task still `autopost: "pending"` more than 2 minutes after
     its last update (covers a crash between the completion CAS and the enqueue), and enqueues every
     due `publish_youtube` job (the posts whose `notBefore` has passed);
   - re-reads `videos.list?part=status` for posts uploaded at least 10 minutes ago, within the last
     48 h, to record their final privacy and upload status, and to trip the forced-private circuit
-    breaker (`docs/youtube.md`) if YouTube locked one private.
+    breaker (`docs/youtube.md`) if YouTube locked one private. An account that needs a reconnect
+    is skipped until it is reconnected.
 
 **Stopping:** press Ctrl+C (SIGINT/SIGTERM). Running engines are cancelled and their jobs go back
 to the queue without using up an attempt. Press Ctrl+C a second time to exit at once.

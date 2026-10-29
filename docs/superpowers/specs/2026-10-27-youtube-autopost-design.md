@@ -139,10 +139,11 @@ not yet uploaded is posted in its latest look.
 ```
 { _id, channelId, channelTitle, channelHandle?, thumbnailUrl?,
   refreshToken /*encryptSetting*/, accessToken? /*encrypted*/, accessTokenExpiresAt?, scopes[],
-  status: "active" | "reauth_required" | "paused", lastError?, warning?,
+  status: "active" | "reauth_required" | "paused", warning?,
   autoPost: boolean, privacy: "public" | "unlisted" | "private", madeForKids: boolean,
   connectedAt, createdAt, updatedAt }
 ```
+(Amended after the final review: `lastError` was dropped. Nothing wrote or read it.)
 
 **`oauth_states`:**
 - Shape: `{_id: state, userId, codeVerifier, expiresAt}`.
@@ -173,7 +174,8 @@ Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1}`, `{state:1, notBefor
   - → `blocked`: needs a reconnect, the channel is missing, or a scope was refused.
   - → `failed`: a permanent error or the retry budget ran out.
 - `queued` | `blocked` | `failed` → `cancelled`: the clip or task was deleted, the account was
-  disconnected, or auto-post was turned off.
+  disconnected, or auto-post was turned off. A `working` post is cancelled by its own job for the
+  same reasons or a channel change (§4.5 claim checks) (amended after the final review).
 - `failed` | `blocked` → `queued`: the user pressed "Try again", or reconnected (blocked posts only).
 
 ### 4.3 Connecting (OAuth, our own routes)
@@ -210,10 +212,11 @@ Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1}`, `{state:1, notBefor
   - GET returns `{configured, connected, channel, status, warning, auto_post, privacy,
     made_for_kids}`, plus a setup hint when the env vars are missing. It never returns tokens.
   - PATCH sets `auto_post`, `privacy` and `made_for_kids`. Turning auto-post off cancels posts that
-    are `queued` or `blocked`.
+    are `queued`, `blocked` or `failed` (amended after the final review: `failed` too, so a later
+    "Try again" cannot post it).
 - **`DELETE /api/youtube/account`** disconnects.
   1. Delete the account doc first.
-  2. Cancel `queued` and `blocked` posts.
+  2. Cancel `queued`, `blocked` and `failed` posts (amended after the final review).
   3. Then revoke at `https://oauth2.googleapis.com/revoke`, best effort and logged only.
   - `deleteAllUserData` does the same, and also deletes the user's posts and states.
 - **Token refresh** (worker):
@@ -240,6 +243,10 @@ Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1}`, `{state:1, notBefor
    - Set `autopost: "done"`.
 4. A cron step re-runs `createPostsForTask` for tasks still `pending` more than 2 minutes after
    their last update. This covers a crash between the CAS and the enqueue.
+   - The re-run sees the task's current clips, so it skips a clip that starts its own lineage
+     after `run.completedAt`: that clip was combined in the editor meanwhile, and combined clips
+     never post. A restyled clip keeps its older lineage and still posts (amended after the final
+     review).
 
 **Re-running the same source video posts again** (the user's decision). A new task on a video that was already processed posts all of its clips, even ones covering the same moments as Shorts already on the channel. `lineageId` only prevents re-posts within one task. There is no cross-task de-duplication.
 
@@ -259,6 +266,10 @@ Each post snapshots the account's `channelId` when it is created (field `channel
   - Payload `{postId}`.
   - A failure hook. When the job dies, the post goes back to `queued` with `notBefore` 2 minutes
     later while it has attempts left, and to `failed` otherwise.
+  - A cron step applies the same transition to a `working` post whose `claimedBy` job is no longer
+    queued or running, because its hook never completed (a long database outage, or a kill
+    between the reaper's write and the hook). It is fenced on the claim, so a job that finishes
+    meanwhile wins (amended after the final review).
   - Jobs are dispatched at creation, and also by a cron step that enqueues every `queued` post whose
     `notBefore` has passed.
   - A handler that defers a post only sets `notBefore`. The cron picks the post up again.
@@ -267,7 +278,10 @@ Each post snapshots the account's `channelId` when it is created (field `channel
   - Also accept `working` when `claimedBy` is this job's id, since a released or reaped job re-runs
     with the same id.
   - Then check, in order:
-    1. The account exists and is active.
+    1. The account exists and is active. A missing account means the user disconnected while the
+       post was working, so the post is cancelled ("YouTube account was disconnected."), as are
+       posts for another channel and posts after auto-post was turned off (amended after the final
+       review).
     2. The task exists and is not `processing`. If a restyle is running, defer 2 minutes with
        `waitReason: "restyle"`.
     3. A clip with this `lineageId` is still in `task.clips`. If not, cancel the post.
@@ -293,7 +307,12 @@ Each post snapshots the account's `channelId` when it is created (field `channel
   - `parse` enforces the limits and throws `OutputValidationError`, which triggers a repair turn:
     - Strip `<` and `>` everywhere.
     - The title must be 1-100 characters.
-    - The description plus `"\n\n#a #b"` must fit in 5000 UTF-8 bytes.
+    - The title must not contain a link (`http://`, `https://` or `www.`), a hashtag (a `#`
+      starting a word, so "C#" passes) or a line break. The prompt rule above, enforced too, so a
+      transcript written as instructions cannot get them into the title (amended after the final
+      review).
+    - The description plus `"\n\n#a #b"` must fit in 5000 UTF-8 bytes (with no hashtag left, the
+      description alone is sent; amended after the final review).
     - Hashtags must match `[\p{L}\p{N}_]+`, deduped, at most 5.
   - Tags are clipped deterministically to the 500-character rule; drop tags from the end until it
     fits.
@@ -309,8 +328,13 @@ Each post snapshots the account's `channelId` when it is created (field `channel
     - Query: `notifySubscribers`.
     - No `#Shorts`, no links, no signature.
   1. If `upload.sessionUri` exists, **query it first** with `PUT`, `Content-Length: 0` and
-     `Content-Range: bytes */{size}`. Only do this when `upload.storageKey` and `size` still match
-     the clip.
+     `Content-Range: bytes */{size}`. ~~Only do this when `upload.storageKey` and `size` still match
+     the clip.~~ When they no longer match (a restyle changed the file), the saved session is still
+     queried once, with its saved size: a 200/201 there means the older render is already the
+     lineage's video; a 308 or 404/410 drops the session, which is never resumed or fed the new
+     file. An error on that query is handled as for a matching session (in-job retries, then the
+     error table), so no new session starts while it cannot be read (amended after the final
+     review: the old rule missed a lost response followed by a restyle, a duplicate).
      - 200/201: done. Record the returned resource. This is how a lost response is recovered without
        a duplicate.
      - 308: resume from `Range` + 1, or from 0 when there is no `Range`.
@@ -319,7 +343,9 @@ Each post snapshots the account's `channelId` when it is created (field `channel
      https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status`
      with `X-Upload-Content-Length` and `X-Upload-Content-Type: video/mp4`.
      - **Increment `insertCalls` before the call.** If `insertCalls` would exceed 3, fail the post
-       instead.
+       instead. A start refused with `quotaExceeded` or `uploadLimitExceeded` gives its call back:
+       Google sent no `Location`, so no session and no video can exist. Every other failed start
+       still counts (amended after the final review; ruling dup-2b).
      - Save `Location` as `upload.sessionUri` immediately.
   3. Send the file with a single `PUT` streamed from `createReadStream`, passing `ctx.signal`.
      Google discourages chunking, and clips are tens of MB.
@@ -339,9 +365,9 @@ Each post snapshots the account's `channelId` when it is created (field `channel
   | Reason or status | Result |
   |---|---|
   | `quotaExceeded` | `queued` until the next midnight Pacific + 5 min (`quota`). Apply it with one `updateMany` to every queued post, so no other call is wasted. |
-  | `uploadLimitExceeded` | `queued` + 6 h (`channel_limit`). |
+  | `uploadLimitExceeded` | `queued` + 6 h (`channel_limit`). Applied to every queued post of that user's channel, as the quota row does for the project, so no other post spends a refused call (amended after the final review). |
   | `rateLimitExceeded`, `userRateLimitExceeded`, 429, 5xx, network, Anthropic transient errors | `queued` after 1, 5, then 15 min. After 4 attempts, `failed`. |
-  | `invalid_grant`, `insufficientPermissions`, `youtubeSignupRequired` | `blocked`, with a "Reconnect" or "Create a channel" message. |
+  | `invalid_grant`, `insufficientPermissions`, `youtubeSignupRequired` | `blocked`, with a "Reconnect" or "Create a channel" message. If the account doc is gone by then (a disconnect mid-run revoked the grant), `cancelled` with "YouTube account was disconnected." instead (amended after the final review). |
   | `invalidTitle`, `invalidDescription`, `invalidTags` | Clear `metadata` and retry once, then `failed`. |
   | Any other 4xx, `forbiddenPrivacySetting` | `failed`. |
 
@@ -358,8 +384,13 @@ Each post snapshots the account's `channelId` when it is created (field `channel
   - Not public: "YouTube made this video private" + a link to the setup doc's audit note. This also
     sets `youtube_accounts.warning`, which Settings shows.
   - `rejected` or `failed`: the reason, for example a duplicate.
+- Clear a post `warning` that an earlier pass stored once the video is back to the requested
+  privacy with no rejection (amended after the final review).
 - Only verify posts whose `channelId` matches the account's current channel. A video on a
   previously connected channel cannot be read with the new token.
+- Skip an account that is `reauth_required`: its refresh token would fail again on every pass.
+  Its posts are verified after the reconnect, while still inside the 48 h window (amended after
+  the final review).
 
 **Circuit breaker for the forced-private lock** (our call). The first time any upload comes back
 (from the upload response or from verification) with a `privacyStatus` other than the one
@@ -373,8 +404,11 @@ re-posted (v1).
 
 Settings explains the lock and offers **Resume posting**. Pressing it sets the account back to
 `active` and moves those posts to `queued`; the user does this after the project passes YouTube's
-audit, or to retry once. A post uploaded while the lock was in force stays as it is, and the user
-can delete it in YouTube Studio.
+audit, or to retry once. Any wait a post had from before the lock (a quota wait, say) is dropped
+with it; a limit still in force re-defers the posts on the first upload, at no insert call (§4.5
+step 2). A `reauth_required` account stays so, and its held posts wait for the reconnect
+instead (amended after the final review). A post uploaded while the lock was in force stays as it
+is, and the user can delete it in YouTube Studio.
 
 ### 4.7 Interactions with existing features
 
@@ -383,28 +417,41 @@ can delete it in YouTube Studio.
      `cancelled`.
   2. If a post is `working`, return 409 "This clip is uploading to YouTube. Try again in a minute."
   - The claim CAS and the cancel CAS act on the same post doc, so exactly one of them wins.
+  - If the clip delete is then refused (a restyle started between the route's status check and
+    the delete's own CAS), the post gets its state and wait back. A crash between the two still
+    leaves it cancelled (amended after the final review).
   - Task delete then deletes its posts.
   - The confirm dialogs say that videos already on YouTube stay there.
 - **Restyle route:** return 409 while any of the task's posts is `working`. Otherwise it is allowed:
   - Uploaded lineages are never re-posted.
   - Queued lineages wait for the restyle, then upload the new render.
   - A lineage whose clip failed to re-render is cancelled when its job runs.
-  - If the file changed under a half-finished session, step 1 starts a new session. No video exists
-    yet, so this cannot duplicate.
+  - ~~If the file changed under a half-finished session, step 1 starts a new session. No video
+    exists yet, so this cannot duplicate.~~ That reasoning is false when the old session's upload
+    finished at Google but the response was lost (§2's lost-response case): the video does exist.
+    So step 1 queries the older render's saved session first and records its video when it is
+    done; only a session that is gone or incomplete is replaced by a new one (amended after the
+    final review).
 - **Editor exports** do not change `clip.filename`, so edits made in the editor are not what gets
   posted.
 
 ### 4.8 Routes and UI
 
 - **Routes:**
-  - `GET /api/tasks/[id]/youtube` returns `{posts:[{clip_id, state, phase, progress, title,
-    description, tags, hashtags, video_url, privacy_status, warning, error, not_before}]}`.
+  - `GET /api/tasks/[id]/youtube` returns `{posts:[{id, clip_id, state, phase, progress, title,
+    description, tags, hashtags, video_url, privacy_status, upload_status, warning, error,
+    not_before, wait_reason, insert_cap_reached}], autopost_pending}` (amended after the final
+    review: `id` for the retry URL, `upload_status` for the uploaded chip, `wait_reason` and
+    `insert_cap_reached` for the other chips and the retry confirm, and `autopost_pending`, true
+    until the task's posts exist, so the page keeps polling).
     `clip_id` is the current clip of the lineage.
   - `POST /api/tasks/[id]/youtube/[postId]/retry` accepts `failed` or `blocked` posts and returns 409
     for `uploaded`. It enqueues the job and returns `worker_online`.
     - It resets the automatic retry budget (`attempts`).
     - It **adds one** to the `videos.insert` allowance (the cap becomes `insertCalls + 1`) instead of
-      resetting it (our call). Before any new session, a saved `sessionUri` is still queried first.
+      resetting it (our call). As built, the cap becomes `max(insertCap, insertCalls + 1)`, so an
+      unused cap is never lowered (amended after the final review; Task 6 ruling). Before any new
+      session, a saved `sessionUri` is still queried first.
     - When the post had already reached its insert cap, the confirm says: "If this clip is already on
       your channel, don't retry; it would post twice."
   - Every route uses `handle()` and `requireUser`, and is owner-only. Serializers never output
@@ -426,6 +473,13 @@ can delete it in YouTube Studio.
   - Each clip tile gets a status chip: "Waiting to post", "Writing title…", "Uploading…", "Posted ↗",
     "Private on YouTube", "Waiting for YouTube's daily limit (until 9:05 AM)", or "Failed" + reason +
     "Try again".
+    - Also (amended after the final review): "Waiting for YouTube's channel upload limit",
+      "Waiting to retry the upload" (+ the stored error), "Waiting for the new style to finish",
+      "Reconnect YouTube to post" (+ the stored error when it says more than the pill, such as
+      "Create a YouTube channel, then reconnect"), "Posting paused"; "Not posted" + the reason for
+      a post cancelled with one (another channel, auto-post off, disconnected; a delete's cancel
+      shows nothing); "Flagged by YouTube ↗" with the reason line for an upload YouTube rejected
+      or failed; and "Removed from YouTube" for a video deleted on YouTube.
   - `ClipFocus` shows the posted title, description, hashtags and tags (read-only).
   - The page polls the posts route every 4 s while any post is `queued` or `working`. Task polling
     stops at completion, so this needs its own poll.
