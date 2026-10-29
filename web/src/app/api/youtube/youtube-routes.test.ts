@@ -659,6 +659,23 @@ describe("GET /api/youtube/posts", () => {
     expect(body.posts.at(-1).id).toBe("p-1");
   });
 
+  it("leaves out posts cancelled without a reason (a clip delete), so they take no slot in the cap", async () => {
+    const base = Date.parse("2026-10-01T00:00:00Z");
+    await collections().youtubePosts.insertMany([
+      ...Array.from({ length: 200 }, (_, i) => postDoc(`p-${i}`, { createdAt: new Date(base + i * 60_000) })),
+      postDoc("p-deleted", { state: "cancelled", createdAt: new Date(base + 300 * 60_000) }),
+      postDoc("p-off", { state: "cancelled", error: "Auto-post was turned off.", createdAt: new Date(base + 301 * 60_000) }),
+    ]);
+
+    const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
+
+    expect(body.truncated).toBe(true);
+    expect(body.posts).toHaveLength(200);
+    expect(body.posts[0].id).toBe("p-off");
+    expect(body.posts.map((post: { id: string }) => post.id)).not.toContain("p-deleted");
+    expect(body.posts.at(-1).id).toBe("p-1");
+  });
+
   it("returns null titles and clip for a post whose task is gone", async () => {
     await collections().youtubePosts.insertOne(postDoc("p-orphan", { taskId: "task-gone" }));
 

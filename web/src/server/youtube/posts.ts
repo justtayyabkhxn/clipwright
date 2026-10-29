@@ -529,7 +529,12 @@ export type OverviewPost = SerializedPost & {
  */
 export async function listPostsForUser(userId: string, limit: number): Promise<{ posts: OverviewPost[]; truncated: boolean }> {
   const { youtubePosts, tasks } = collections();
-  const found = await youtubePosts.find({ userId }).sort({ createdAt: -1 }).limit(limit + 1).toArray();
+  // A post cancelled without a reason (a clip delete) has nothing to show, so it takes no slot.
+  const found = await youtubePosts
+    .find({ userId, $nor: [{ state: "cancelled", error: { $exists: false } }] })
+    .sort({ createdAt: -1 })
+    .limit(limit + 1)
+    .toArray();
   const posts = found.slice(0, limit);
   const taskDocs = await tasks
     .find(

@@ -63,6 +63,11 @@ export function collections() {
 async function createIndexes() {
   const db = getDb();
   const exists = (field: string) => ({ partialFilterExpression: { [field]: { $exists: true } } });
+  // {userId:1, createdAt:-1} replaced {userId:1}; createIndex never drops the old one. 26 and 27 are
+  // NamespaceNotFound (a fresh database) and IndexNotFound (already dropped).
+  await db.collection("youtube_posts").dropIndex("userId_1").catch((error) => {
+    if (error?.code !== 26 && error?.code !== 27) throw error;
+  });
   await Promise.all([
     // Better Auth's adapter creates none of its own.
     db.collection("user").createIndex({ email: 1 }, { unique: true }),

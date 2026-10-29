@@ -75,4 +75,20 @@ describe("YouTube indexes", () => {
     const autopostIndex = taskIndexes.find((index) => JSON.stringify(index.key) === JSON.stringify({ autopost: 1 }));
     expect(autopostIndex?.partialFilterExpression).toEqual({ autopost: "pending" });
   });
+
+  it("drops the old youtube_posts {userId:1} index once, and starts again without it", async () => {
+    await closeDb();
+    process.env.MONGODB_DB = "db_test_youtube_upgrade";
+    resetEnv();
+    await getDb().collection("youtube_posts").createIndex({ userId: 1 });
+
+    await ensureIndexes();
+    const keys = (await getDb().collection("youtube_posts").indexes()).map((index) => JSON.stringify(index.key));
+    expect(keys).not.toContain(JSON.stringify({ userId: 1 }));
+    expect(keys).toContain(JSON.stringify({ userId: 1, createdAt: -1 }));
+
+    // The next start finds no old index to drop.
+    await closeDb();
+    await expect(ensureIndexes()).resolves.toBeUndefined();
+  });
 });
