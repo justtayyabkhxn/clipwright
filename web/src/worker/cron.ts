@@ -10,6 +10,7 @@ import type { JobType, YoutubePostDoc } from "../server/types";
 import { getAccessToken, getAccount } from "../server/youtube/accounts";
 import { listVideoStatus } from "../server/youtube/google";
 import { createPostsForTask, enqueueQueued, PRIVATE_LOCK, tripPrivateLock } from "../server/youtube/posts";
+import { releaseLostPost } from "./handlers/publish-youtube";
 
 export const CRON_INTERVAL_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -121,6 +122,21 @@ export async function sweepUploads(now = new Date()) {
 
 // --- YouTube auto-post (design §4.4, §4.5, §4.6) ---
 
+/**
+ * A `working` post whose job is no longer queued or running (its failure hook never completed: a
+ * long database outage, or a kill between the reaper's write and its hook) gets the hook's own
+ * transition. Fenced on the claim, so a job finishing meanwhile wins.
+ */
+export async function releaseOrphanedPosts(): Promise<number> {
+  const { jobs, youtubePosts } = collections();
+  let released = 0;
+  for (const post of await youtubePosts.find({ state: "working" }).toArray()) {
+    const live = await jobs.findOne({ _id: post.claimedBy ?? "", status: { $in: ["queued", "running"] } }, { projection: { _id: 1 } });
+    if (!live && (await releaseLostPost(post))) released++;
+  }
+  return released;
+}
+
 /** §4.5: enqueue every `queued` post whose `notBefore` has passed or is absent (a deferred handler only sets `notBefore`). */
 export async function dispatchDuePosts(now = new Date()): Promise<number> {
   return enqueueQueued({}, now);
@@ -231,6 +247,7 @@ export async function runCron(now = new Date()) {
     ["sweep work dirs", sweepWorkDirs],
     ["sweep YouTube sources", sweepYoutubeSources],
     ["sweep uploads", sweepUploads],
+    ["release orphaned YouTube posts", releaseOrphanedPosts],
     ["dispatch due YouTube posts", dispatchDuePosts],
     ["resume pending YouTube autopost", resumePendingAutopost],
     ["verify YouTube uploads", verifyUploads],

@@ -272,10 +272,13 @@ async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDo
   }
 }
 
-/** Failure hook (the job died or threw): back in the queue in 2 min while automatic attempts remain, else failed. */
+/** The job holding `post` died or threw: back in the queue in 2 min while automatic attempts remain, else failed. */
+export function releaseLostPost(post: YoutubePostDoc): Promise<boolean> {
+  return post.attempts < RETRY_DELAYS_MS.length ? deferPost(post, "retry", later(2 * MINUTE), WORKER_STOPPED) : failPost(post, WORKER_STOPPED);
+}
+
+/** Failure hook. The cron's `releaseOrphanedPosts` does the same for a post whose hook never completed. */
 export async function publishFailed(job: JobDoc): Promise<void> {
   const post = await collections().youtubePosts.findOne({ _id: String(job.payload.postId), state: "working", claimedBy: job._id });
-  if (!post) return;
-  if (post.attempts < RETRY_DELAYS_MS.length) await deferPost(post, "retry", later(2 * MINUTE), WORKER_STOPPED);
-  else await failPost(post, WORKER_STOPPED);
+  if (post) await releaseLostPost(post);
 }

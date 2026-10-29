@@ -15,6 +15,7 @@ import {
   deleteOldJobs,
   dispatchDuePosts,
   expireExports,
+  releaseOrphanedPosts,
   resumePendingAutopost,
   runCron,
   sweepUploads,
@@ -332,6 +333,32 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
       .jobs.find({ type: "publish_youtube" })
       .toArray();
     expect(jobs.map((j) => j.payload.postId).sort()).toEqual(["due", "no-wait"]);
+  });
+
+  it("releases a working post whose job is no longer queued or running, as its failure hook would have", async () => {
+    const jobIn = async (postId: string, status: JobDoc["status"]) => {
+      const { job: queued } = await enqueueJob({ type: "publish_youtube", taskId: "t1", userId: USER, activeKey: `youtube:${postId}`, payload: { postId } });
+      await collections().jobs.updateOne({ _id: queued._id }, { $set: { status } });
+      return queued._id;
+    };
+    await seedPost({ _id: "failed-job", lineageId: "c1", state: "working", claimedBy: await jobIn("failed-job", "failed"), phase: "uploading" });
+    await seedPost({ _id: "running-job", lineageId: "c2", state: "working", claimedBy: await jobIn("running-job", "running") });
+    await seedPost({ _id: "requeued-job", lineageId: "c3", state: "working", claimedBy: await jobIn("requeued-job", "queued") });
+    await seedPost({ _id: "deleted-job", lineageId: "c4", state: "working", claimedBy: "0".repeat(32) });
+    await seedPost({ _id: "last-attempt", lineageId: "c5", state: "working", claimedBy: "f".repeat(32), attempts: 3 });
+    const before = Date.now();
+
+    expect(await releaseOrphanedPosts()).toBe(3);
+
+    for (const id of ["failed-job", "deleted-job"]) {
+      const released = await storedPost(id);
+      expect(released).toMatchObject({ state: "queued", waitReason: "retry", attempts: 1, error: "The upload stopped unexpectedly." });
+      expect(released.claimedBy).toBeUndefined();
+      expect(released.phase).toBeUndefined();
+      expect(released.notBefore!.getTime()).toBeGreaterThanOrEqual(before + 2 * MINUTE);
+    }
+    expect(await storedPost("last-attempt")).toMatchObject({ state: "failed", error: "The upload stopped unexpectedly." });
+    for (const id of ["running-job", "requeued-job"]) expect((await storedPost(id)).state).toBe("working");
   });
 
   it("does not count a due post whose job already exists", async () => {
