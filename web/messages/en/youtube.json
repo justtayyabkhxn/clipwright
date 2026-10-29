@@ -1,0 +1,36 @@
+{
+  "title": "YouTube",
+  "description": "Every clip auto-post has sent to your channel, or is about to.",
+  "loadError": "Could not load your YouTube posts",
+  "settings": "Settings",
+  "openSettings": "Open Settings",
+  "notConfiguredTitle": "YouTube isn't set up",
+  "notConfiguredBody": "Auto-post needs a Google OAuth client on this server. Settings → YouTube says how to add one.",
+  "notConnectedTitle": "No channel connected",
+  "notConnectedBody": "Connect your YouTube channel in Settings, and every new clip posts there as a Short.",
+  "account": {
+    "openChannel": "Open {channel} on YouTube",
+    "status": {
+      "active": "Connected",
+      "reauth_required": "Needs reconnecting",
+      "paused": "Posting paused"
+    },
+    "autoPostOn": "Auto-post on",
+    "autoPostOff": "Auto-post off"
+  },
+  "summaryLabel": "Summary",
+  "counts": {
+    "posted": "Posted",
+    "waiting": "Waiting",
+    "uploading": "Uploading",
+    "failed": "Failed",
+    "notPosted": "Not posted"
+  },
+  "taskGone": "Deleted generation",
+  "clip": "Clip",
+  "nextTry": "Next try {time}",
+  "uploadedAt": "Uploaded {time}",
+  "emptyTitle": "Nothing posted yet",
+  "emptyBody": "When a generation finishes with auto-post on, its clips show up here.",
+  "truncated": "Showing the latest 200 posts"
+}
