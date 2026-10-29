@@ -479,7 +479,10 @@ is, and the user can delete it in YouTube Studio.
       "Create a YouTube channel, then reconnect"), "Posting paused"; "Not posted" + the reason for
       a post cancelled with one (another channel, auto-post off, disconnected; a delete's cancel
       shows nothing); "Flagged by YouTube ↗" with the reason line for an upload YouTube rejected
-      or failed; and "Removed from YouTube" for a video deleted on YouTube.
+      or failed (also on a private-locked upload, with the lock's line as the reason); and
+      "Removed from YouTube" for a video deleted on YouTube before verification saw it finish
+      processing (§4.6 reads a video only until its first final status, so a later deletion is
+      not detected).
   - `ClipFocus` shows the posted title, description, hashtags and tags (read-only).
   - The page polls the posts route every 4 s while any post is `queued` or `working`. Task polling
     stops at completion, so this needs its own poll.
@@ -598,7 +601,7 @@ is, and the user can delete it in YouTube Studio.
 19. **A disconnected or paused account at completion:** posts are created `blocked` ("Reconnect YouTube to post"). They go out once the user reconnects or resumes posting, never silently skipped.
 20. **Circuit breaker:** if YouTube returns a privacy other than the one requested, auto-post pauses and queued clips are held until "Resume posting" in Settings. Locked videos are not re-posted in v1.
 21. **"Try again" allows exactly one more `videos.insert` call**, with a warning when the post already hit its cap. It never resets the duplicate guard.
-22. **Switching to a different channel** cancels clips still waiting for the old channel ("Not posted: a different channel was connected"). They are not redirected to the new one.
+22. **Switching to a different channel** cancels clips still waiting for the old channel (the chip shows "Not posted" with the reason "A different channel was connected."; amended after the final review). They are not redirected to the new one.
 
 ## 8. Left to the builder
 

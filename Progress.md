@@ -423,3 +423,12 @@ uploads every clip of a finished video to the user's channel as a public Short.
   the final review)".
 - Verification: see the backend report (`final-fix-backend.md`: full vitest 857 passed / 1
   skipped); the docs commit ran tsc and lint.
+- 2026-10-29 12:07 re-review fix round (F1–F7, all Minor): a cancel without a reason (clip or task
+  delete) drops the old error, so a refused task delete no longer shows a stale retry/failure as
+  the "Not posted" reason, and a refused clip delete puts the error back; the channel-change reason
+  is "A different channel was connected." (no doubled "Not posted"); Resume posting on a
+  reconnect-required account drops pre-lock errors and waits; a rejected or failed upload on a
+  private-locked project shows "Flagged by YouTube" with the private-lock line; the worker and the
+  chip share the RECONNECT/PAUSED sentences (`web/src/lib/youtube-blocked.ts`); the guide and spec
+  say "Removed from YouTube" only catches deletions before verification finished; three stale
+  cancel comments fixed.

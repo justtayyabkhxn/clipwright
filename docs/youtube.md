@@ -110,9 +110,10 @@ forth to pass. Until it does, you have two options:
   cap asks you to check your channel first.
 - **Stopping.** Turning auto-post off, or disconnecting the channel, cancels every clip that has
   not uploaded yet (one already uploading may still finish). Deleting a clip or a task never
-  removes a video already on YouTube; it is refused for a moment if that clip is mid-upload.
-  Connecting a different channel cancels clips still waiting for the old one ("Not posted: a
-  different channel was connected"); they are not redirected to the new channel.
+  removes a video already on YouTube; it is refused for a moment if that clip is mid-upload. A
+  task delete refused that way still cancels the task's other waiting clips (they then show no
+  chip). Connecting a different channel cancels clips still waiting for the old one ("Not posted",
+  with the reason "A different channel was connected."); they are not redirected to the new channel.
 - **What's not included (v1).** No review step before posting. No scheduling. One channel per
   user. No TikTok/Instagram. No thumbnails, playlists or view/like metrics. Tasks completed before
   you connected YouTube are never backfilled.
@@ -142,8 +143,8 @@ forth to pass. Until it does, you have two options:
 | "Waiting for YouTube's channel upload limit" | The channel hit YouTube's own (unpublished) daily upload limit; every clip waiting for that channel is held for about 6 hours. No time is shown. | Wait; it resumes automatically. |
 | "Posted ↗" | Uploaded; the link opens the video. | — |
 | "Private on YouTube" | YouTube returned a privacy other than the one you chose (at upload or on verification). | See [the audit section](#2-forced-private-uploads-and-the-audit). |
-| "Flagged by YouTube ↗" + reason | YouTube rejected or failed the video after processing; the line under it names the reason (for example a duplicate upload). | Open the video in YouTube Studio. Clipwright never re-posts an uploaded clip. |
-| "Removed from YouTube" | The video was deleted on YouTube (verification no longer finds it). | Nothing to do; Clipwright never re-posts an uploaded clip. |
+| "Flagged by YouTube ↗" + reason | YouTube rejected or failed the video after processing; the line under it names the reason (for example a duplicate upload), or says "YouTube made this video private" when the video was also forced private. | Open the video in YouTube Studio. Clipwright never re-posts an uploaded clip. |
+| "Removed from YouTube" | The video was deleted on YouTube before verification saw it finish processing. Verification reads each video only until its first final status (usually 10–15 minutes after the upload), so a video deleted later is not detected and keeps its "Posted ↗" link. | Nothing to do; Clipwright never re-posts an uploaded clip. |
 | "Reconnect YouTube to post" | The refresh token was revoked or expired, or YouTube refused the grant (a missing permission, or the Google account has no channel: the line under it then says "Create a YouTube channel, then reconnect"). | Settings → YouTube → **Reconnect**. The clip posts once you have. |
 | "Posting paused" | The forced-private circuit breaker tripped (see [§2](#2-forced-private-uploads-and-the-audit)). | Settings → YouTube → **Resume posting**, after requesting the audit (or to retry once). |
 | "Failed" + reason + "Try again" | A permanent error (invalid metadata YouTube rejected twice, the retry budget ran out, or Google refused the server's OAuth client, in which case the reason names the two `GOOGLE_OAUTH_*` variables to check). | Read the reason; "Try again" retries, with one extra upload attempt. If the clip might already be on your channel, check before retrying — posting it twice is possible if it actually succeeded and YouTube has since expired its upload session. |
