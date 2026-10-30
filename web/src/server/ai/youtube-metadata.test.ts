@@ -47,6 +47,22 @@ describe("writeYoutubeMetadata", () => {
     expect(system.toLowerCase()).toContain("never");
   });
 
+  it("adds the video summary, topics and why-it-works only when known", async () => {
+    const fake = fakeFetch(() => messageResponse(VALID_OUTPUT, { model: MODEL }));
+    await write(fake.fetch);
+    await writeYoutubeMetadata(
+      { ...INPUT, videoSummary: "A talk on investing.", videoTopics: ["index funds"], whyItWorks: "Contrarian claim" },
+      { apiKey: TEST_KEY, model: MODEL, fetch: fake.fetch },
+    );
+
+    const data = (i: number) => {
+      const prompt: string = fake.requests[i].body.messages[0].content;
+      return JSON.parse(prompt.slice(prompt.indexOf("{")));
+    };
+    expect(Object.keys(data(0)).sort()).toEqual(["hook_title", "source_title", "transcript"]);
+    expect(data(1)).toMatchObject({ video_summary: "A talk on investing.", video_topics: ["index funds"], why_it_works: "Contrarian claim" });
+  });
+
   it("returns parsed metadata with the model name", async () => {
     const fake = fakeFetch(() => messageResponse(VALID_OUTPUT));
     const result = await write(fake.fetch);
@@ -159,6 +175,14 @@ describe("fitTags", () => {
 });
 
 describe("youtubeDescription", () => {
+  it("puts the full-video link before the hashtags, and drops it rather than pass the byte limit", () => {
+    const url = "https://www.youtube.com/watch?v=abcdefghijk";
+    expect(youtubeDescription({ description: "Body", hashtags: ["a"] }, url)).toBe(`Body\n\nFull video: ${url}\n\n#a`);
+    expect(youtubeDescription({ description: "Body", hashtags: [] }, url)).toBe(`Body\n\nFull video: ${url}`);
+    const full = "x".repeat(4990);
+    expect(youtubeDescription({ description: full, hashtags: [] }, url)).toBe(full);
+  });
+
   it("joins the description and hashtags with the required separator", () => {
     expect(youtubeDescription({ description: "Body text.", hashtags: ["money", "tips"] })).toBe(
       "Body text.\n\n#money #tips",

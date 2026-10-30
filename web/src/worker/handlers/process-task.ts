@@ -21,6 +21,7 @@ import {
 } from "../../server/tasks";
 import type { ClipLength, TaskDoc } from "../../server/types";
 import { getAccount } from "../../server/youtube/accounts";
+import { channelNotesFor } from "../../server/youtube/insights";
 import { createPostsForTask } from "../../server/youtube/posts";
 import {
   cancelledOutcome,
@@ -100,6 +101,7 @@ function planFromSegment(segment: TranscriptSegment): RenderPlan {
       shareabilityScore: v.shareability_score,
       hookType: v.hook_type,
       hookTitle: segment.hook_title,
+      viralityReasoning: v.virality_reasoning,
     },
   };
 }
@@ -217,10 +219,16 @@ export async function processTask(ctx: JobContext): Promise<JobOutcome> {
         video_path: videoPath,
         transcript_text: transcript,
       });
+      // What performs on the user's channel nudges selection; never worth failing a task over.
+      const channelNotes = await channelNotesFor(task.userId).catch((error) => {
+        console.warn(`[worker] Task ${taskId}: channel notes unavailable: ${errorMessage(error)}`);
+        return null;
+      });
       try {
         analysis = await selectClips({
           transcript,
           clipSignals,
+          channelNotes,
           clipLength,
           apiKey: settings.anthropicApiKey,
           model: settings.claudeModel,
@@ -282,6 +290,7 @@ export async function processTask(ctx: JobContext): Promise<JobOutcome> {
         progress: 100,
         progressMessage: "Complete!",
         "run.completedAt": new Date(),
+        analysis: { summary: analysis.summary, keyTopics: analysis.keyTopics },
         ...(autopost && { autopost: "pending" as const }),
       },
       runFilter,

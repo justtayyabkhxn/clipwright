@@ -21,7 +21,7 @@ export const GET = handle(async (request: Request, { params }: Params) => {
   return json(serializeTask(await getTaskForUser(id, user.id)));
 });
 
-/** Rename. Like SupoClip this is not edit-locked: a title can change mid-run. */
+/** Rename. This is not edit-locked: a title can change mid-run. */
 export const PATCH = handle(async (request: Request, { params }: Params) => {
   const { id } = await params;
   const user = await requireUser(request);

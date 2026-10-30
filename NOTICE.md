@@ -8,7 +8,7 @@ Clipwright is based on **SupoClip**, an open-source AI video clipping tool by
 - Source: <https://github.com/FujiwaraChoki/supoclip>
 - License: GNU Affero General Public License v3.0
 
-Clipwright started from a fork of SupoClip with Claude support (commit `1dbb178` in this
+Clipwright started from a fork of SupoClip with Claude support (commit `29dc44b` in this
 repository's history) and keeps SupoClip's Python video renderer, clip-selection prompts and
 algorithms, caption templates and editor design.
 
@@ -37,7 +37,7 @@ Clipwright and let people use it over a network, you offer those users the compl
 source code of your version. Clipwright links to its source from the sidebar and the sign-in pages;
 set `NEXT_PUBLIC_SOURCE_CODE_URL` to your repository so that link points at your version.
 
-Keep this notice, the [LICENSE](LICENSE) file and the "Based on SupoClip" credit in any copy or
+Keep this notice and the [LICENSE](LICENSE) file in any copy or
 derivative you distribute.
 
 ## Third-party components

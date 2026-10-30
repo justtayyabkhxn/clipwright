@@ -9,7 +9,7 @@ import { collections } from "../db";
 import { env } from "../env";
 import { decryptSetting, encryptSetting } from "../settings";
 import type { YoutubeAccountDoc } from "../types";
-import { exchangeCode, fetchMyChannel, GoogleApiError, refreshAccessToken, revokeToken } from "./google";
+import { exchangeCode, fetchMyChannel, GoogleApiError, PLAYLIST_SCOPE, refreshAccessToken, revokeToken } from "./google";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
@@ -96,13 +96,21 @@ export async function saveConnectedAccount(userId: string, tokens: Tokens, chann
 
 export async function updateAccountPrefs(
   userId: string,
-  prefs: { autoPost?: boolean; privacy?: YoutubeAccountDoc["privacy"]; madeForKids?: boolean },
+  prefs: {
+    autoPost?: boolean;
+    privacy?: YoutubeAccountDoc["privacy"];
+    madeForKids?: boolean;
+    addToPlaylist?: boolean;
+    linkFullVideo?: boolean;
+  },
 ): Promise<YoutubeAccountDoc | null> {
   const set: MatchKeysAndValues<YoutubeAccountDoc> = {
     updatedAt: new Date(),
     ...(prefs.autoPost !== undefined && { autoPost: prefs.autoPost }),
     ...(prefs.privacy !== undefined && { privacy: prefs.privacy }),
     ...(prefs.madeForKids !== undefined && { madeForKids: prefs.madeForKids }),
+    ...(prefs.addToPlaylist !== undefined && { addToPlaylist: prefs.addToPlaylist }),
+    ...(prefs.linkFullVideo !== undefined && { linkFullVideo: prefs.linkFullVideo }),
   };
   return collections().youtubeAccounts.findOneAndUpdate({ _id: userId }, { $set: set }, { returnDocument: "after" });
 }
@@ -197,6 +205,10 @@ export function serializeAccount(account: YoutubeAccountDoc | null) {
     auto_post: account?.autoPost ?? false,
     privacy: account?.privacy ?? "public",
     made_for_kids: account?.madeForKids ?? false,
+    add_to_playlist: account?.addToPlaylist ?? false,
+    link_full_video: account?.linkFullVideo ?? false,
+    /** The connection allows playlists; false means turning them on needs a reconnect. */
+    playlist_access: account?.scopes.includes(PLAYLIST_SCOPE) ?? false,
     ...(!configured && { setup_hint: "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET to enable YouTube auto-post." }),
   };
 }

@@ -8,7 +8,7 @@ import { resetEnv } from "./env";
 import { deleteUserFont, fontDirs, fontFamilyName, listFonts, resolveFontFile, saveUserFont } from "./fonts";
 import { getStorage } from "./storage";
 
-// Output of font_registry.get_font_family_name for the bundled fonts at 1dbb178.
+// Output of font_registry.get_font_family_name for the bundled fonts at 29dc44b.
 const PYTHON_FAMILY_NAMES: Record<string, string> = {
   "Anton-Regular.ttf": "Anton",
   "ArchivoBlack-Regular.ttf": "Archivo Black",

@@ -5,7 +5,7 @@
 import { type BulkWriteResult, Collection, MongoBulkWriteError, MongoNetworkError } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { closeDb, collections, ensureIndexes } from "../db";
+import { closeDb, collections, ensureIndexes, getDb, migrateChannelLimitWaits } from "../db";
 import { resetEnv } from "../env";
 import type { ClipDoc, TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../types";
 import {
@@ -18,12 +18,14 @@ import {
   claimPost,
   clearMetadata,
   createPostsForTask,
-  deferAllQueuedForChannel,
   deferAllQueuedForQuota,
   deferPost,
   failPost,
+  holdChannelForLimit,
   markUploaded,
   refundInsertCall,
+  releaseChannelLimit,
+  reserveUploadSlot,
   resumePosting,
   retryPost,
   saveMetadata,
@@ -33,7 +35,10 @@ import {
   takeInsertCall,
   tripPrivateLock,
   unblockAfterReconnect,
+  UPLOAD_GAP_MS,
+  CHANNEL_LIMIT_HOLD_MS,
 } from "./posts";
+import { channelNotesFor } from "./insights";
 
 let mongod: MongoMemoryServer;
 const baseEnv = { ...process.env };
@@ -160,6 +165,18 @@ async function claimed(overrides: Partial<YoutubePostDoc> = {}): Promise<Youtube
   return (await claimPost("p1", "job1"))!;
 }
 
+describe("reserveUploadSlot", () => {
+  it("lets one upload start, then holds the next until the gap has passed", async () => {
+    await seedAccount();
+    const now = new Date();
+
+    expect(await reserveUploadSlot(USER, now)).toBeNull();
+    expect(await reserveUploadSlot(USER, new Date(now.getTime() + 60_000 + 1))).toEqual(new Date(now.getTime() + UPLOAD_GAP_MS));
+    // A minute early still counts as on time: the slot's own job must not miss it by the previous claim's seconds.
+    expect(await reserveUploadSlot(USER, new Date(now.getTime() + UPLOAD_GAP_MS - 60_000))).toBeNull();
+  });
+});
+
 describe("createPostsForTask", () => {
   it("creates one post per non-fallback clip in order, notifying only the first", async () => {
     await seedAccount({ privacy: "unlisted", madeForKids: true });
@@ -181,15 +198,36 @@ describe("createPostsForTask", () => {
         privacy: "unlisted",
         madeForKids: true,
       });
-      expect(p.waitReason).toBeUndefined();
     }
-    const byLineage = Object.fromEntries(posts.map((p) => [p.lineageId, p._id]));
+    const byLineage = Object.fromEntries(posts.map((p) => [p.lineageId, p]));
+    // The first clip uploads now; each later one gets a slot UPLOAD_GAP_MS after the previous.
+    expect(byLineage.c1.notBefore).toBeUndefined();
+    expect(byLineage.c1.waitReason).toBeUndefined();
+    const first = byLineage.c1.createdAt.getTime();
+    expect(byLineage.orig2).toMatchObject({ waitReason: "spacing", notBefore: new Date(first + UPLOAD_GAP_MS) });
+    expect(byLineage.c3).toMatchObject({ waitReason: "spacing", notBefore: new Date(first + 2 * UPLOAD_GAP_MS) });
     const jobs = await publishJobs();
-    expect(jobs.map((job) => job.payload.postId)).toEqual([byLineage.c1, byLineage.orig2, byLineage.c3]);
+    expect(jobs.map((job) => job.payload.postId)).toEqual([byLineage.c1._id, byLineage.orig2._id, byLineage.c3._id]);
     for (const job of jobs) {
       expect(job).toMatchObject({ taskId: "t1", userId: USER, status: "queued", activeKey: `youtube:${job.payload.postId}` });
     }
+    // Each job runs at its post's slot.
+    expect(jobs.map((job) => job.runAt.getTime())).toEqual([
+      expect.any(Number), first + UPLOAD_GAP_MS, first + 2 * UPLOAD_GAP_MS,
+    ]);
     expect(await autopostFlag()).toBe("done");
+  });
+
+  it("starts a second task's slots after the first task's last one", async () => {
+    await seedAccount();
+    await seedTask([clip("c1"), clip("c2")]);
+    await createPostsForTask("t1");
+    const lastSlot = (await collections().youtubePosts.findOne({ lineageId: "c2" }))!.notBefore!.getTime();
+    await collections().tasks.insertOne({ ...(await collections().tasks.findOne({ _id: "t1" }))!, _id: "t2", autopost: "pending", clips: [clip("d1")] });
+
+    await createPostsForTask("t2");
+
+    expect((await collections().youtubePosts.findOne({ lineageId: "d1" }))!.notBefore).toEqual(new Date(lastSlot + UPLOAD_GAP_MS));
   });
 
   it("never posts a clip combined in the editor after the run completed (a re-run from the cron)", async () => {
@@ -625,20 +663,72 @@ describe("account-wide transitions", () => {
     expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
   });
 
-  it("holds every queued post of one user's channel for its upload limit without shortening a longer wait", async () => {
-    const until = new Date(Date.now() + 6 * 3_600_000);
-    const later = new Date(Date.now() + 24 * 3_600_000);
+  it("holds the channel and every queued post of it for its upload limit, with no automatic retry", async () => {
+    await seedAccount();
+    const until = new Date(Date.now() + CHANNEL_LIMIT_HOLD_MS);
     await seedPost({ _id: "q" });
+    await seedPost({ _id: "quota", lineageId: "c4", notBefore: new Date(Date.now() + 3_600_000), waitReason: "quota" });
     await seedPost({ _id: "other-channel", lineageId: "c2", channelId: "UC2" });
     await seedPost({ _id: "other-user", lineageId: "c3", userId: "u2" });
-    await seedPost({ _id: "quota", lineageId: "c4", notBefore: later, waitReason: "quota" });
     await seedPost({ _id: "b", lineageId: "c5", state: "blocked", waitReason: "reconnect" });
 
-    expect(await deferAllQueuedForChannel(USER, "UC1", until)).toBe(1);
-    expect(await storedPost("q")).toMatchObject({ notBefore: until, waitReason: "channel_limit" });
-    for (const id of ["other-channel", "other-user"]) expect((await storedPost(id)).notBefore).toBeUndefined();
-    expect(await storedPost("quota")).toMatchObject({ notBefore: later, waitReason: "quota" });
+    expect(await holdChannelForLimit(USER, "UC1", until)).toBe(2);
+    // Blocked, not queued: neither the cron nor a job will pick them up.
+    for (const id of ["q", "quota"]) expect(await storedPost(id)).toMatchObject({ state: "blocked", waitReason: "channel_limit", notBefore: until });
+    for (const id of ["other-channel", "other-user"]) expect((await storedPost(id)).state).toBe("queued");
     expect(await storedPost("b")).toMatchObject({ state: "blocked", waitReason: "reconnect" });
+    expect((await storedAccount())!.channelLimitUntil).toEqual(until);
+    // A reconnect never releases the hold; only the user does.
+    await unblockAfterReconnect(USER);
+    expect(await storedPost("q")).toMatchObject({ state: "blocked", waitReason: "channel_limit" });
+  });
+
+  it("starts posts created during a channel-limit hold held", async () => {
+    const until = new Date(Date.now() + CHANNEL_LIMIT_HOLD_MS);
+    await seedAccount({ channelLimitUntil: until });
+    await seedTask([clip("c1")]);
+
+    await createPostsForTask("t1");
+
+    expect((await storedPosts())[0]).toMatchObject({ state: "blocked", waitReason: "channel_limit", notBefore: until });
+    expect(await publishJobs()).toEqual([]);
+  });
+
+  it("Post all refuses while the hold runs, then queues every held post 10 minutes apart", async () => {
+    const until = new Date(Date.now() + CHANNEL_LIMIT_HOLD_MS);
+    await seedAccount({ channelLimitUntil: until });
+    const held = { state: "blocked" as const, waitReason: "channel_limit" as const, notBefore: until, error: "limit" };
+    await seedPost({ _id: "h1", ...held, createdAt: new Date(Date.now() - 2000) });
+    await seedPost({ _id: "h2", lineageId: "c2", ...held, createdAt: new Date(Date.now() - 1000) });
+
+    await expect(releaseChannelLimit(USER)).rejects.toMatchObject({ status: 409 });
+    await expect(retryPost("h1", USER)).rejects.toMatchObject({ status: 409 });
+
+    const after = new Date(until.getTime() + 1000);
+    expect(await releaseChannelLimit(USER, after)).toBe(2);
+    expect(await storedPost("h1")).toMatchObject({ state: "queued", attempts: 0 });
+    expect((await storedPost("h1")).notBefore).toBeUndefined();
+    expect(await storedPost("h2")).toMatchObject({ state: "queued", waitReason: "spacing", notBefore: new Date(after.getTime() + UPLOAD_GAP_MS) });
+    expect((await storedAccount())!.channelLimitUntil).toBeUndefined();
+    expect((await publishJobs()).map((job) => job.payload.postId).sort()).toEqual(["h1", "h2"]);
+  });
+
+  it("converts an old 6-hour channel-limit wait into the 12-hour hold, counted from the refusal", async () => {
+    await seedAccount();
+    const oldWait = new Date(Date.now() + 3 * 3_600_000);
+    await seedPost({ waitReason: "channel_limit", notBefore: oldWait });
+
+    await migrateChannelLimitWaits(getDb());
+
+    const until = new Date(oldWait.getTime() + 6 * 3_600_000);
+    expect(await storedPost("p1")).toMatchObject({ state: "blocked", waitReason: "channel_limit", notBefore: until });
+    expect((await storedAccount())!.channelLimitUntil).toEqual(until);
+  });
+
+  it("a held clip's own Post works once its hold is over", async () => {
+    await seedAccount();
+    await seedPost({ state: "blocked", waitReason: "channel_limit", notBefore: new Date(Date.now() - 1000) });
+    expect((await retryPost("p1", USER)).post).toMatchObject({ state: "queued" });
   });
 });
 
@@ -700,6 +790,7 @@ describe("serializePosts", () => {
       warning: null,
       error: null,
       not_before: notBefore.toISOString(),
+      stats: null,
       insert_cap_reached: true,
     });
     expect(out.posts[1]).toMatchObject({ id: "p2", clip_id: null, title: null, tags: [], hashtags: [], insert_cap_reached: false });
@@ -708,5 +799,40 @@ describe("serializePosts", () => {
     for (const secret of ["upload_id", "SESSIONSECRET", "sessionUri", "clips/t1", "storageKey", "job-holding-claim", "claimed", "token", "Token"]) {
       expect(json).not.toContain(secret);
     }
+  });
+});
+
+describe("channelNotesFor", () => {
+  /** n posted clips, the i-th with `views(i)` views and the given hook type/length. */
+  async function seedMeasured(n: number, views: (i: number) => number, shape: (i: number) => Partial<ClipDoc> = () => ({})) {
+    const at = new Date();
+    const clips = Array.from({ length: n }, (_, i) => clip(`c${i}`, { text: `Opening words of clip ${i} "quoted"`, ...shape(i) }));
+    await seedTask(clips);
+    await collections().youtubePosts.insertMany(
+      clips.map((c, i) =>
+        post({ _id: `p${i}`, lineageId: c.id, state: "uploaded", uploadStatus: "processed", uploadedAt: at, stats: { views: views(i), likes: 0, comments: 0, at } }),
+      ),
+    );
+  }
+
+  it("says nothing until 10 posted clips have view counts", async () => {
+    await seedMeasured(9, (i) => i * 100);
+    expect(await channelNotesFor(USER)).toBeNull();
+  });
+
+  it("summarizes the median, averages by hook type and length, and the top clips", async () => {
+    await seedMeasured(
+      10,
+      (i) => (i < 5 ? 1000 + i : 10 + i),
+      (i) => (i < 5 ? { hookType: "story", duration: 45, hookTitle: `Story ${i}` } : { hookType: "question", duration: 20 }),
+    );
+
+    const notes = (await channelNotesFor(USER))!;
+
+    expect(notes).toContain("- 10 recent posted Shorts, median 510 views.");
+    expect(notes).toContain("- By hook type: story 1002 avg views (5 clips), question 17 avg views (5 clips).");
+    expect(notes).toContain("- By length: 30-60 s 1002 avg views (5 clips), under 30 s 17 avg views (5 clips).");
+    expect(notes).toContain("  - 1004 views (Story 4; story, 45 s), opening: Opening words of clip 4 quoted");
+    expect(notes.split("\n").filter((line) => line.startsWith("  - "))).toHaveLength(5);
   });
 });

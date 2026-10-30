@@ -16,7 +16,7 @@ uploads every clip of a finished video to the user's channel as a public Short.
   its clips again.
 
 ### 2026-10-27 17:04 — Design written and committed (`d5e2be6`)
-- Research: SupoClip's original YouTube code, the Clipwright integration points, and Google's
+- Research: the original app's YouTube code, the Clipwright integration points, and Google's
   current API rules (100 uploads a day per project; the forced-private lock is unresolved).
 - 22 "our calls" are listed in §7 of the design.
 

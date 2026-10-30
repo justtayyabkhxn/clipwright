@@ -84,7 +84,7 @@ describe("env", () => {
 
   it("reads the YouTube settings", () => {
     useEnv({});
-    expect(env.CLAUDE_METADATA_MODEL).toBe("claude-sonnet-5");
+    expect(env.CLAUDE_METADATA_MODEL).toBe("claude-haiku-4-5");
     expect(env.GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
     useEnv({ GOOGLE_OAUTH_CLIENT_ID: "  " });
     expect(env.GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();

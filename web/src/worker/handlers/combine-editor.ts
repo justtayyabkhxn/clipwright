@@ -1,4 +1,4 @@
-// combine_editor: port of editor_service.combine_editor (map-editor.md §5.3). The route snapshotted
+// combine_editor: port of editor_service.combine_editor. The route snapshotted
 // each selected draft into `payload.inputs`; the new clip is appended with its own ready draft.
 
 import { randomUUID } from "node:crypto";

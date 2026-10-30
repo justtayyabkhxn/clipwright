@@ -213,6 +213,7 @@ export type ClipScores = Pick<
   | "shareabilityScore"
   | "hookType"
   | "hookTitle"
+  | "viralityReasoning"
 >;
 
 export function renderOptions(settings: TaskSettings, maxClipSeconds: number) {

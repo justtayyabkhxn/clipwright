@@ -600,7 +600,7 @@ export const RESTYLE_FAILED_MESSAGE = "Restyle failed. Your existing clips are u
 /**
  * The `$set` for a restyle that ends without replacing the clips (cancel, failure, worker died): the
  * task is completed again with the settings the old clips were rendered with (the settings route put
- * them in `payload.previousSettings`), as SupoClip's edit transaction rolled them back.
+ * them in `payload.previousSettings`).
  */
 export function restyleRollback(job: Pick<JobDoc, "payload">, message: string) {
   const previous = job.payload?.previousSettings as TaskSettings | undefined;

@@ -8,7 +8,7 @@ import { collections } from "../../server/db";
 import { encryptSetting } from "../../server/settings";
 import { getStorage } from "../../server/storage";
 import type { TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../../server/types";
-import { nextMidnightPacific } from "../../server/youtube/google";
+import { nextMidnightPacific, PLAYLIST_SCOPE } from "../../server/youtube/google";
 import { claimPost, markUploaded } from "../../server/youtube/posts";
 import { FAILURE_HOOKS, runJob } from "../run-job";
 import { claimed, clipFixture, fakeEngine, seedTask, setupWorkerTestEnv, writeFile } from "../test-utils";
@@ -50,7 +50,7 @@ const METADATA = {
   tags: ["habits", "productivity tips"],
   language: "en",
 };
-const STORED_METADATA = { ...METADATA, model: "claude-sonnet-5" };
+const STORED_METADATA = { ...METADATA, model: "claude-haiku-4-5" };
 const SAVED_SESSION = { sessionUri: SESSION, storageKey: CLIP.storageKey, size: FILE.length, startedAt: new Date() };
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -59,7 +59,7 @@ const googleError = (status: number, reason: string) =>
   json(status, { error: { code: status, errors: [{ reason, message: "Google's own words, never stored" }] } });
 const video = (privacyStatus = "public") => ({ id: "VID", status: { privacyStatus, uploadStatus: "uploaded" } });
 
-type Kind = "claude" | "token" | "initiate" | "query" | "upload";
+type Kind = "claude" | "token" | "initiate" | "query" | "upload" | "playlist" | "playlistItem";
 type Call = { kind: Kind; url: string; headers: Headers; json?: any; bytes?: string }; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Responder = (call: Call, index: number) => Response | Promise<Response>;
 
@@ -69,12 +69,16 @@ const DEFAULTS: Record<Kind, Responder> = {
   initiate: () => new Response(null, { status: 200, headers: { Location: SESSION } }),
   query: () => new Response(null, { status: 404 }),
   upload: () => json(200, video()),
+  playlist: () => json(200, { id: "PL1" }),
+  playlistItem: () => json(200, { id: "item-1" }),
 };
 
 function kindOf(url: string, headers: Headers): Kind {
   const { pathname, searchParams } = new URL(url);
   if (pathname.endsWith("/v1/messages")) return "claude";
   if (pathname === "/token") return "token";
+  if (pathname === "/youtube/v3/playlists") return "playlist";
+  if (pathname === "/youtube/v3/playlistItems") return "playlistItem";
   if (url === SESSION) return headers.get("content-range")?.startsWith("bytes */") ? "query" : "upload";
   if (pathname === "/upload/youtube/v3/videos" && searchParams.get("uploadType") === "resumable") return "initiate";
   throw new Error(`Unexpected request to ${url}`);
@@ -191,7 +195,7 @@ describe("publish_youtube", () => {
     expect(fake.kinds()).toEqual(["claude", "initiate", "upload"]);
 
     const [claude] = fake.of("claude");
-    expect(claude.json.model).toBe("claude-sonnet-5");
+    expect(claude.json.model).toBe("claude-haiku-4-5");
     expect(claude.json.messages[0].content).toContain(
       JSON.stringify({ source_title: "Talk", hook_title: "Hook c1v2", transcript: "words of c1v2" }),
     );
@@ -375,7 +379,7 @@ describe("publish_youtube", () => {
     expect(fake.of("initiate")).toHaveLength(1);
   });
 
-  it("uploadLimitExceeded holds every queued post of the channel 6 h, giving the refused call back", async () => {
+  it("uploadLimitExceeded holds the channel's posts 12 h with no automatic retry, giving the refused call back", async () => {
     await setup({ post: { metadata: STORED_METADATA } });
     await collections().youtubePosts.insertMany([
       postDoc({ _id: "p2", lineageId: "c2", metadata: STORED_METADATA }),
@@ -386,7 +390,7 @@ describe("publish_youtube", () => {
     const before = Date.now();
 
     await run(fake);
-    // The siblings' jobs then find their posts not due: none spends a refused call.
+    // The siblings' jobs then find their posts held: none spends a refused call.
     for (const id of ["p2", "p3"]) {
       const job = await claimed({ type: "publish_youtube", taskId: "t1", userId: USER, activeKey: `youtube:${id}`, payload: { postId: id } });
       expect(await runJob(job, { runEngine: fakeEngine({}).runEngine, fetch: fake.fetch })).toEqual({ status: "cancelled" });
@@ -394,10 +398,11 @@ describe("publish_youtube", () => {
 
     expect(fake.of("initiate")).toHaveLength(1);
     const post = await storedPost();
-    expect(post).toMatchObject({ state: "queued", waitReason: "channel_limit", attempts: 0, insertCalls: 0 });
-    expectWait(post.notBefore, 6 * 60 * MINUTE, before);
+    expect(post).toMatchObject({ state: "blocked", waitReason: "channel_limit", attempts: 0, insertCalls: 0 });
+    expectWait(post.notBefore, 12 * 60 * MINUTE, before);
+    expect((await storedAccount()).channelLimitUntil).toEqual(post.notBefore);
     for (const id of ["p2", "p3"]) {
-      expect(await storedPost(id)).toMatchObject({ state: "queued", waitReason: "channel_limit", notBefore: post.notBefore, insertCalls: 0 });
+      expect(await storedPost(id)).toMatchObject({ state: "blocked", waitReason: "channel_limit", notBefore: post.notBefore, insertCalls: 0 });
     }
     const elsewhere = await storedPost("elsewhere");
     expect(elsewhere.waitReason).toBeUndefined();
@@ -619,6 +624,95 @@ describe("publish_youtube", () => {
     const post = await storedPost();
     expect(post).toMatchObject({ state: "queued", waitReason: "restyle", attempts: 0 });
     expectWait(post.notBefore, 2 * MINUTE, before);
+  });
+
+  it("waits for the user's next upload slot when another upload started under 10 min ago", async () => {
+    await setup();
+    const next = new Date(Date.now() + 7 * MINUTE);
+    await collections().youtubeAccounts.updateOne({ _id: USER }, { $set: { nextUploadAt: next } });
+    const fake = services();
+
+    await run(fake);
+
+    expect(fake.calls).toEqual([]);
+    expect(await storedPost()).toMatchObject({ state: "queued", waitReason: "spacing", notBefore: next, attempts: 0 });
+  });
+
+  it("links the full video at the end of the description when that setting is on", async () => {
+    const url = "https://www.youtube.com/watch?v=abcdefghijk";
+    await setup({ account: { linkFullVideo: true }, task: { source: { type: "youtube", url, title: "Talk" } } });
+    const fake = services();
+
+    await run(fake);
+
+    expect(fake.of("initiate")[0].json.snippet.description).toBe(
+      `One small habit, explained.\n\nFull video: ${url}\n\n#habits #productivity`,
+    );
+  });
+
+  it("never links an uploaded file's source", async () => {
+    await setup({ account: { linkFullVideo: true } });
+    const fake = services();
+
+    await run(fake);
+
+    expect(fake.of("initiate")[0].json.snippet.description).not.toContain("Full video");
+  });
+
+  it("adds the Short to a playlist named after the source, created once per task", async () => {
+    await setup({ account: { addToPlaylist: true, scopes: [PLAYLIST_SCOPE], privacy: "unlisted" }, post: { privacy: "unlisted" } });
+    const fake = services({ upload: () => json(200, video("unlisted")) });
+
+    await run(fake);
+
+    expect(await storedPost()).toMatchObject({ state: "uploaded", videoId: "VID" });
+    expect(fake.of("playlist")[0].json).toEqual({
+      snippet: { title: "Talk", description: "Shorts from this video." },
+      status: { privacyStatus: "unlisted" },
+    });
+    expect(fake.of("playlistItem")[0].json).toEqual({ snippet: { playlistId: "PL1", resourceId: { kind: "youtube#video", videoId: "VID" } } });
+    expect((await collections().tasks.findOne({ _id: "t1" }))!.youtubePlaylistId).toBe("PL1");
+
+    // The task's next Short reuses the playlist.
+    await collections().youtubePosts.insertOne(postDoc({ _id: "p2", lineageId: "c1-other", privacy: "unlisted" }));
+    await collections().tasks.updateOne({ _id: "t1" }, { $push: { clips: { ...CLIP, id: "c2", lineageId: "c1-other" } } });
+    await collections().youtubeAccounts.updateOne({ _id: USER }, { $unset: { nextUploadAt: "" } });
+    const second = services({ upload: () => json(200, video("unlisted")) });
+    await runJob(
+      await claimed({ type: "publish_youtube", taskId: "t1", userId: USER, activeKey: "youtube:p2", payload: { postId: "p2" } }),
+      { runEngine: fakeEngine({}).runEngine, fetch: second.fetch },
+    );
+    expect(second.of("playlist")).toEqual([]);
+    expect(second.of("playlistItem")[0].json.snippet.playlistId).toBe("PL1");
+  });
+
+  it("skips playlists until the connection allows them, and never fails a posted Short over one", async () => {
+    await setup({ account: { addToPlaylist: true } });
+    const noAccess = services();
+    await run(noAccess);
+    expect(noAccess.of("playlist")).toEqual([]);
+    expect(await storedPost()).toMatchObject({ state: "uploaded" });
+
+    await collections().youtubePosts.deleteMany({});
+    await collections().tasks.deleteMany({});
+    await collections().youtubeAccounts.deleteMany({});
+    await collections().jobs.deleteMany({});
+    await setup({ account: { addToPlaylist: true, scopes: [PLAYLIST_SCOPE] } });
+    const refused = services({ playlist: () => googleError(403, "insufficientPermissions") });
+    await run(refused);
+    expect(await storedPost()).toMatchObject({ state: "uploaded", videoId: "VID" });
+    expect((await storedAccount()).status).toBe("active");
+  });
+
+  it("holds a post that runs while its channel is resting after the upload limit, without calling YouTube", async () => {
+    const until = new Date(Date.now() + 5 * 60 * MINUTE);
+    await setup({ account: { channelLimitUntil: until } });
+    const fake = services();
+
+    await run(fake);
+
+    expect(fake.calls).toEqual([]);
+    expect(await storedPost()).toMatchObject({ state: "blocked", waitReason: "channel_limit", notBefore: until });
   });
 
   it("does not re-ask Claude when metadata is stored", async () => {

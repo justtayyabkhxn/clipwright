@@ -21,9 +21,9 @@ export function BrandWordmark({ className }: { className?: string }) {
   );
 }
 
-const SOURCE_CREDIT = "Based on SupoClip · AGPL-3.0";
+const SOURCE_CREDIT = "Source · AGPL-3.0";
 
-/** AGPL-3.0 credit and source link for the upstream project. `iconOnly` fits the collapsed rail. */
+/** AGPL-3.0 notice and source link. `iconOnly` fits the collapsed rail. */
 export function SourceCredit({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
   return (
     <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer"

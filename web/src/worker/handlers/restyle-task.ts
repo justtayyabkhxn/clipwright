@@ -102,6 +102,7 @@ export async function restyleTask(ctx: JobContext): Promise<JobOutcome> {
                 shareabilityScore: old.shareabilityScore ?? 0,
                 hookType: old.hookType ?? null,
                 hookTitle: old.hookTitle ?? null,
+                ...(old.viralityReasoning && { viralityReasoning: old.viralityReasoning }),
               }),
               lineageId: lineageOf(old),
             },

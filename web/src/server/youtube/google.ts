@@ -11,6 +11,8 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/youtube.upload",
   "https://www.googleapis.com/auth/youtube.readonly",
 ];
+/** Asked for only when the user turns on playlists: creating playlists and adding videos needs it. */
+export const PLAYLIST_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
 
 // Every call but the upload PUT is small; a hung connection must not hold the worker's only slot.
 const CALL_TIMEOUT_MS = 60_000;
@@ -148,13 +150,19 @@ export async function fetchMyChannel(accessToken: string, fetchImpl: typeof fetc
   };
 }
 
-export type VideoStatus = { privacyStatus: string; uploadStatus: string; rejectionReason?: string };
+export type VideoStats = { views: number; likes: number | null; comments: number | null };
+export type VideoStatus = { privacyStatus: string; uploadStatus: string; rejectionReason?: string; stats?: VideoStats };
 
 type VideoList = {
-  items?: { id: string; status: { privacyStatus: string; uploadStatus: string; rejectionReason?: string; failureReason?: string } }[];
+  items?: {
+    id: string;
+    status: { privacyStatus: string; uploadStatus: string; rejectionReason?: string; failureReason?: string };
+    // Counts arrive as strings; likeCount/commentCount are absent when the owner hides or disables them.
+    statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+  }[];
 };
 
-/** `videos.list?part=status`, 50 ids (1 quota unit) per call. Deleted videos are absent from the map. */
+/** `videos.list?part=status,statistics`, 50 ids (1 quota unit) per call. Deleted videos are absent from the map. */
 export async function listVideoStatus(accessToken: string, ids: string[], fetchImpl: typeof fetch = fetch) {
   const statuses = new Map<string, VideoStatus>();
   for (let i = 0; i < ids.length; i += 50) {
@@ -163,19 +171,47 @@ export async function listVideoStatus(accessToken: string, ids: string[], fetchI
     // returns every match (up to the 50 ids sent in this batch).
     const list = await okJson<VideoList>(
       "video status lookup",
-      await apiGet(accessToken, `/videos?part=status&id=${batch}`, fetchImpl),
+      await apiGet(accessToken, `/videos?part=status,statistics&id=${batch}`, fetchImpl),
     );
-    for (const { id, status } of list.items ?? []) {
+    for (const { id, status, statistics } of list.items ?? []) {
       // A failed upload explains itself in failureReason, a rejected one in rejectionReason.
       const reason = status.rejectionReason ?? status.failureReason;
       statuses.set(id, {
         privacyStatus: status.privacyStatus,
         uploadStatus: status.uploadStatus,
         ...(reason ? { rejectionReason: reason } : {}),
+        ...(statistics && { stats: { views: count(statistics.viewCount) ?? 0, likes: count(statistics.likeCount), comments: count(statistics.commentCount) } }),
       });
     }
   }
   return statuses;
+}
+
+const count = (value?: string) => (value === undefined ? null : Number(value));
+
+const apiPost = (accessToken: string, path: string, body: unknown, fetchImpl: typeof fetch) =>
+  fetchImpl(`${googleUrls().api}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+  });
+
+/** `playlists.insert` (50 quota units): a new playlist on the token owner's channel. Returns its id. */
+export async function createPlaylist(
+  accessToken: string,
+  playlist: { title: string; description: string; privacy: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const body = { snippet: { title: playlist.title, description: playlist.description }, status: { privacyStatus: playlist.privacy } };
+  const created = await okJson<{ id: string }>("playlist create", await apiPost(accessToken, "/playlists?part=snippet,status", body, fetchImpl));
+  return created.id;
+}
+
+/** `playlistItems.insert` (50 quota units): append a video to a playlist. */
+export async function addPlaylistItem(accessToken: string, playlistId: string, videoId: string, fetchImpl: typeof fetch = fetch) {
+  const body = { snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } } };
+  await okJson("playlist add", await apiPost(accessToken, "/playlistItems?part=snippet", body, fetchImpl));
 }
 
 export type VideoInsertBody = {

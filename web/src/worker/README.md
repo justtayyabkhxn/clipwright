@@ -43,10 +43,11 @@ What the worker does while running:
   - re-runs `createPostsForTask` for any task still `autopost: "pending"` more than 2 minutes after
     its last update (covers a crash between the completion CAS and the enqueue), and enqueues every
     due `publish_youtube` job (the posts whose `notBefore` has passed);
-  - re-reads `videos.list?part=status` for posts uploaded at least 10 minutes ago, within the last
-    48 h, to record their final privacy and upload status, and to trip the forced-private circuit
-    breaker (`docs/youtube.md`) if YouTube locked one private. An account that needs a reconnect
-    is skipped until it is reconnected.
+  - re-reads `videos.list?part=status,statistics` for posts uploaded at least 10 minutes ago, within
+    the last 48 h, to record their final privacy and upload status, and to trip the forced-private
+    circuit breaker (`docs/youtube.md`) if YouTube locked one private. An account that needs a
+    reconnect is skipped until it is reconnected;
+  - refreshes the view, like and comment counts of posted videos whose counts are over an hour old.
 
 **Stopping:** press Ctrl+C (SIGINT/SIGTERM). Running engines are cancelled and their jobs go back
 to the queue without using up an attempt. Press Ctrl+C a second time to exit at once.

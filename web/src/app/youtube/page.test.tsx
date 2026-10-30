@@ -84,7 +84,9 @@ it("shows the channel, the counts, and the posts grouped by task, newest group f
   const counts = within(screen.getByRole("list", { name: "Summary" })).getAllByRole("listitem").map((item) => item.textContent);
   expect(counts).toEqual(["1Posted", "1Waiting", "1Uploading", "1Failed", "1Not posted"]);
 
-  const groups = screen.getAllByRole("heading", { level: 2 });
+  // One heading per generation, after the insights section's own.
+  const [insights, ...groups] = screen.getAllByRole("heading", { level: 2 });
+  expect(insights).toHaveTextContent("What performs");
   expect(groups.map((heading) => heading.textContent)).toEqual(["Podcast", "Talk"]);
   expect(within(groups[0]).getByRole("link")).toHaveAttribute("href", "/tasks/t2");
   expect(within(groups[1]).getByRole("link")).toHaveAttribute("href", "/tasks/t1");
@@ -253,4 +255,27 @@ it("polls every 4 s while a post is working or due, every 30 s while one waits o
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("holds channel-limited clips with Post and Post all disabled until the 12 hours are over", async () => {
+  const later = new Date(Date.now() + 6 * 3_600_000).toISOString();
+  const earlier = new Date(Date.now() - 60_000).toISOString();
+  posts = [
+    post({ id: "h1", state: "blocked", wait_reason: "channel_limit", not_before: later }),
+    post({ id: "h2", state: "blocked", wait_reason: "channel_limit", not_before: later, clip_title: "Hook two" }),
+  ];
+  const { unmount } = render(<YoutubePage />);
+
+  expect(await screen.findByRole("button", { name: "Post all (2)" })).toBeDisabled();
+  expect(screen.getByText(`2 clips are on hold. You can post them from ${when(later)}.`)).toBeInTheDocument();
+  for (const button of screen.getAllByRole("button", { name: "Post" })) expect(button).toBeDisabled();
+  unmount();
+
+  // The hold is over: both buttons work.
+  posts = posts.map((p) => post({ ...p, not_before: earlier }));
+  render(<YoutubePage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Post all (2)" }));
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/youtube/posts/release" && init?.method === "POST")).toBe(true));
+  await userEvent.click(screen.getAllByRole("button", { name: "Post" })[0]);
+  await waitFor(() => expect(retryCalls).toEqual(["t1/h1"]));
 });

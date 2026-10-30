@@ -24,6 +24,57 @@
     "autoPostOff": "Auto-post off"
   },
   "summaryLabel": "Summary",
+  "totals": {
+    "label": "Performance across your posted clips",
+    "views": "Total views",
+    "likes": "Total likes",
+    "comments": "Total comments",
+    "videos": "{count, plural, one {Across # video} other {Across # videos}}",
+    "refreshed": "Updated hourly from YouTube"
+  },
+  "channelLimit": {
+    "title": "Your channel reached YouTube's daily upload limit.",
+    "waiting": "{count, plural, one {# clip is} other {# clips are}} on hold. You can post {count, plural, one {it} other {them}} from {time}.",
+    "ready": "{count, plural, one {# clip is} other {# clips are}} on hold and ready to post.",
+    "postAll": "Post all ({count})",
+    "posting": "Posting…",
+    "failed": "Could not post the clips."
+  },
+  "insights": {
+    "title": "What performs",
+    "description": "Average views per posted clip. A group shows once it has {min} videos.",
+    "notEnough": "Not enough data yet. Each group needs {min} posted clips with view counts, refreshed hourly.",
+    "avgViews": "avg · {count, plural, one {# video} other {# videos}}",
+    "dimensions": {
+      "hookType": "Hook type",
+      "length": "Clip length",
+      "captionStyle": "Caption style",
+      "timeOfDay": "Time posted",
+      "score": "Claude's virality score"
+    },
+    "groups": {
+      "hookType": {
+        "question": "Question",
+        "statement": "Bold statement",
+        "statistic": "Statistic",
+        "story": "Story",
+        "contrast": "Contrast",
+        "none": "No clear hook"
+      },
+      "length": { "under30": "Under 30 s", "30to60": "30–60 s", "over60": "Over 60 s" },
+      "captionStyle": {
+        "default": "Default",
+        "hormozi": "Hormozi",
+        "mrbeast": "MrBeast",
+        "minimal": "Minimal",
+        "tiktok": "TikTok",
+        "neon": "Neon",
+        "podcast": "Podcast"
+      },
+      "timeOfDay": { "morning": "Morning (5–12)", "afternoon": "Afternoon (12–17)", "evening": "Evening (17–22)", "night": "Night (22–5)" },
+      "score": { "85plus": "85+", "70to84": "70–84", "50to69": "50–69", "under50": "Under 50" }
+    }
+  },
   "counts": {
     "posted": "Posted",
     "waiting": "Waiting",
@@ -32,6 +83,7 @@
     "notPosted": "Not posted"
   },
   "taskGone": "Deleted generation",
+  "groupPending": "{count} of {total} not posted yet",
   "clip": "Clip",
   "nextTry": "Next try {time}",
   "uploadedAt": "Uploaded {time}",

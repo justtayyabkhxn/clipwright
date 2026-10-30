@@ -25,6 +25,15 @@ export function lineageOf(clip: Pick<ClipDoc, "id" | "lineageId">): string {
 
 /** `videos.insert` session starts allowed per post before a manual retry (§4.5). */
 export const INSERT_CAP = 3;
+/** Uploads of one user start at least this far apart, so a task's clips go live spread out, not all at once. */
+export const UPLOAD_GAP_MS = 10 * 60 * 1000;
+/**
+ * YouTube's channel upload limit (`uploadLimitExceeded`): the channel's posts are held this long, then
+ * wait for the user's "Post" / "Post all". Nothing retries on its own: the reset time is unpublished.
+ */
+export const CHANNEL_LIMIT_HOLD_MS = 12 * 60 * 60 * 1000;
+/** A slot may start this early: a job that runs on time must not miss its slot by the seconds the previous claim took. */
+const SLOT_SLACK_MS = 60 * 1000;
 export const CHANNEL_CHANGED_ERROR = "A different channel was connected.";
 export const AUTO_POST_OFF_ERROR = "Auto-post was turned off.";
 export const DISCONNECTED_ERROR = "YouTube account was disconnected.";
@@ -34,6 +43,8 @@ export const POST_UPLOADING_MESSAGE = "This clip is uploading to YouTube. Try ag
 export const RESTYLE_UPLOADING_MESSAGE = "A clip from this task is uploading to YouTube. Try again in a minute.";
 /** The §4.6 forced-private code: the UI maps it to copy in `messages/en` (never an English sentence in `post.warning`). */
 export const PRIVATE_LOCK = "private_lock";
+/** A "Post" / "Post all" pressed before the channel-limit hold ends (the buttons are disabled until then). */
+export const CHANNEL_LIMIT_HELD_MESSAGE = "YouTube's channel upload limit was reached. You can post these clips once the 12-hour wait is over.";
 const CANCELLABLE: YoutubePostDoc["state"][] = ["queued", "blocked", "failed"];
 /** Fields that only mean something while a job holds the post. */
 const RELEASE = { claimedBy: "", phase: "", progress: "" } as const;
@@ -42,9 +53,13 @@ const due = (now: Date): Filter<YoutubePostDoc> => ({ $or: [{ notBefore: { $exis
 const held = (post: YoutubePostDoc): Filter<YoutubePostDoc> => ({ _id: post._id, state: "working", claimedBy: post.claimedBy });
 const notUploaded = (postId: string): Filter<YoutubePostDoc> => ({ _id: postId, state: { $ne: "uploaded" } });
 
-async function enqueuePost(post: Pick<YoutubePostDoc, "_id" | "taskId" | "userId">): Promise<{ job: JobDoc; created: boolean }> {
+async function enqueuePost(
+  post: Pick<YoutubePostDoc, "_id" | "taskId" | "userId">,
+  runAt?: Date,
+): Promise<{ job: JobDoc; created: boolean }> {
   return enqueueJob({
     type: "publish_youtube",
+    runAt,
     taskId: post.taskId,
     userId: post.userId,
     activeKey: `youtube:${post._id}`,
@@ -87,8 +102,11 @@ export async function createPostsForTask(taskId: string): Promise<number> {
     return 0;
   }
 
-  const { state, waitReason } = initialState(account);
   const now = new Date();
+  const { state, waitReason, notBefore: heldUntil } = initialState(account, now);
+  // Each queued post gets its own upload slot, UPLOAD_GAP_MS after the previous one (§4.4).
+  const firstSlot = state === "queued" ? await firstFreeSlot(account, now) : now;
+  const slot = (index: number) => new Date(firstSlot.getTime() + index * UPLOAD_GAP_MS);
   // A cron re-run sees the task's current clips. One that starts its own lineage after the run
   // completed was combined in the editor, which never posts (§2); a restyled clip keeps an older lineage.
   // ponytail: a restyle finishing in that window moves run.completedAt and gives the combined clip's
@@ -105,6 +123,8 @@ export async function createPostsForTask(taskId: string): Promise<number> {
       channelId: account.channelId,
       state,
       ...(waitReason && { waitReason }),
+      ...(heldUntil && { notBefore: heldUntil }),
+      ...(state === "queued" && slot(index) > now && { notBefore: slot(index), waitReason: "spacing" as const }),
       attempts: 0,
       insertCalls: 0,
       insertCap: INSERT_CAP,
@@ -128,21 +148,53 @@ export async function createPostsForTask(taskId: string): Promise<number> {
       inserted = error.insertedCount;
     }
     // Enqueue from the stored docs: after a crash the existing posts carry other ids than `docs`.
-    const queued = await youtubePosts.find({ taskId, state: "queued", ...due(now) }).toArray();
+    // Each job runs at its post's slot.
+    const queued = await youtubePosts.find({ taskId, state: "queued" }).toArray();
     const byLineage = new Map(queued.map((post) => [post.lineageId, post]));
     for (const doc of docs) {
       const post = byLineage.get(doc.lineageId);
-      if (post) await enqueuePost(post);
+      if (post) await enqueuePost(post, post.notBefore);
     }
   }
   await markDone();
   return inserted;
 }
 
-/** `queued` only for an active, unlocked account; the private lock wins over a needed reconnect. */
-function initialState(account: YoutubeAccountDoc): Pick<YoutubePostDoc, "state" | "waitReason"> {
+/** The first slot after every upload already started or scheduled for this user. */
+async function firstFreeSlot(account: YoutubeAccountDoc, now: Date): Promise<Date> {
+  const [last] = await collections()
+    .youtubePosts.find({ userId: account._id, state: "queued", notBefore: { $exists: true } })
+    .sort({ notBefore: -1 })
+    .limit(1)
+    .toArray();
+  return new Date(Math.max(now.getTime(), account.nextUploadAt?.getTime() ?? 0, last ? last.notBefore!.getTime() + UPLOAD_GAP_MS : 0));
+}
+
+/**
+ * Take the user's upload slot: null when this upload may start now (the next one then waits
+ * UPLOAD_GAP_MS), else when it may. Every post goes through this, however it was queued (a retry,
+ * a resume after the lock, a reconnect), so no two uploads ever start back to back.
+ */
+export async function reserveUploadSlot(userId: string, now = new Date()): Promise<Date | null> {
+  const { youtubeAccounts } = collections();
+  const reserved = await youtubeAccounts.findOneAndUpdate(
+    { _id: userId, $or: [{ nextUploadAt: { $exists: false } }, { nextUploadAt: { $lte: new Date(now.getTime() + SLOT_SLACK_MS) } }] },
+    { $set: { nextUploadAt: new Date(now.getTime() + UPLOAD_GAP_MS) } },
+  );
+  if (reserved) return null;
+  return (await youtubeAccounts.findOne({ _id: userId }, { projection: { nextUploadAt: 1 } }))?.nextUploadAt ?? null;
+}
+
+/**
+ * `queued` only for an active, unlocked account outside a channel-limit hold; the private lock wins over
+ * a needed reconnect, which wins over the hold.
+ */
+function initialState(account: YoutubeAccountDoc, now = new Date()): Pick<YoutubePostDoc, "state" | "waitReason" | "notBefore"> {
   if (account.warning === PRIVATE_LOCK) return { state: "blocked", waitReason: "private_lock" };
   if (account.status !== "active") return { state: "blocked", waitReason: "reconnect" };
+  if (account.channelLimitUntil && account.channelLimitUntil > now) {
+    return { state: "blocked", waitReason: "channel_limit", notBefore: account.channelLimitUntil };
+  }
   return { state: "queued" };
 }
 
@@ -174,6 +226,15 @@ export async function deferPost(post: YoutubePostDoc, reason: YoutubeWaitReason,
     ...(reason === "retry" && { $inc: { attempts: 1 } }),
   };
   return (await collections().youtubePosts.updateOne(held(post), update)).matchedCount > 0;
+}
+
+/** The held post's own channel-limit hold: `blocked` until `until`, then the user's "Post" releases it. */
+export async function holdPostForChannelLimit(post: YoutubePostDoc, until: Date, message: string): Promise<boolean> {
+  const result = await collections().youtubePosts.updateOne(held(post), {
+    $set: { state: "blocked", waitReason: "channel_limit", notBefore: until, error: message, updatedAt: new Date() },
+    $unset: { ...RELEASE, errorReason: "" },
+  });
+  return result.matchedCount > 0;
 }
 
 export async function blockPost(post: YoutubePostDoc, reason: YoutubeWaitReason, message: string): Promise<boolean> {
@@ -349,8 +410,9 @@ export async function hasWorkingPost(taskId: string): Promise<boolean> {
 export async function unblockAfterReconnect(userId: string): Promise<number> {
   const locked = (await getAccount(userId))?.warning === PRIVATE_LOCK;
   const now = new Date();
+  // A channel-limit hold is the user's to release ("Post"), never a reconnect's.
   const result = await collections().youtubePosts.updateMany(
-    { userId, state: "blocked", waitReason: { $ne: PRIVATE_LOCK } },
+    { userId, state: "blocked", waitReason: { $nin: [PRIVATE_LOCK, "channel_limit"] } },
     locked
       ? { $set: { waitReason: PRIVATE_LOCK, updatedAt: now }, $unset: { notBefore: "", error: "", errorReason: "" } }
       : { $set: { state: "queued", updatedAt: now }, $unset: { waitReason: "", notBefore: "", error: "", errorReason: "" } },
@@ -418,9 +480,53 @@ export function deferAllQueuedForQuota(until: Date): Promise<number> {
   return holdQueued({}, "quota", until);
 }
 
-/** `uploadLimitExceeded`: the limit is per channel, so that user's queued posts for it wait. */
-export function deferAllQueuedForChannel(userId: string, channelId: string, until: Date): Promise<number> {
-  return holdQueued({ userId, channelId }, "channel_limit", until);
+/**
+ * `uploadLimitExceeded`: the limit is per channel, so the account records the hold (posts created during
+ * it start held) and that channel's queued posts are held with it. Returns how many were held.
+ */
+export async function holdChannelForLimit(userId: string, channelId: string, until: Date): Promise<number> {
+  const now = new Date();
+  const { youtubeAccounts, youtubePosts } = collections();
+  await youtubeAccounts.updateOne({ _id: userId, channelId }, { $set: { channelLimitUntil: until, updatedAt: now } });
+  const result = await youtubePosts.updateMany(
+    { userId, channelId, state: "queued" },
+    { $set: { state: "blocked", waitReason: "channel_limit", notBefore: until, updatedAt: now }, $unset: { error: "", errorReason: "" } },
+  );
+  return result.modifiedCount;
+}
+
+/**
+ * "Post all": queue every channel-limit-held post of the user, oldest first, in 10-minute slots. 409 while
+ * any hold is still running (the buttons are disabled until then). Returns how many were released.
+ */
+export async function releaseChannelLimit(userId: string, now = new Date()): Promise<number> {
+  const { youtubeAccounts, youtubePosts } = collections();
+  const heldFilter = { userId, state: "blocked", waitReason: "channel_limit" } as const;
+  const heldPosts = await youtubePosts.find(heldFilter).sort({ createdAt: 1 }).toArray();
+  if (!heldPosts.length) return 0;
+  const latest = Math.max(...heldPosts.map((post) => post.notBefore?.getTime() ?? 0));
+  if (latest > now.getTime()) throw new ApiError(409, { message: CHANNEL_LIMIT_HELD_MESSAGE, code: "channel_limit", available_at: new Date(latest).toISOString() });
+
+  const account = await youtubeAccounts.findOneAndUpdate({ _id: userId }, { $unset: { channelLimitUntil: "" } }, { returnDocument: "after" });
+  if (!account) throw new ApiError(404, "YouTube account is not connected.");
+  const firstSlot = await firstFreeSlot(account, now);
+  let released = 0;
+  for (const [index, post] of heldPosts.entries()) {
+    const slot = new Date(firstSlot.getTime() + index * UPLOAD_GAP_MS);
+    const later = slot > now;
+    const queued = await youtubePosts.findOneAndUpdate(
+      { _id: post._id, ...heldFilter },
+      {
+        $set: { state: "queued", attempts: 0, updatedAt: now, ...(later && { notBefore: slot, waitReason: "spacing" as const }) },
+        $unset: { error: "", errorReason: "", ...(!later && { notBefore: "", waitReason: "" }) },
+      },
+      { returnDocument: "after" },
+    );
+    if (!queued) continue;
+    await enqueuePost(queued, queued.notBefore);
+    released++;
+  }
+  return released;
 }
 
 // --- Manual retry (§4.8) ---
@@ -437,9 +543,12 @@ export async function retryPost(
   taskId?: string,
 ): Promise<{ post: YoutubePostDoc; job: JobDoc }> {
   const { youtubePosts } = collections();
+  const now = new Date();
   const owned = { _id: postId, userId, ...(taskId && { taskId }) };
+  // A channel-limit hold may only be released once it has run out.
+  const stillHeld = { waitReason: "channel_limit" as const, notBefore: { $gt: now } };
   const post = await youtubePosts.findOneAndUpdate(
-    { ...owned, state: { $in: ["failed", "blocked"] } },
+    { ...owned, state: { $in: ["failed", "blocked"] }, $nor: [stillHeld] },
     [
       {
         $set: {
@@ -454,9 +563,12 @@ export async function retryPost(
     { returnDocument: "after" },
   );
   if (!post) {
-    const existing = await youtubePosts.findOne(owned, { projection: { state: 1 } });
+    const existing = await youtubePosts.findOne(owned, { projection: { state: 1, waitReason: 1, notBefore: 1 } });
     if (!existing) throw new ApiError(404, "Post not found");
     if (existing.state === "uploaded") throw new ApiError(409, "This clip is already on YouTube.");
+    if (existing.waitReason === "channel_limit" && existing.notBefore && existing.notBefore > now) {
+      throw new ApiError(409, { message: CHANNEL_LIMIT_HELD_MESSAGE, code: "channel_limit", available_at: existing.notBefore.toISOString() });
+    }
     throw new ApiError(409, "Only a failed or blocked post can be retried.");
   }
   return { post, job: (await enqueuePost(post)).job };
@@ -483,6 +595,7 @@ export type SerializedPost = {
   warning: string | null;
   error: string | null;
   not_before: string | null;
+  stats: { views: number; likes: number | null; comments: number | null } | null;
   /** "Try again" must warn that the clip may already be on the channel. */
   insert_cap_reached: boolean;
 };
@@ -507,6 +620,7 @@ export function serializePosts(task: Pick<TaskDoc, "clips">, posts: YoutubePostD
       warning: post.warning ?? null,
       error: post.error ?? null,
       not_before: post.notBefore?.toISOString() ?? null,
+      stats: post.stats ? { views: post.stats.views, likes: post.stats.likes, comments: post.stats.comments } : null,
       insert_cap_reached: post.insertCalls >= post.insertCap,
     })),
   };
@@ -521,14 +635,33 @@ export type OverviewPost = SerializedPost & {
   clip_title: string | null;
   created_at: string;
   uploaded_at: string | null;
+  /** What the insights group by; null once the clip or task is gone. */
+  hook_type: string | null;
+  duration: number | null;
+  virality_score: number | null;
+  caption_template: string | null;
 };
 
 /**
  * The user's newest `limit` posts, newest first, for the YouTube overview page. `truncated` says
  * older ones exist. One query for the posts and one for their tasks (titles and clips only).
  */
-export async function listPostsForUser(userId: string, limit: number): Promise<{ posts: OverviewPost[]; truncated: boolean }> {
+export type StatsTotals = { videos: number; views: number; likes: number; comments: number };
+
+export async function listPostsForUser(
+  userId: string,
+  limit: number,
+): Promise<{ posts: OverviewPost[]; truncated: boolean; totals: StatsTotals }> {
   const { youtubePosts, tasks } = collections();
+  // Over every live posted video, not just the listed page; $sum skips hidden (null) counts.
+  const [sums] = await youtubePosts
+    .aggregate<StatsTotals>([
+      { $match: { userId, state: "uploaded", uploadStatus: { $ne: "deleted" }, stats: { $exists: true } } },
+      { $group: { _id: null, videos: { $sum: 1 }, views: { $sum: "$stats.views" }, likes: { $sum: "$stats.likes" }, comments: { $sum: "$stats.comments" } } },
+      { $project: { _id: 0 } },
+    ])
+    .toArray();
+  const totals = sums ?? { videos: 0, views: 0, likes: 0, comments: 0 };
   // A post cancelled without a reason (a clip delete) has nothing to show, so it takes no slot.
   const found = await youtubePosts
     .find({ userId, $nor: [{ state: "cancelled", error: { $exists: false } }] })
@@ -539,20 +672,37 @@ export async function listPostsForUser(userId: string, limit: number): Promise<{
   const taskDocs = await tasks
     .find(
       { _id: { $in: [...new Set(posts.map((post) => post.taskId))] }, userId },
-      { projection: { "source.title": 1, "clips.id": 1, "clips.lineageId": 1, "clips.hookTitle": 1 } },
+      {
+        projection: {
+          "source.title": 1,
+          "settings.captionTemplate": 1,
+          "clips.id": 1,
+          "clips.lineageId": 1,
+          "clips.hookTitle": 1,
+          "clips.hookType": 1,
+          "clips.duration": 1,
+          "clips.viralityScore": 1,
+        },
+      },
     )
     .toArray();
   const taskById = new Map(taskDocs.map((task) => [task._id, task]));
   return {
     truncated: found.length > limit,
+    totals,
     posts: posts.map((post) => {
       const task = taskById.get(post.taskId);
       const [serialized] = serializePosts(task ?? { clips: [] }, [post]).posts;
+      const clip = task?.clips.find((candidate) => candidate.id === serialized.clip_id);
       return {
         ...serialized,
         task_id: post.taskId,
         task_title: task?.source.title ?? null,
-        clip_title: task?.clips.find((clip) => clip.id === serialized.clip_id)?.hookTitle ?? null,
+        clip_title: clip?.hookTitle ?? null,
+        hook_type: clip?.hookType ?? null,
+        duration: clip?.duration ?? null,
+        virality_score: clip?.viralityScore ?? null,
+        caption_template: task?.settings.captionTemplate ?? null,
         created_at: post.createdAt.toISOString(),
         uploaded_at: post.uploadedAt?.toISOString() ?? null,
       };

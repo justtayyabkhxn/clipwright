@@ -497,7 +497,7 @@ is, and the user can delete it in YouTube Studio.
   `test-utils.ts`.
 - The redirect base is `BETTER_AUTH_URL`.
 
-## 5. From original SupoClip (`1dbb178`)
+## 5. From the original app (`29dc44b`)
 
 - **Reuse:**
   - Single-use random state bound to the user and provider, with a TTL.

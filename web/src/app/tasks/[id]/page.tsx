@@ -54,6 +54,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { ClipTile, ClipFocus, ProcessingPanel, EmptyState } from "@/components/app/clip-wall";
+import { ChannelLimitBanner } from "@/components/app/channel-limit-banner";
 import { useYoutubeRetry, type YoutubePost } from "@/components/app/youtube-status-chip";
 import { timeAgo } from "@/lib/generations";
 import { VIDEO_SOURCE_LABELS, VideoSourceIcon, videoSourceKind, type VideoSourceKind } from "@/components/video-source-icon";
@@ -678,6 +679,7 @@ export default function TaskPage() {
 
       <div className="mt-8">
         {reconnecting && <p role="status" className="mb-4 text-sm text-muted-foreground">{t("reconnecting")}</p>}
+        <ChannelLimitBanner posts={youtubePosts} onReleased={() => void fetchYoutubePosts()} className="mb-6" />
 
         {isActive && task ? (
           <div className="space-y-8">

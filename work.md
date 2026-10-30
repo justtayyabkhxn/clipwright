@@ -2,9 +2,9 @@
 
 Last updated: 2026-10-28. Phases 1 to 4 are done and verified. Phase 5 (a real run with the user's Atlas URI and keys) is partly done. **Current work:** branch `youtube-autopost` (YouTube Shorts auto-post). All 14 plan tasks are done and reviewed; the final whole-branch review is next. See "Branch `youtube-autopost`" below.
 
-**Goal:** rebrand the SupoClip + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
+**Goal:** rebrand the original Python app + Claude fork as **Clipwright** and rebuild it on **Next.js + MongoDB**. It must run **locally on Windows without Docker** today and stay **deployable to Vercel** later. The existing Python video renderer is reused as a CLI "engine". Scope: the core clipping flow plus the full clip editor.
 
-The authoritative spec is [`docs/port/DESIGN.md`](docs/port/DESIGN.md). Detailed maps of the original system are in `docs/port/map-*.md` (frontend, task-api, pipeline, ai, editor, data, runtime, critique).
+The authoritative spec is [`docs/port/DESIGN.md`](docs/port/DESIGN.md).
 
 ---
 
@@ -12,7 +12,7 @@ The authoritative spec is [`docs/port/DESIGN.md`](docs/port/DESIGN.md). Detailed
 
 | Topic | Decision |
 |---|---|
-| Name | **Clipwright**. The AGPL-3.0 license stays, with a "Based on SupoClip" credit and a source link |
+| Name | **Clipwright**. The AGPL-3.0 license stays, with NOTICE.md and a source link |
 | Hosting | Local now, Vercel-ready later (user's choice) |
 | Database | **MongoDB Atlas free tier** (user's choice). Tests use `mongodb-memory-server` |
 | Renderer | **Reuse the Python renderer** as `engine/` (user's choice) |
@@ -33,14 +33,14 @@ web/       Next.js app: UI, API routes (src/app/api), server modules (src/server
 engine/    Python render engine (uv project, package clipwright_engine, CLI: python -X utf8 -m clipwright_engine <cmd>)
 data/      git-ignored runtime data: storage/ (durable files) and work/ (job temp dirs)
 docs/      user docs; docs/port/ holds the design spec and the maps of the original system
-(backend/ is deleted; read the original with git show 1dbb178:backend/...)
+(backend/ is deleted; read the original with git show 29dc44b:backend/...)
 ```
 
 ---
 
 ## Done
 
-### Before the rewrite (SupoClip + Claude), in baseline commit `1dbb178` on `master`
+### Before the rewrite (original app + Claude), in baseline commit `29dc44b` on `master`
 - Claude provider fixes (valid default model, JSON-schema structured output, connection test, masked keys, server-side refusal fallback for Opus 5).
 - UI redesign (warm paper and terracotta tokens, Newsreader serif, sidebar with recent projects and provider indicator, AI provider settings).
 
@@ -69,14 +69,14 @@ docs/      user docs; docs/port/ holds the design spec and the maps of the origi
 
 ## Phases 3 and 4: done (2026-10-27, commit "Clipwright phases 3-4")
 
-- **Docs:** `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, a fresh `CHANGELOG.md`, and a new `NOTICE.md` crediting SupoClip under AGPL-3.0.
+- **Docs:** `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, a fresh `CHANGELOG.md`, and a new `NOTICE.md` crediting the upstream project under AGPL-3.0.
   - New `docs/`: setup, configuration, architecture, claude-integration, testing, troubleshooting, deploying-to-vercel.
   - `docs/port/DESIGN.md` updated with every Phase 2 contract addition plus the env vars it was missing.
 - **Settings interop test:** now uses a fixed ciphertext produced by the original Python `encrypt_setting_value`, so it no longer skips.
 - **Full-stack E2E:** `web/e2e/full-flow.spec.ts` with fakes in `web/e2e/fakes/` (Anthropic Messages and Models, AssemblyAI) and `global-setup.ts`.
   - The setup starts an in-memory MongoDB replica set, the fakes, a synthetic 45 s video, `next dev` and the real worker plus engine.
   - The test covers: sign up → save keys and Test connection → upload → generate → 2 clips → play and download → preset export → editor edit, autosave and reload → server export → library → delete clip → delete task.
-  - It passed twice in a row (about 8 minutes each). Old SupoClip specs deleted.
+  - It passed twice in a row (about 8 minutes each). Old upstream specs deleted.
   - New optional env var `ASSEMBLYAI_BASE_URL` (regional endpoint, or a fake in tests), passed to the engine.
 - **Whole-system review (read-only):** 3 confirmed defects, all fixed with regression tests:
   1. Concurrent first sign-ups could all become admin. Now a one-time `meta.admin_bootstrap` upsert picks a single winner.
@@ -103,7 +103,7 @@ docs/      user docs; docs/port/ holds the design spec and the maps of the origi
 - **Assistant panel:** the optional in-app Claude assistant panel is not built.
 - **Claim fencing:** task writes are fenced by `run.jobId`, not by the claim token. That only matters with more than one worker process.
 - **Emoji captions:** need a colour emoji font that libass can use ("Noto Color Emoji"). Otherwise they are off; see troubleshooting.
-- **Source link:** `NEXT_PUBLIC_SOURCE_CODE_URL` defaults to the upstream SupoClip repo. Set it to your own repository before deploying (AGPL-3.0 §13).
+- **Source link:** `NEXT_PUBLIC_SOURCE_CODE_URL` defaults to https://github.com/justtayyabkhxn/clipwright. A fork must set it to its own repository before deploying (AGPL-3.0 §13).
 - **yt-dlp:** 2026.10.26 is available (the lock has 2026.10.21). Update with `cd engine && uv lock --upgrade-package yt-dlp && uv sync` if YouTube downloads fail.
 
 ---
@@ -178,7 +178,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
   - A 401 from the session URL fails the post. Its session is kept.
 - **"Try again"** sets the upload allowance to `max(cap, insertCalls + 1)`, so an unused allowance is never lowered.
 - **Warning codes.** `post.warning` stores codes (`private_lock` or YouTube's reason code). The UI maps them to text.
-- **Setup-doc links.** The Settings hint shows `docs/youtube.md` as text, not a link, because `NEXT_PUBLIC_SOURCE_CODE_URL` defaults to upstream SupoClip. The task page's private-lock line links to `/settings#youtube`.
+- **Setup-doc links.** The Settings hint shows `docs/youtube.md` as text, not a link, because `NEXT_PUBLIC_SOURCE_CODE_URL` may point at a fork without that path. The task page's private-lock line links to `/settings#youtube`.
 - **Accepted, documented windows** (marked with `ponytail:` notes where they apply):
   - The unblock/trip read-then-write window; the post-claim account check is the backstop.
   - A re-claimed run of the same job id; the insert cap bounds it.
@@ -191,7 +191,7 @@ Claude writes each clip's title, description, tags and hashtags, and the worker 
 ## How to resume
 
 1. **Check state:**
-   `git -c safe.directory=C:/other-projects/supoclip log --oneline` (the branch is `clipwright`).
+   `git -c safe.directory='*' log --oneline` (the branch is `clipwright`).
    - **Why the flag:** the folder is owned by another Windows account ("Tayyab Khan"), so every git command needs `-c safe.directory=...`. The global git config was intentionally left unchanged.
    - **Repo-local identity:** user.name `nakul`, user.email `nakul.volume@gmail.com`.
 2. **Next step:** on branch `youtube-autopost`, finish the branch (see above), then the rest of Phase 5.

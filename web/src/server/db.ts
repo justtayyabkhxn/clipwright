@@ -68,6 +68,7 @@ async function createIndexes() {
   await db.collection("youtube_posts").dropIndex("userId_1").catch((error) => {
     if (error?.code !== 26 && error?.code !== 27) throw error;
   });
+  await migrateChannelLimitWaits(db);
   await Promise.all([
     // Better Auth's adapter creates none of its own.
     db.collection("user").createIndex({ email: 1 }, { unique: true }),
@@ -106,6 +107,29 @@ export async function closeDb() {
   cache.__clipwrightConnect = undefined;
   cache.__clipwrightIndexes = undefined;
   await client?.close();
+}
+
+/**
+ * The channel-limit wait used to keep posts `queued` for 6 h and retry them by itself. Now it is a 12-hour
+ * `blocked` hold the user releases ("Post" / "Post all"): convert any old wait, keeping its 12 hours from
+ * the refusal (the old `notBefore` was refusal + 6 h), and record the hold on the account. Idempotent.
+ */
+export async function migrateChannelLimitWaits(db: Db) {
+  const posts = db.collection<YoutubePostDoc>("youtube_posts");
+  const old = { state: "queued", waitReason: "channel_limit" } as const;
+  if (!(await posts.countDocuments(old))) return;
+  await posts.updateMany(old, [
+    { $set: { state: "blocked", notBefore: { $add: [{ $ifNull: ["$notBefore", "$$NOW"] }, 6 * 60 * 60 * 1000] }, updatedAt: "$$NOW" } },
+  ]);
+  const holds = await posts
+    .aggregate<{ _id: string; until: Date }>([
+      { $match: { state: "blocked", waitReason: "channel_limit" } },
+      { $group: { _id: "$userId", until: { $max: "$notBefore" } } },
+    ])
+    .toArray();
+  for (const { _id, until } of holds) {
+    await db.collection<YoutubeAccountDoc>("youtube_accounts").updateOne({ _id, channelLimitUntil: { $exists: false } }, { $set: { channelLimitUntil: until } });
+  }
 }
 
 /** Idempotent. Awaited by the worker at startup; started lazily by the first `collections()` call. */

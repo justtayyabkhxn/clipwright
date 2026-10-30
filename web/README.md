@@ -20,6 +20,5 @@ UI copy is English only, kept in `messages/en/*.json` and loaded through next-in
 
 ## License
 
-Clipwright is based on [SupoClip](https://github.com/FujiwaraChoki/supoclip) and is licensed under
-AGPL-3.0, like the upstream project. The app links to its source from the sidebar and the sign-in
+Clipwright is licensed under AGPL-3.0 (see [NOTICE.md](../NOTICE.md)). The app links to its source from the sidebar and the sign-in
 pages; set `NEXT_PUBLIC_SOURCE_CODE_URL` to point that link at your own fork.

@@ -31,7 +31,7 @@ npx -y pnpm@10 run test:watch                  # watch mode
 - Storage tests use a temporary `DATA_DIR`.
 - Worker handler tests inject a fake engine runner and a fake Anthropic `fetch`; the Claude tests
   run the real SDK request path against a fake `fetch`. No test makes a paid call.
-- `src/server/settings.test.ts` decrypts a ciphertext produced once by SupoClip's original Python
+- `src/server/settings.test.ts` decrypts a ciphertext produced once by the original Python
   implementation, which keeps saved keys compatible.
 
 ### Slow real-engine test

@@ -6,15 +6,14 @@ Guidance for Claude Code (and other coding agents) working in this repository.
 
 Clipwright turns long videos (YouTube URLs or uploads) into short 9:16 clips: AssemblyAI transcribes,
 Claude picks and scores segments, a Python engine renders them with face-aware crops and burned
-captions, and a clip editor refines them. It is a rebrand and re-platform of SupoClip (AGPL-3.0):
+captions, and a clip editor refines them. It is a re-platform of an earlier Python app (AGPL-3.0, see NOTICE.md):
 one Next.js app plus a Node worker, MongoDB as the only database, and the original Python renderer
 reused as a CLI. It runs locally on Windows, macOS and Linux without Docker and is meant to move to
 Vercel later (see `docs/deploying-to-vercel.md`).
 
 **`docs/port/DESIGN.md` is the authoritative spec** (env, storage keys, collections, jobs, engine
-CLI, API routes). Keep it in sync when you change a contract. `docs/port/map-*.md` describe the
-original SupoClip system; the original code is in git history at commit `1dbb178`
-(`git show 1dbb178:backend/src/...`). `work.md` is the progress log.
+CLI, API routes). Keep it in sync when you change a contract. The original
+code is in git history at commit `29dc44b` (`git show 29dc44b:backend/src/...`). `work.md` is the progress log.
 
 ## Layout
 
@@ -24,7 +23,7 @@ web/                 Next.js 15 app, package "clipwright"
   src/server/        server modules shared by routes and the worker: env, db, auth, session, http,
                      storage, settings, jobs, tasks, drafts, engine, fonts, caption-templates, ai/,
                      youtube/
-  src/server/ai/     Claude clip selection (TypeScript port of SupoClip's ai.py), YouTube metadata
+  src/server/ai/     Claude clip selection (TypeScript port of the original ai.py), YouTube metadata
   src/server/youtube/  YouTube auto-post: accounts (OAuth, tokens), google (API calls), posts
   src/worker/        worker entry (main.ts), run-job, cron, handlers/ (one per job type)
   src/components, src/hooks, src/lib   client code (shadcn/Radix UI, Tailwind v4)
@@ -93,9 +92,9 @@ TypeScript (`src/server/ai`). The browser polls every 2 s. Files go through the 
 - **YouTube URLs** are host-checked and stored as `https://www.youtube.com/watch?v={id}`; uploads are
   `upload://{uuid}{ext}` and map to `uploads/{uuid}{ext}`.
 - **Settings:** `ANTHROPIC_API_KEY`, `ASSEMBLY_AI_API_KEY`, `CLAUDE_MODEL` from env or `app_settings`
-  (AES-256-GCM, `v1:` format, byte-compatible with SupoClip's Python). Env wins unless the admin set
+  (AES-256-GCM, `v1:` format, byte-compatible with the original Python). Env wins unless the admin set
   `preferAdminValue`. `/api/ai/provider` returns `llm_configured` and `transcription_configured`.
-- **API shapes** match SupoClip's so the client barely changed; errors are `{detail}`.
+- **API shapes** match the original app's so the client barely changed; errors are `{detail}`.
 - **The engine** never touches MongoDB, never calls an LLM, and gets keys only in its request.
 
 ## Conventions
@@ -113,14 +112,14 @@ TypeScript (`src/server/ai`). The browser polls every 2 s. Files go through the 
 - `web/src/lib/caption-templates.json` is generated from `engine/clipwright_engine/caption_templates.py`;
   an engine test asserts they match.
 - Tests: vitest with `mongodb-memory-server`, fake `runEngine`, fake Anthropic `fetch`; no paid calls.
-- UI copy goes in `messages/en/*.json`. Product name is **Clipwright**; "SupoClip" appears only in
-  the credit ("Based on SupoClip", NOTICE.md, license text).
+- UI copy goes in `messages/en/*.json`. Product name is **Clipwright**; the upstream project is
+  named only in NOTICE.md.
 - Deliberate shortcuts are marked with a `ponytail:` comment naming the limit and the upgrade path.
 - Never create `docs/claude.md`: on Windows it collides with `CLAUDE.md`.
 
 ## Machine quirks (Windows dev box)
 
-- Every git command needs `git -c safe.directory=C:/other-projects/supoclip ...` (the folder is owned
+- If git reports "dubious ownership", use `git -c safe.directory='*' ...` (the folder may be owned
   by another Windows account). Do not change the global git config.
 - `pnpm` is not on PATH: use `npx -y pnpm@10`.
 - `python` on PATH is the Microsoft Store stub. Use `engine/.venv/Scripts/python.exe` or `uv run`.

@@ -1,6 +1,6 @@
 """Regenerate python-golden.json from the original Python AI layer.
 
-The original lives at commit 1dbb178 (backend/src/ai.py). Run with the backend venv:
+The original lives at commit 29dc44b (backend/src/ai.py). Run with the backend venv:
   backend/.venv/Scripts/python.exe -X utf8 web/src/server/ai/__fixtures__/generate.py
 """
 
@@ -284,7 +284,7 @@ async def request_bodies():
 
 def main():
     golden = {
-        "source": "backend/src/ai.py at commit 1dbb178",
+        "source": "backend/src/ai.py at commit 29dc44b",
         "transcripts": TRANSCRIPTS,
         "signals": SIGNALS,
         "prompts": prompts(),

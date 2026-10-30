@@ -128,7 +128,13 @@
     "waitingChannelLimit": "Waiting for YouTube's channel upload limit",
     "waitingRetry": "Waiting to retry the upload",
     "waitingRestyle": "Waiting for the new style to finish",
+    "scheduledFor": "Uploads at {time}",
     "reconnectToPost": "Reconnect YouTube to post",
+    "channelLimit": "Channel upload limit reached",
+    "channelLimitUntil": "You can post it at {time}",
+    "channelLimitReady": "Ready to post again",
+    "post": "Post",
+    "posting": "Posting…",
     "reconnectInSettings": "Reconnect in Settings",
     "pausedPrivateLock": "Posting paused",
     "resumeInSettings": "Resume posting in Settings",
@@ -150,6 +156,9 @@
     "warnings": {
       "duplicate": "YouTube flagged this video as a duplicate upload"
     },
+    "views": "{count, plural, one {# view} other {# views}}",
+    "likes": "{count, plural, one {# like} other {# likes}}",
+    "comments": "{count, plural, one {# comment} other {# comments}}",
     "metadataTitle": "YouTube",
     "tagsLabel": "Tags"
   }

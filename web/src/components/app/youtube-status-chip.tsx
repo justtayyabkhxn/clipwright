@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Eye, Loader2, MessageCircle, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,7 +27,7 @@ export interface YoutubePost {
   clip_id: string | null;
   state: "queued" | "working" | "uploaded" | "blocked" | "failed" | "cancelled";
   phase: "writing" | "uploading" | null;
-  wait_reason: "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock" | null;
+  wait_reason: "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock" | "spacing" | null;
   title: string | null;
   description: string | null;
   tags: string[];
@@ -38,6 +38,8 @@ export interface YoutubePost {
   warning: string | null;
   error: string | null;
   not_before: string | null;
+  /** Public counts, refreshed hourly; likes/comments null when the owner hides them. */
+  stats: { views: number; likes: number | null; comments: number | null } | null;
   insert_cap_reached: boolean;
 }
 
@@ -50,8 +52,46 @@ const KNOWN_WARNING_CODES: Record<string, string> = { duplicate: "youtube.warnin
  */
 const BLOCKED_PILL_SAYS = [RECONNECT, PAUSED];
 
+/** Day and time: a 12-hour hold usually ends on another day than it started. */
+function formatLocalDayTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** True once `iso` has passed, re-checked every 15 s so a disabled button enables on its own. */
+export function usePassed(iso: string | null) {
+  const [now, setNow] = useState(() => Date.now());
+  const due = iso ? Date.parse(iso) : 0;
+  useEffect(() => {
+    if (!iso || due <= Date.now()) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [iso, due]);
+  return !iso || due <= now;
+}
+
 function formatLocalTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+}
+
+export const COUNT = new Intl.NumberFormat("en");
+
+/** "👁 1.2K  👍 34  💬 5", each with its full count as the accessible label. */
+export function VideoStats({ stats }: { stats: NonNullable<YoutubePost["stats"]> }) {
+  const t = useTranslations("task");
+  const items = [
+    { Icon: Eye, value: stats.views, label: "youtube.views" },
+    { Icon: ThumbsUp, value: stats.likes, label: "youtube.likes" },
+    { Icon: MessageCircle, value: stats.comments, label: "youtube.comments" },
+  ] as const;
+  return (
+    <span className="inline-flex items-center gap-3 text-sm font-semibold tabular-nums text-foreground">
+      {items.map(({ Icon, value, label }) => value !== null && (
+        <span key={label} className="inline-flex items-center gap-1" title={t(label, { count: value })} aria-label={t(label, { count: value })}>
+          <Icon className="size-4 text-muted-foreground" aria-hidden />{COUNT.format(value)}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function pillClass(tone: "muted" | "warn" | "error" | "success") {
@@ -88,6 +128,7 @@ export function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePo
       : post.wait_reason === "channel_limit" ? t("youtube.waitingChannelLimit")
       : post.wait_reason === "retry" ? t("youtube.waitingRetry")
       : post.wait_reason === "restyle" ? t("youtube.waitingRestyle")
+      : post.wait_reason === "spacing" && post.not_before ? t("youtube.scheduledFor", { time: formatLocalTime(post.not_before) })
       : t("youtube.waitingToPost");
     return (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -95,6 +136,10 @@ export function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePo
         {post.wait_reason === "retry" && post.error && <span className="text-[10px] text-muted-foreground">{post.error}</span>}
       </div>
     );
+  }
+
+  if (post.state === "blocked" && post.wait_reason === "channel_limit") {
+    return <ChannelLimitHold post={post} retrying={retrying} onRetry={onRetry} />;
   }
 
   if (post.state === "blocked") {
@@ -160,18 +205,50 @@ export function YoutubeStatusChip({ post, retrying, onRetry }: { post: YoutubePo
   const label = flagged ? t("youtube.flagged") : t("youtube.posted");
   return (
     <div className="space-y-0.5">
-      {post.video_url ? (
-        <a href={post.video_url} target="_blank" rel="noreferrer" className={cn(pillClass(tone), "hover:underline")}>
-          {label}<ExternalLink className="size-2.5" />
-        </a>
-      ) : (
-        <span className={pillClass(tone)}>{label}</span>
-      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {post.video_url ? (
+          <a href={post.video_url} target="_blank" rel="noreferrer" className={cn(pillClass(tone), "hover:underline")}>
+            {label}<ExternalLink className="size-2.5" />
+          </a>
+        ) : (
+          <span className={pillClass(tone)}>{label}</span>
+        )}
+        {post.stats && <VideoStats stats={post.stats} />}
+      </div>
       {privateLine || (post.warning && (
         <p className="text-[10px] leading-snug text-muted-foreground">
           {t(KNOWN_WARNING_CODES[post.warning] ?? "youtube.warningUnknown", { code: post.warning })}
         </p>
       ))}
+    </div>
+  );
+}
+
+/**
+ * A post held by YouTube's channel upload limit: no automatic retry. Its "Post" button stays disabled
+ * until the 12-hour hold ends, then queues it (the 10-minute gap still applies).
+ */
+function ChannelLimitHold({ post, retrying, onRetry }: { post: YoutubePost; retrying: boolean; onRetry: () => void }) {
+  const t = useTranslations("task");
+  const ready = usePassed(post.not_before);
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={pillClass("warn")}>{t("youtube.channelLimit")}</span>
+        <span className="text-[10px] text-muted-foreground">
+          {ready || !post.not_before ? t("youtube.channelLimitReady") : t("youtube.channelLimitUntil", { time: formatLocalDayTime(post.not_before) })}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-[10px]"
+        onClick={onRetry}
+        disabled={!ready || retrying}
+        aria-label={retrying ? t("youtube.posting") : undefined}
+      >
+        {retrying ? <Loader2 className="size-3 animate-spin" /> : t("youtube.post")}
+      </Button>
     </div>
   );
 }

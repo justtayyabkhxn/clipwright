@@ -74,7 +74,7 @@ ffprobe -version
 ## 2. Get the code and install dependencies
 
 ```bash
-git clone <your Clipwright repository URL> clipwright
+git clone https://github.com/justtayyabkhxn/clipwright.git clipwright
 cd clipwright
 
 cd web

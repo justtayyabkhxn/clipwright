@@ -17,7 +17,7 @@
 
 ## Global Constraints
 
-- Every git command: `git -c safe.directory=C:/other-projects/supoclip ...`.
+- Every git command: `git -c safe.directory='*' ...`.
 - pnpm: `npx -y pnpm@10 ...` in `web/`.
 - After each task, add a timestamped entry to `Progress.md` at the repo root, in the existing format (`### YYYY-MM-DD HH:MM — <what>`, time from `date '+%Y-%m-%d %H:%M'`).
 - Route handlers only do short OAuth and DB work. Claude calls, uploads and verification run in the worker.

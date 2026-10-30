@@ -258,7 +258,9 @@ describe("OAuth and Data API", () => {
   it("listVideoStatus batches ids by 50", async () => {
     const ids = Array.from({ length: 51 }, (_, i) => `v${i}`);
     const fake = fakeFetch(
-      json({ items: [{ id: "v0", status: { privacyStatus: "public", uploadStatus: "processed" } }] }),
+      json({
+        items: [{ id: "v0", status: { privacyStatus: "public", uploadStatus: "processed" }, statistics: { viewCount: "1200", likeCount: "34" } }],
+      }),
       json({ items: [{ id: "v50", status: { privacyStatus: "private", uploadStatus: "rejected", rejectionReason: "duplicate" } }] }),
     );
 
@@ -266,11 +268,12 @@ describe("OAuth and Data API", () => {
 
     expect(fake.requests).toHaveLength(2);
     // videos.list rejects maxResults alongside the id filter, so it must never be sent here.
-    expect(fake.requests[0].url).toBe(`https://www.googleapis.com/youtube/v3/videos?part=status&id=${ids.slice(0, 50).join(",")}`);
+    expect(fake.requests[0].url).toBe(`https://www.googleapis.com/youtube/v3/videos?part=status,statistics&id=${ids.slice(0, 50).join(",")}`);
     expect(new URL(fake.requests[0].url).searchParams.has("maxResults")).toBe(false);
     expect(new URL(fake.requests[0].url).searchParams.get("id")?.split(",")).toEqual(ids.slice(0, 50));
     expect(new URL(fake.requests[1].url).searchParams.get("id")).toBe("v50");
-    expect(statuses.get("v0")).toEqual({ privacyStatus: "public", uploadStatus: "processed" });
+    // commentCount absent (comments disabled): null, not 0.
+    expect(statuses.get("v0")).toEqual({ privacyStatus: "public", uploadStatus: "processed", stats: { views: 1200, likes: 34, comments: null } });
     expect(statuses.get("v50")).toEqual({ privacyStatus: "private", uploadStatus: "rejected", rejectionReason: "duplicate" });
   });
 

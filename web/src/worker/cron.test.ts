@@ -15,6 +15,7 @@ import {
   deleteOldJobs,
   dispatchDuePosts,
   expireExports,
+  refreshVideoStats,
   releaseOrphanedPosts,
   resumePendingAutopost,
   runCron,
@@ -394,6 +395,27 @@ describe("YouTube auto-post cron (design §4.4, §4.5, §4.6)", () => {
     // Not stuck long enough yet: left alone for the next run.
     expect((await collections().tasks.findOne({ _id: "fresh" }))!.autopost).toBe("pending");
     expect(await collections().youtubePosts.countDocuments({ taskId: "fresh" })).toBe(0);
+  });
+
+  it("refreshes stale view/like/comment counts of posted videos", async () => {
+    const now = new Date();
+    await seedAccount();
+    const uploaded = { state: "uploaded" as const, uploadStatus: "processed", uploadedAt: new Date(now.getTime() - 3 * DAY) };
+    await seedPost({ _id: "stale", lineageId: "c1", ...uploaded, videoId: "V1", stats: { views: 1, likes: 0, comments: 0, at: new Date(now.getTime() - 2 * 60 * MINUTE) } });
+    await seedPost({ _id: "fresh", lineageId: "c2", ...uploaded, videoId: "V2", stats: { views: 5, likes: 1, comments: 1, at: new Date(now.getTime() - MINUTE) } });
+    await seedPost({ _id: "gone", lineageId: "c3", ...uploaded, videoId: "V3", uploadStatus: "deleted" });
+    const requested: string[] = [];
+    const fetchImpl = (async (input: string | URL) => {
+      requested.push(...(new URL(String(input)).searchParams.get("id") ?? "").split(","));
+      const items = [{ id: "V1", status: { privacyStatus: "public", uploadStatus: "processed" }, statistics: { viewCount: "900", likeCount: "12" } }];
+      return new Response(JSON.stringify({ items }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+
+    expect(await refreshVideoStats(now, fetchImpl)).toBe(1);
+
+    expect(requested).toEqual(["V1"]);
+    expect((await storedPost("stale")).stats).toEqual({ views: 900, likes: 12, comments: null, at: now });
+    expect((await storedPost("fresh")).stats!.views).toBe(5);
   });
 
   it("verification records processed videos and trips the breaker on private", async () => {

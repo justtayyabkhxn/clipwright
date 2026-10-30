@@ -85,6 +85,20 @@ describe("prompt content", () => {
     }
   });
 
+  it("adds the channel notes to the analysis and rerank prompts only when given", () => {
+    const transcript = "[00:12 - 00:21] A strong opening line";
+    const notes = "- 12 recent posted Shorts, median 900 views.";
+    const plain = buildTranscriptAnalysisPrompt({ transcript });
+    const withNotes = buildTranscriptAnalysisPrompt({ transcript, channelNotes: notes });
+    expect(plain).not.toContain("creator's channel");
+    expect(withNotes).toContain(notes);
+    expect(withNotes).toContain("soft preference");
+    // The transcript stays last, after the notes.
+    expect(withNotes.endsWith(transcript)).toBe(true);
+    expect(buildCandidateRerankPrompt([], notes)).toContain(notes);
+    expect(buildCandidateRerankPrompt([])).not.toContain("creator's channel");
+  });
+
   it("never asks for B-roll or performance history", () => {
     const prompt = buildTranscriptAnalysisPrompt({ transcript: "[00:12 - 00:21] A strong opening line" }).toLowerCase();
     expect(prompt).not.toContain("b-roll");

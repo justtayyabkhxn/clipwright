@@ -14,7 +14,7 @@ import {
 
 const SECRET = "interop-secret-0123456789";
 // Encrypted once with SECRET by the original Python implementation
-// (`git show 1dbb178:backend/src/runtime_settings.py`, encrypt_setting_value).
+// (`git show 29dc44b:backend/src/runtime_settings.py`, encrypt_setting_value).
 const PYTHON_CIPHERTEXT = "v1:1xF1bgRWT4Y7alFy:VfjlpSYXT9aklcGxMMd8EQ:golRAh3ugbMoLguxbxXQP5ZT96o3";
 
 let mongod: MongoMemoryServer;

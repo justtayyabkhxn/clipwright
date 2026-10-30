@@ -46,6 +46,8 @@ export type ClipDoc = {
   shareabilityScore: number;
   hookType: string | null;
   hookTitle: string | null;
+  /** Claude's note on why the clip should perform; context for the YouTube metadata. */
+  viralityReasoning?: string;
   sourceRanges: SourceRange[];
   keepRanges?: [number, number][];
   captionSettings?: CaptionSettings;
@@ -68,6 +70,10 @@ export type TaskDoc = {
     videoId?: string;
     durationSeconds?: number;
   };
+  /** The analysis's summary and topics of the whole video; context for the YouTube metadata. */
+  analysis?: { summary: string; keyTopics: string[] };
+  /** The playlist this task's Shorts are added to, once the first one created it. */
+  youtubePlaylistId?: string;
   settings: TaskSettings;
   clips: ClipDoc[];
   /** The run the enqueuing route started: the worker's start CAS must match `jobId`. */
@@ -198,6 +204,14 @@ export type YoutubeAccountDoc = {
   autoPost: boolean;
   privacy: "public" | "unlisted" | "private";
   madeForKids: boolean;
+  /** Uploads start at least UPLOAD_GAP_MS apart: the earliest the next one may start. */
+  nextUploadAt?: Date;
+  /** YouTube refused an upload for the channel's daily limit: no upload starts before this. */
+  channelLimitUntil?: Date;
+  /** Add each Short to a playlist named after its source video (needs PLAYLIST_SCOPE). Off when absent. */
+  addToPlaylist?: boolean;
+  /** End each description with a link to the full source video (YouTube sources only). Off when absent. */
+  linkFullVideo?: boolean;
   connectedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -213,7 +227,7 @@ export type OAuthStateDoc = {
 
 export type YoutubePostState = "queued" | "working" | "uploaded" | "blocked" | "failed" | "cancelled";
 
-export type YoutubeWaitReason = "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock";
+export type YoutubeWaitReason = "retry" | "quota" | "channel_limit" | "restyle" | "reconnect" | "private_lock" | "spacing";
 
 export type YoutubePostDoc = {
   _id: string;
@@ -253,6 +267,8 @@ export type YoutubePostDoc = {
   privacyStatus?: string;
   uploadStatus?: string;
   verifiedAt?: Date;
+  /** Public counts from the hourly stats refresh; likes/comments null when the owner hides them. */
+  stats?: { views: number; likes: number | null; comments: number | null; at: Date };
   uploadedAt?: Date;
   warning?: string;
   error?: string;

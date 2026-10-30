@@ -327,6 +327,9 @@ describe("serializeAccount", () => {
       auto_post: false,
       privacy: "public",
       made_for_kids: false,
+      add_to_playlist: false,
+      link_full_video: false,
+      playlist_access: false,
     });
 
     await saveConnectedAccount("u1", TOKENS, CHANNEL);
@@ -340,6 +343,9 @@ describe("serializeAccount", () => {
       auto_post: true,
       privacy: "public",
       made_for_kids: false,
+      add_to_playlist: false,
+      link_full_video: false,
+      playlist_access: false,
     });
   });
 

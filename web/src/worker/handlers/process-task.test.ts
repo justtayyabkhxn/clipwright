@@ -169,7 +169,12 @@ describe("process_task", () => {
     expect(fetch.requests[0].body.model).toBe("claude-sonnet-5");
 
     const done = (await task(seeded._id))!;
-    expect(done).toMatchObject({ status: "completed", progress: 100, progressMessage: "Complete!" });
+    expect(done).toMatchObject({
+      status: "completed",
+      progress: 100,
+      progressMessage: "Complete!",
+      analysis: { summary: "Productivity", keyTopics: ["habits"] },
+    });
     expect(done.run).toMatchObject({ jobId: job._id, cacheHit: false, startedAt: expect.any(Date), completedAt: expect.any(Date) });
     expect(done.clips).toHaveLength(2);
     expect(done.clips[0]).toMatchObject({
@@ -184,6 +189,7 @@ describe("process_task", () => {
       hookScore: 20,
       hookType: "statement",
       hookTitle: "The habit that doubled my output",
+      viralityReasoning: "Bold",
       sourceRanges: [{ start: 0, end: 8 }],
       keepRanges: [[0, 8]],
       captionSettings: { font_size: 32, position_y: 0.7 },

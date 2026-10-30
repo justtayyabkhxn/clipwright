@@ -5,12 +5,12 @@ What changed in Clipwright for people using and running it. Newest first. Tag en
 
 ## Unreleased
 
-## 0.1.0 — first release, based on SupoClip
+## 0.1.0 — first release
 
-Clipwright 0.1.0 is a rebrand and re-platform of [SupoClip](https://github.com/FujiwaraChoki/supoclip)
+Clipwright 0.1.0 is a rebrand and re-platform of an earlier open-source Python clipping app
 (AGPL-3.0). See [NOTICE.md](NOTICE.md).
 
-- **New:** Clipwright name, logo and wordmark. A "Based on SupoClip (AGPL-3.0) · Source" link in the
+- **New:** Clipwright name, logo and wordmark. An "AGPL-3.0 · Source" link in the
   sidebar and on the sign-in pages, configurable with `NEXT_PUBLIC_SOURCE_CODE_URL`.
 - **New:** runs locally on Windows, macOS and Linux with no Docker. `pnpm dev` starts the Next.js app
   and the worker together; configuration lives in `web/.env.local`.
@@ -28,7 +28,7 @@ Clipwright 0.1.0 is a rebrand and re-platform of [SupoClip](https://github.com/F
   worker status.
 - **Improved:** Claude is the only LLM (default `claude-opus-5`), called from TypeScript with
   JSON-schema output, output repair, retries within a time budget and the server-side refusal
-  fallback. Prompts and selection logic match SupoClip's.
+  fallback. Prompts and selection logic match the original app's.
 - **Improved:** restyling all clips runs as a background job. Cancelling or a failed restyle keeps
   the existing clips and restores the previous settings.
 - **Improved:** uploads stream straight to disk; clip and editor media support HTTP Range requests.

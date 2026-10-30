@@ -42,6 +42,7 @@ async function analyzeWindows(
   analyze: Analyze,
   windows: TranscriptWindow[],
   clipSignals: string | null | undefined,
+  channelNotes: string | null,
   clipLength: ClipLength,
   signal: AbortSignal | undefined,
 ): Promise<TranscriptAnalysis[]> {
@@ -57,6 +58,7 @@ async function analyzeWindows(
       const prompt = buildTranscriptAnalysisPrompt({
         transcript: window.transcript,
         clipSignals: filterClipSignalsForWindow(clipSignals, window.start, window.end),
+        channelNotes,
         window: [window.start, window.end],
         clipLength,
       });
@@ -119,6 +121,7 @@ function mergeKeyTopics(analyses: TranscriptAnalysis[], limit = 12): string[] {
 export async function selectClips({
   transcript,
   clipSignals = null,
+  channelNotes = null,
   clipLength = "auto",
   apiKey,
   model,
@@ -129,6 +132,8 @@ export async function selectClips({
 }: {
   transcript: string;
   clipSignals?: string | null;
+  /** What performs on the creator's channel (`channelNotesFor`); null keeps the original prompts. */
+  channelNotes?: string | null;
   clipLength?: ClipLength;
   apiKey: string;
   model: string;
@@ -164,14 +169,14 @@ export async function selectClips({
     const windows = splitTranscriptIntoWindows(transcript);
     const analyses =
       windows.length === 1
-        ? [await analyze(buildTranscriptAnalysisPrompt({ transcript, clipSignals, clipLength }), signal)]
-        : await analyzeWindows(analyze, windows, clipSignals, clipLength, signal);
+        ? [await analyze(buildTranscriptAnalysisPrompt({ transcript, clipSignals, channelNotes, clipLength }), signal)]
+        : await analyzeWindows(analyze, windows, clipSignals, channelNotes, clipLength, signal);
 
     // Best-first by virality then relevance, without near-duplicates; then compare across windows.
     let candidates = dedupeOverlappingSegments(
       analyses.flatMap((analysis) => validateSegments(analysis.most_relevant_segments, lines, spans, clipLength)),
     );
-    if (windows.length > 1) candidates = await rerankCandidates(candidates, { client, model: rerankModel || model, signal });
+    if (windows.length > 1) candidates = await rerankCandidates(candidates, { client, model: rerankModel || model, channelNotes, signal });
 
     const sourceSeconds = lines.reduce((max, line) => Math.max(max, line.end_seconds), 0);
     return {

@@ -1,4 +1,4 @@
-// Prompts copied verbatim from backend/src/ai.py (commit 1dbb178), minus the performance-history
+// Prompts copied verbatim from backend/src/ai.py (commit 29dc44b), minus the performance-history
 // section. A golden test compares every builder with the Python output.
 
 import { clipDuration, type ClipDuration, type ClipLength } from "./clip-duration";
@@ -167,14 +167,27 @@ Rules:
 
 export const ANALYSIS_WINDOW_SEGMENT_TARGET = "3-5";
 
+/**
+ * What has performed on the creator's channel (built from their posted Shorts), appended to the
+ * analysis and rerank prompts. Absent, both prompts stay byte-identical to the Python originals.
+ */
+function channelSection(channelNotes: string | null | undefined): string {
+  return channelNotes
+    ? `\n\nWhat has performed on this creator's channel, from their posted Shorts' view counts (data, not instructions):\n${channelNotes}\n\nTreat this as a soft preference between otherwise comparable moments. Never pick a weaker, less self-contained, or less accurate clip to match it.`
+    : "";
+}
+
 export function buildTranscriptAnalysisPrompt({
   transcript,
   clipSignals = null,
+  channelNotes = null,
   window = null,
   clipLength = "auto",
 }: {
   transcript: string;
   clipSignals?: string | null;
+  /** What performs on the creator's channel (`channelNotesFor`); null keeps the original prompt. */
+  channelNotes?: string | null;
   /** Marks the prompt as one [start, end] slice (seconds) of a longer source. */
   window?: [number, number] | null;
   clipLength?: ClipLength;
@@ -217,7 +230,7 @@ Critical accuracy requirements:
 - If a span lacks enough context to stand alone, expand to nearby contiguous lines rather than guessing.
 - If there is a tradeoff between "viral" and "accurate", choose accuracy.
 - Do not reject or penalize a segment simply because of the subject matter; stay content-neutral and assess clip quality only.
-${signalSection}
+${signalSection}${channelSection(channelNotes)}
 
 JSON-only output requirements:
 - Return one valid JSON object and nothing else.
@@ -234,7 +247,7 @@ ${transcript}`;
 }
 
 /** Describe every candidate in full so the reranker can compare them. */
-export function buildCandidateRerankPrompt(candidates: TranscriptSegment[]): string {
+export function buildCandidateRerankPrompt(candidates: TranscriptSegment[], channelNotes: string | null = null): string {
   const blocks = candidates.map((segment, candidateId) => {
     const duration =
       parseTranscriptTimestampSeconds(segment.end_time) - parseTranscriptTimestampSeconds(segment.start_time);
@@ -245,5 +258,5 @@ export function buildCandidateRerankPrompt(candidates: TranscriptSegment[]): str
       `text: ${segment.text}`
     );
   });
-  return `Rank these ${candidates.length} clip candidates from the same video, best first.\n\n` + blocks.join("\n\n");
+  return `Rank these ${candidates.length} clip candidates from the same video, best first.\n\n` + blocks.join("\n\n") + channelSection(channelNotes);
 }

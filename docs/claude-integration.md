@@ -73,14 +73,14 @@ There is no other LLM provider and no automatic fallback to another provider.
 
 ## How the integration works
 
-The code is a TypeScript port of SupoClip's Python `ai.py`, in
+The code is a TypeScript port of the original Python `ai.py`, in
 [`web/src/server/ai`](../web/src/server/ai). It runs inside the worker during the
 "Analyzing content with AI..." step of a generation.
 
 | File | Role |
 |---|---|
 | `index.ts` | `selectClips()`: windows, concurrency, budgets, final selection. |
-| `prompts.ts` | System and user prompts (byte-identical to the Python originals, minus SupoClip's performance section). |
+| `prompts.ts` | System and user prompts (byte-identical to the Python originals, minus the original performance section). |
 | `client.ts` | One structured Claude call, output repair, transient retries. |
 | `schemas.ts` | JSON schemas sent to Claude and the zod parsers for the replies. |
 | `validate.ts`, `transcript.ts` | Timestamp validation, snapping, repair and grounding against the transcript. |

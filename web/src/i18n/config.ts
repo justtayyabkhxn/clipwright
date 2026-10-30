@@ -12,6 +12,7 @@ export const NAMESPACES = [
   "task",
   "editor",
   "youtube",
+  "landing",
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

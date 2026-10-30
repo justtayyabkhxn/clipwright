@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Settings, TriangleAlert, Youtube } from "lucide-react";
+import { ChevronRight, Eye, MessageCircle, Settings, ThumbsUp, TriangleAlert, Youtube } from "lucide-react";
+import { ChannelLimitBanner } from "@/components/app/channel-limit-banner";
 import { EmptyState } from "@/components/app/clip-wall";
 import { PageError, PageLoading } from "@/components/app/page-state";
-import { YoutubeStatusChip, useYoutubeRetry, type YoutubePost } from "@/components/app/youtube-status-chip";
+import { YoutubeInsights, type InsightPost } from "@/components/app/youtube-insights";
+import { COUNT, VideoStats, YoutubeStatusChip, useYoutubeRetry, type YoutubePost } from "@/components/app/youtube-status-chip";
 import { Button } from "@/components/ui/button";
 import { formatSupportMessage, parseApiError } from "@/lib/api-error";
 import { useSession } from "@/lib/auth-client";
 
 /** `GET /api/youtube/account` (design §9), the fields this page shows. Tokens never appear here. */
+type Totals = { videos: number; views: number; likes: number; comments: number };
+
 type Account = {
   configured: boolean;
   connected: boolean;
@@ -22,7 +26,7 @@ type Account = {
 };
 
 /** One `GET /api/youtube/posts` item: the task page's post plus where it came from. */
-type OverviewPost = YoutubePost & {
+type OverviewPost = YoutubePost & InsightPost & {
   task_id: string;
   task_title: string | null;
   clip_title: string | null;
@@ -33,6 +37,15 @@ type OverviewPost = YoutubePost & {
 /** The user's own locale and time zone: a wait can run past midnight, so the day is included. */
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** A group's counts summed over its posts that have stats; likes/comments stay hidden if every clip hides them. */
+function combinedStats(posts: OverviewPost[]): YoutubePost["stats"] {
+  const withStats = posts.flatMap((post) => (post.stats ? [post.stats] : []));
+  if (withStats.length === 0) return null;
+  const sum = (key: "likes" | "comments") =>
+    withStats.some((s) => s[key] !== null) ? withStats.reduce((total, s) => total + (s[key] ?? 0), 0) : null;
+  return { views: withStats.reduce((total, s) => total + s.views, 0), likes: sum("likes"), comments: sum("comments") };
 }
 
 async function getJson<T>(url: string, fallback: string): Promise<T> {
@@ -50,17 +63,19 @@ export default function YoutubePage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [posts, setPosts] = useState<OverviewPost[]>([]);
   const [truncated, setTruncated] = useState(false);
+  const [totals, setTotals] = useState<Totals | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (background = false) => {
     try {
       const [nextAccount, list] = await Promise.all([
         getJson<Account>("/api/youtube/account", t("loadError")),
-        getJson<{ posts: OverviewPost[]; truncated: boolean }>("/api/youtube/posts", t("loadError")),
+        getJson<{ posts: OverviewPost[]; truncated: boolean; totals: Totals }>("/api/youtube/posts", t("loadError")),
       ]);
       setAccount(nextAccount);
       setPosts(list.posts);
       setTruncated(list.truncated);
+      setTotals(list.totals);
       setError(null);
     } catch (err) {
       // A failed background poll keeps the last list.
@@ -173,6 +188,8 @@ export default function YoutubePage() {
         </div>
       )}
 
+      <ChannelLimitBanner posts={posts} onReleased={() => void load(true)} className="mt-6" />
+
       {posts.length === 0 ? (
         channel && (
           <div className="mt-6">
@@ -181,6 +198,31 @@ export default function YoutubePage() {
         )
       ) : (
         <>
+          {totals && totals.videos > 0 && (
+            <section aria-label={t("totals.label")} className="mt-6 rounded-xl border bg-background p-4 sm:p-5">
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {([
+                  { key: "views", Icon: Eye, value: totals.views },
+                  { key: "likes", Icon: ThumbsUp, value: totals.likes },
+                  { key: "comments", Icon: MessageCircle, value: totals.comments },
+                ] as const).map(({ key, Icon, value }) => (
+                  <li key={key} className="flex items-center gap-3">
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+                      <Icon className="size-5" aria-hidden />
+                    </span>
+                    <div>
+                      <span className="block text-3xl font-bold tabular-nums leading-none">{COUNT.format(value)}</span>
+                      <span className="text-xs text-muted-foreground">{t(`totals.${key}`)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                {t("totals.videos", { count: totals.videos })} · {t("totals.refreshed")}
+              </p>
+            </section>
+          )}
+
           <ul aria-label={t("summaryLabel")} className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {counts.map(({ key, value }) => (
               <li key={key} className="rounded-xl border bg-background px-4 py-3">
@@ -190,22 +232,37 @@ export default function YoutubePage() {
             ))}
           </ul>
 
-          <div className="mt-8 space-y-8">
-            {[...groups].map(([taskId, taskPosts]) => (
-              <section key={taskId}>
-                <h2 className="mb-3 truncate font-display text-lg font-semibold tracking-tight">
-                  {taskPosts[0].task_title === null ? t("taskGone") : (
-                    <Link href={`/tasks/${taskId}`} className="underline-offset-2 hover:underline">{taskPosts[0].task_title}</Link>
+          <YoutubeInsights posts={posts} />
+
+          <div className="mt-8 space-y-5">
+            {[...groups].map(([taskId, taskPosts]) => {
+              const pending = taskPosts.filter((post) => post.state !== "uploaded").length;
+              const stats = combinedStats(taskPosts);
+              return (
+              // Native <details>: closed by default, and the open state survives the background polls.
+              <details key={taskId} className="group">
+                <summary className="flex group-open:mb-3 cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden />
+                  <h2 className="min-w-0 truncate font-display text-lg font-semibold tracking-tight">
+                    {taskPosts[0].task_title === null ? t("taskGone") : (
+                      <Link href={`/tasks/${taskId}`} className="underline-offset-2 hover:underline">{taskPosts[0].task_title}</Link>
+                    )}
+                  </h2>
+                  {stats && <VideoStats stats={stats} />}
+                  {pending > 0 && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      {t("groupPending", { count: pending, total: taskPosts.length })}
+                    </span>
                   )}
-                </h2>
+                </summary>
                 <ul className="divide-y rounded-xl border bg-background">
                   {taskPosts.map((post) => (
                     <li key={post.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                       <p className="min-w-0 text-sm font-medium leading-snug">{post.title || post.clip_title || t("clip")}</p>
                       <div className="space-y-1 sm:w-72 sm:shrink-0">
                         <YoutubeStatusChip post={post} retrying={retryingPostId === post.id} onRetry={() => requestRetry(post.task_id, post)} />
-                        {/* The quota chip already says until when. */}
-                        {post.state === "queued" && post.wait_reason !== "quota" && post.not_before && Date.parse(post.not_before) > Date.now() && (
+                        {/* The quota and spacing chips already say until when. */}
+                        {post.state === "queued" && post.wait_reason !== "quota" && post.wait_reason !== "spacing" && post.not_before && Date.parse(post.not_before) > Date.now() && (
                           <p className="text-[11px] text-muted-foreground">{t("nextTry", { time: formatWhen(post.not_before) })}</p>
                         )}
                         {post.state === "uploaded" && post.uploaded_at && (
@@ -215,8 +272,9 @@ export default function YoutubePage() {
                     </li>
                   ))}
                 </ul>
-              </section>
-            ))}
+              </details>
+              );
+            })}
           </div>
 
           {truncated && <p className="mt-6 text-center text-xs text-muted-foreground">{t("truncated")}</p>}

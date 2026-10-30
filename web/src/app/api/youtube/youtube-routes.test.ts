@@ -139,6 +139,12 @@ describe("POST /api/youtube/connect", () => {
     expect(doc?.userId).toBe(users.alice.id);
   });
 
+  it("asks for the playlist permission too when {playlists: true}", async () => {
+    const response = await call(connectRoute.POST, "/api/youtube/connect", { method: "POST", body: { playlists: true } });
+    const url = new URL(((await response.json()) as { authorize_url: string }).authorize_url);
+    expect(url.searchParams.get("scope")).toBe(`${BOTH_SCOPES} https://www.googleapis.com/auth/youtube.force-ssl`);
+  });
+
   it("returns 409 not_configured when client env vars are missing", async () => {
     process.env.GOOGLE_OAUTH_CLIENT_ID = "";
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = "";
@@ -464,6 +470,17 @@ describe("GET/PATCH/DELETE /api/youtube/account", () => {
     expect((await collections().youtubePosts.findOne({ _id: "post-2" }))?.state).toBe("cancelled");
   });
 
+  it("PATCH turns playlists and full-video links on, and rejects non-booleans", async () => {
+    await connectAlice();
+    const response = await call(accountRoute.PATCH, "/api/youtube/account", {
+      method: "PATCH",
+      body: { add_to_playlist: true, link_full_video: true },
+    });
+    expect(await response.json()).toMatchObject({ add_to_playlist: true, link_full_video: true, playlist_access: false });
+    const bad = await call(accountRoute.PATCH, "/api/youtube/account", { method: "PATCH", body: { link_full_video: "yes" } });
+    expect(bad.status).toBe(400);
+  });
+
   it("PATCH rejects an invalid privacy value", async () => {
     await connectAlice();
     const response = await call(accountRoute.PATCH, "/api/youtube/account", { method: "PATCH", body: { privacy: "secret" } });
@@ -625,6 +642,21 @@ describe("GET /api/youtube/posts", () => {
     expect(body.posts[2]).toMatchObject({ task_title: "Talk", clip_id: "clip-2", clip_title: "Why it works", title: null });
   });
 
+  it("totals the caller's live posted videos, skipping hidden counts, deleted videos and other users", async () => {
+    const at = new Date();
+    await collections().youtubePosts.insertMany([
+      postDoc("a", { state: "uploaded", uploadStatus: "processed", stats: { views: 1000, likes: 50, comments: 4, at } }),
+      postDoc("b", { state: "uploaded", uploadStatus: "processed", stats: { views: 250, likes: null, comments: null, at } }),
+      postDoc("gone", { state: "uploaded", uploadStatus: "deleted", stats: { views: 9999, likes: 1, comments: 1, at } }),
+      postDoc("bob", { userId: users.bob.id, state: "uploaded", stats: { views: 7, likes: 7, comments: 7, at } }),
+      postDoc("queued"),
+    ]);
+
+    const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
+
+    expect(body.totals).toEqual({ videos: 2, views: 1250, likes: 50, comments: 4 });
+  });
+
   it("never exposes the upload session, tokens or the claim", async () => {
     await insertTask("task-1", users.alice.id, "Talk", [clipDoc("clip-1", "Hook", "lin-1")]);
     await collections().youtubePosts.insertOne(postDoc("p-1", {
@@ -635,9 +667,9 @@ describe("GET /api/youtube/posts", () => {
     const body = await (await call(postsRoute.GET, "/api/youtube/posts")).json();
 
     expect(Object.keys(body.posts[0]).sort()).toEqual([
-      "clip_id", "clip_title", "created_at", "description", "error", "hashtags", "id", "insert_cap_reached", "not_before",
-      "phase", "privacy_status", "progress", "state", "tags", "task_id", "task_title", "title", "upload_status",
-      "uploaded_at", "video_url", "wait_reason", "warning",
+      "caption_template", "clip_id", "clip_title", "created_at", "description", "duration", "error", "hashtags", "hook_type", "id",
+      "insert_cap_reached", "not_before", "phase", "privacy_status", "progress", "state", "stats", "tags", "task_id", "task_title",
+      "title", "upload_status", "uploaded_at", "video_url", "virality_score", "wait_reason", "warning",
     ]);
     const text = JSON.stringify(body);
     expect(text).not.toContain("session-secret");

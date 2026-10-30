@@ -1,0 +1,106 @@
+{
+  "nav": {
+    "how": "How it works",
+    "posting": "Auto-post",
+    "setup": "Setup",
+    "source": "Source",
+    "signIn": "Sign in",
+    "signUp": "Sign up"
+  },
+  "hero": {
+    "title": "One long video in.",
+    "titleAccent": "A week of Shorts out.",
+    "body": "Clipwright transcribes your video, has Claude pick the moments worth watching, renders them as 9:16 clips with face-tracked framing and word-synced captions, and posts them to your YouTube channel, ten minutes apart, while you do something else.",
+    "primary": "Create the admin account",
+    "secondary": "See what to set up",
+    "facts": "Self-hosted · Your own API keys · Open source, AGPL‑3.0"
+  },
+  "stage": {
+    "source": "podcast-episode-42.mp4",
+    "label": "Example video and clips",
+    "clips": [
+      { "title": "The habit that doubled my output", "caption": ["THE", "ONE", "HABIT", "THAT", "CHANGED", "EVERYTHING"], "highlight": 2, "score": 87, "status": "18.4K views" },
+      { "title": "Why most advice fails beginners", "caption": ["NOBODY", "TELLS", "YOU", "THIS", "PART"], "highlight": 3, "score": 81, "status": "Uploads at 4:40 PM" },
+      { "title": "Stop planning, start shipping", "caption": ["JUST", "SHIP", "THE", "UGLY", "VERSION"], "highlight": 1, "score": 76, "status": "Uploads at 4:50 PM" }
+    ]
+  },
+  "pipeline": {
+    "title": "Paste a link. Walk away.",
+    "body": "These are the real progress messages you'll watch on the task page. Every step runs on your machine, in the worker that starts with pnpm dev.",
+    "steps": {
+      "download": { "name": "Download", "message": "Downloading video...", "detail": "A YouTube URL through yt-dlp, or your own upload up to 4 GB." },
+      "transcribe": { "name": "Transcribe", "message": "Generating transcript...", "detail": "AssemblyAI returns every word with its timestamp, so cuts and captions land exactly." },
+      "pick": { "name": "Pick", "message": "Analyzing content with AI...", "detail": "Claude reads the transcript, picks self-contained 15–60 s moments and scores each one." },
+      "render": { "name": "Render", "message": "Creating clip 3/8...", "detail": "Vertical crops that follow faces, animated captions, a hook title, pauses and fillers cut." },
+      "post": { "name": "Post", "message": "Uploading…", "detail": "Each clip goes up as a Short with a title, description, tags and hashtags Claude wrote." }
+    }
+  },
+  "clip": {
+    "title": "Every clip comes with its reasons.",
+    "body": "Claude doesn't just cut. It scores each moment on hook, engagement, value and shareability, says why, and gives it a headline. Sort by score, keep the best, restyle all of them at once, or open any clip in the editor.",
+    "example": "Example clip",
+    "hookTitle": "The habit that doubled my output",
+    "caption": ["THE", "ONE", "HABIT", "THAT", "CHANGED", "EVERYTHING"],
+    "score": "Virality",
+    "parts": { "hook": "Hook", "engagement": "Engagement", "value": "Value", "shareability": "Shareability" },
+    "hookType": "Hook type: story",
+    "reasoning": "Opens on a concrete claim, pays it off inside 40 seconds, and stands alone without the rest of the episode.",
+    "features": [
+      "Face-tracked 9:16 crops, plus fit, pan and split layouts",
+      "7 caption styles with word-synced animation",
+      "Pause and filler-word removal",
+      "Editor: trim, re-caption, combine, export for TikTok, Reels or Shorts"
+    ]
+  },
+  "posting": {
+    "title": "Then it posts itself.",
+    "body": "Connect your channel once. Every finished clip uploads on its own, ten minutes after the last, so they don't bury each other. View, like and comment counts come back every hour.",
+    "example": "Example schedule",
+    "uploadsAt": "Uploads at {time}",
+    "uploading": "Uploading…",
+    "posted": "Posted",
+    "views": "{count} views",
+    "learnTitle": "It learns what works on your channel.",
+    "learnBody": "The YouTube page shows average views by hook type, clip length, caption style and time posted. Once 10 clips have numbers, Claude sees your best performers when it picks the next batch.",
+    "bars": { "story": "Story hooks", "question": "Question hooks", "statement": "Bold statements" },
+    "extras": "Optional: add each video's Shorts to a playlist, and link the full video in every description."
+  },
+  "setup": {
+    "title": "What you need to set up",
+    "body": "Clipwright runs on your own machine (Windows, macOS or Linux) with no Docker. Here's everything it asks for, and where to get it.",
+    "required": "Required",
+    "optional": "Optional",
+    "items": {
+      "tools": { "name": "Node 22+, pnpm 10, uv, ffmpeg", "why": "The web app and worker run on Node; the render engine is Python via uv. ffmpeg needs libass and libx264.", "where": "docs/setup.md walks through each on every OS" },
+      "mongo": { "name": "MongoDB", "why": "The only database: users, tasks, clips and the job queue.", "where": "A free MongoDB Atlas cluster is enough" },
+      "anthropic": { "name": "Anthropic API key", "why": "Claude picks and scores the clips and writes the YouTube titles.", "where": "console.anthropic.com" },
+      "assembly": { "name": "AssemblyAI API key", "why": "Word-level transcripts for cuts and captions.", "where": "assemblyai.com" },
+      "google": { "name": "Google OAuth client", "why": "Only for YouTube auto-post: lets Clipwright upload to your channel.", "where": "Google Cloud Console; docs/youtube.md has the steps" }
+    },
+    "quickTitle": "Quick start",
+    "quickBody": "From a fresh clone. Set MONGODB_URI and BETTER_AUTH_SECRET (32+ random characters) in web/.env.local before the last command.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "thenTitle": "Then, in the app",
+    "then": [
+      "Open localhost:3000 and sign up. The first account becomes the admin.",
+      "Settings → AI and transcription: paste the Anthropic key, test it, pick a model, then save the AssemblyAI key.",
+      "Optional: Settings → YouTube auto-post → Connect YouTube.",
+      "Paste a YouTube link on the home page and start your first generation."
+    ]
+  },
+  "limits": {
+    "title": "Good to know",
+    "items": [
+      "Your computer is the server. The worker has to be running for videos to process and clips to post.",
+      "Until Google audits your API project, YouTube keeps uploads private and allows only a small daily upload quota.",
+      "You pay Anthropic and AssemblyAI directly for what you use. Clipwright itself is free."
+    ]
+  },
+  "close": {
+    "title": "Your channel, on autopilot.",
+    "body": "Set it up once. Feed it long videos. Watch the Shorts and the numbers come back.",
+    "primary": "Sign up",
+    "secondary": "I already have an account"
+  }
+}

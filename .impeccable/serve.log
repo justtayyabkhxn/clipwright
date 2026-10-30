@@ -1,0 +1,4 @@
+QUESTION URL: http://127.0.0.1:58548/
+QUESTION KEY: 96243bb8
+Open the URL for the user now: in-app browser when the harness has one, otherwise the system opener (macOS `open`, Linux `xdg-open`), otherwise show the URL.
+Then collect the answer with: C:/Users/wefor/.claude/plugins/cache/impeccable/impeccable/4.3.1/skills/impeccable/scripts/impeccable serve-question --wait --key 96243bb8

@@ -72,7 +72,12 @@ export function applyCandidateRanking(candidates: TranscriptSegment[], ranking: 
 /** Compare all candidates in one call; keep the first-pass order if that fails (never throws, except on cancellation). */
 export async function rerankCandidates(
   candidates: TranscriptSegment[],
-  { client, model, signal }: { client: Anthropic; model: string; signal?: AbortSignal },
+  {
+    client,
+    model,
+    channelNotes = null,
+    signal,
+  }: { client: Anthropic; model: string; channelNotes?: string | null; signal?: AbortSignal },
 ): Promise<TranscriptSegment[]> {
   if (candidates.length < 2) return candidates;
   try {
@@ -82,7 +87,7 @@ export async function rerankCandidates(
           client,
           model,
           system: CANDIDATE_RERANK_SYSTEM_PROMPT,
-          prompt: buildCandidateRerankPrompt(candidates),
+          prompt: buildCandidateRerankPrompt(candidates, channelNotes),
           schema: CANDIDATE_RANKING_SCHEMA,
           parse: parseCandidateRanking,
           signal: budget,

@@ -86,7 +86,7 @@ and how auto-post behaves.
 |---|---|---|
 | `GOOGLE_OAUTH_CLIENT_ID` | none | OAuth client id from the Google Cloud project, env only (not settable in Settings). |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | none | Its client secret. Never logged or returned by any API response. |
-| `CLAUDE_METADATA_MODEL` | `claude-sonnet-5` | Claude model that writes each clip's title, description, tags and hashtags before upload. |
+| `CLAUDE_METADATA_MODEL` | `claude-haiku-4-5` | Claude model that writes each clip's title, description, tags and hashtags before upload. |
 | `GOOGLE_BASE_URL_OVERRIDE` | unset (Google's real hosts) | **Test-only.** Replaces the origin of every Google endpoint (OAuth, Data API, resumable upload) with this base URL. Used by the vitest and Playwright fakes; never set it in a real `.env.local`. |
 
 ## Browser-side variables
@@ -97,7 +97,7 @@ dev server start), so restart or rebuild after changing them. They are not parse
 | Variable | Default | Meaning |
 |---|---|---|
 | `NEXT_PUBLIC_MAX_VIDEO_UPLOAD_BYTES` | 4 GB | Upload limit the browser checks before sending a file. Keep it equal to `MAX_VIDEO_UPLOAD_BYTES`. |
-| `NEXT_PUBLIC_SOURCE_CODE_URL` | `https://github.com/FujiwaraChoki/supoclip` | Target of the "Source" link in the sidebar and on the sign-in pages. **If you deploy a modified Clipwright, AGPL-3.0 requires you to offer its source to your users: set this to your fork.** |
+| `NEXT_PUBLIC_SOURCE_CODE_URL` | `https://github.com/justtayyabkhxn/clipwright` | Target of the "Source" link in the sidebar and on the sign-in pages. **If you deploy a modified Clipwright, AGPL-3.0 requires you to offer its source to your users: set this to your fork.** |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Public origin used for page metadata (`metadataBase`). |
 
 ## Test-only variables

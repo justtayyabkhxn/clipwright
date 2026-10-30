@@ -11,11 +11,14 @@ import type { JobOutcome } from "../../server/jobs";
 import { getRuntimeSettings } from "../../server/settings";
 import { getStorage } from "../../server/storage";
 import { getTask } from "../../server/tasks";
-import type { JobDoc, YoutubeAccountDoc, YoutubePostDoc } from "../../server/types";
+import type { JobDoc, TaskDoc, YoutubeAccountDoc, YoutubePostDoc } from "../../server/types";
 import { getAccessToken, getAccount, markReauthRequired } from "../../server/youtube/accounts";
 import {
+  addPlaylistItem,
   classify,
+  createPlaylist,
   GoogleApiError,
+  PLAYLIST_SCOPE,
   nextMidnightPacific,
   querySession,
   startUploadSession,
@@ -30,14 +33,17 @@ import {
   CHANNEL_CHANGED_ERROR,
   claimPost,
   clearMetadata,
-  deferAllQueuedForChannel,
   deferAllQueuedForQuota,
   deferPost,
   DISCONNECTED_ERROR,
   failPost,
+  holdChannelForLimit,
+  holdPostForChannelLimit,
+  CHANNEL_LIMIT_HOLD_MS,
   lineageOf,
   markUploaded,
   refundInsertCall,
+  reserveUploadSlot,
   saveMetadata,
   saveSession,
   setPhase,
@@ -50,6 +56,8 @@ const MINUTE = 60_000;
 const RETRY_DELAYS_MS = [1, 5, 15].map((minutes) => minutes * MINUTE);
 /** Per job: the upload is tried this many times, 1/2/4/8 s apart, before the post is deferred. */
 const UPLOAD_TRIES = 5;
+/** YouTube's playlist title limit. */
+const PLAYLIST_TITLE_MAX = 150;
 
 /** Backoff seam, replaced in tests. */
 export const uploadTiming = { sleep: (ms: number, signal: AbortSignal) => sleep(ms, undefined, { signal }) };
@@ -62,6 +70,7 @@ const INSERT_CAP_REACHED =
 const SESSION_REFUSED = "YouTube refused the upload session (HTTP 401).";
 const WORKER_STOPPED = "The upload stopped unexpectedly.";
 /** Names the settings to check, never their values. */
+const CHANNEL_LIMIT_REACHED = "The channel reached YouTube's daily upload limit";
 const CHECK_OAUTH_CLIENT = "Check GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.";
 
 const DONE: JobOutcome = { status: "succeeded" };
@@ -101,14 +110,27 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
   // The lock wins over a needed reconnect; only "Resume posting" releases it (§4.6).
   if (account.warning === "private_lock" || account.status === "paused") return settle(blockPost(post, "private_lock", PAUSED));
   if (account.status !== "active") return settle(blockPost(post, "reconnect", `${RECONNECT}.`));
+  // The channel is resting after YouTube's upload limit; the user releases its posts once the hold ends.
+  if (account.channelLimitUntil && account.channelLimitUntil > new Date()) {
+    return settle(holdPostForChannelLimit(post, account.channelLimitUntil, CHANNEL_LIMIT_REACHED));
+  }
   const task = await getTask(post.taskId);
   if (task?.status === "processing") return settle(deferPost(post, "restyle", later(2 * MINUTE)));
   const clip = task?.clips.find((candidate) => lineageOf(candidate) === post.lineageId);
   if (!task || !clip) return settle(cancelClaimedPost(post, CLIP_GONE));
   const file = await getStorage().stat(clip.storageKey);
   if (!file) return settle(failPost(post, FILE_MISSING));
+  // One upload per UPLOAD_GAP_MS. An upload already in progress (a saved session) resumes at once.
+  // ponytail: a post deferred here is re-dispatched by the 5-minute cron, so it can start up to 5 min
+  // after its slot; slots planned at creation (createPostsForTask) run on time.
+  if (!post.upload) {
+    const wait = await reserveUploadSlot(post.userId);
+    if (wait) return settle(deferPost(post, "spacing", wait));
+  }
 
-  const upload = uploader(ctx, post, account, clip.storageKey, file.size);
+  // Only a YouTube source has a full video to link to.
+  const fullVideoUrl = account.linkFullVideo && task.source.type === "youtube" ? task.source.url : undefined;
+  const upload = uploader(ctx, post, account, clip.storageKey, file.size, fullVideoUrl);
   let metadata: YoutubeMetadata | undefined = post.metadata;
   for (let rewrites = 0; ; rewrites++) {
     if (!metadata) {
@@ -116,7 +138,14 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
       try {
         const settings = await getRuntimeSettings();
         metadata = await writeYoutubeMetadata(
-          { sourceTitle: task.source.title, hookTitle: clip.hookTitle, transcript: clip.text },
+          {
+            sourceTitle: task.source.title,
+            hookTitle: clip.hookTitle,
+            transcript: clip.text,
+            videoSummary: task.analysis?.summary,
+            videoTopics: task.analysis?.keyTopics,
+            whyItWorks: clip.viralityReasoning,
+          },
           { apiKey: settings.anthropicApiKey ?? "", model: env.CLAUDE_METADATA_MODEL, signal: ctx.signal, fetch: ctx.deps.fetch },
         );
       } catch (error) {
@@ -131,7 +160,8 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
     await setPhase(post, "uploading");
     try {
       // markUploaded trips the private lock itself when YouTube returns another privacy.
-      await markUploaded(post, await upload(metadata));
+      const video = await upload(metadata);
+      if ((await markUploaded(post, video)) && account.addToPlaylist) await addToTaskPlaylist(ctx, account, task, post, video.id);
       return DONE;
     } catch (error) {
       if (ctx.stopReason) throw error;
@@ -160,7 +190,14 @@ export async function publishYoutube(ctx: JobContext): Promise<JobOutcome> {
  * A failed start is never retried here (each try would spend an insert call): it goes to the error
  * table, except that a 401 refreshes the token once per job.
  */
-function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccountDoc, storageKey: string, size: number) {
+function uploader(
+  ctx: JobContext,
+  post: YoutubePostDoc,
+  account: YoutubeAccountDoc,
+  storageKey: string,
+  size: number,
+  fullVideoUrl: string | undefined,
+) {
   const fetchImpl = ctx.deps.fetch ?? fetch;
   const current = post.upload?.storageKey === storageKey && post.upload.size === size;
   let session = current ? post.upload?.sessionUri : undefined;
@@ -177,7 +214,7 @@ function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccount
       ctx.throwIfStopped();
       if (!(await takeInsertCall(post))) throw new PostFailed(INSERT_CAP_REACHED, "insertCap");
       try {
-        return await startUploadSession(token, insertBody(post, metadata), size, post.notifySubscribers, fetchImpl);
+        return await startUploadSession(token, insertBody(post, metadata, fullVideoUrl), size, post.notifySubscribers, fetchImpl);
       } catch (error) {
         // An explicit limit refused the start: nothing exists to duplicate, so the call is not counted.
         const refused = classify(error);
@@ -224,12 +261,39 @@ function uploader(ctx: JobContext, post: YoutubePostDoc, account: YoutubeAccount
   };
 }
 
+/**
+ * Add the uploaded Short to its task's playlist, creating the playlist (named after the source
+ * video) with the first one. Best effort: the video is already posted, so a failure is only logged.
+ */
+async function addToTaskPlaylist(ctx: JobContext, account: YoutubeAccountDoc, task: TaskDoc, post: YoutubePostDoc, videoId: string) {
+  if (!account.scopes.includes(PLAYLIST_SCOPE)) return; // Settings asks for a reconnect first.
+  const fetchImpl = ctx.deps.fetch ?? fetch;
+  try {
+    const token = await getAccessToken(account, fetchImpl);
+    let playlistId = (await collections().tasks.findOne({ _id: task._id }, { projection: { youtubePlaylistId: 1 } }))?.youtubePlaylistId;
+    if (!playlistId) {
+      // ponytail: two uploads of one task finishing at once (only with WORKER_CONCURRENCY > 1) may each
+      // create a playlist; the CAS keeps one and the other stays empty. A per-task lock would close it.
+      const created = await createPlaylist(
+        token,
+        { title: task.source.title.slice(0, PLAYLIST_TITLE_MAX), description: "Shorts from this video.", privacy: post.privacy },
+        fetchImpl,
+      );
+      await collections().tasks.updateOne({ _id: task._id, youtubePlaylistId: { $exists: false } }, { $set: { youtubePlaylistId: created } });
+      playlistId = (await collections().tasks.findOne({ _id: task._id }, { projection: { youtubePlaylistId: 1 } }))?.youtubePlaylistId ?? created;
+    }
+    await addPlaylistItem(token, playlistId, videoId, fetchImpl);
+  } catch (error) {
+    console.warn(`[youtube] Post ${post._id}: could not add the video to the playlist: ${errorMessage(error)}`);
+  }
+}
+
 /** Exactly the §4.5 request: Claude's text with the hashtags at the end, nothing fixed beyond category 22. */
-function insertBody(post: YoutubePostDoc, metadata: YoutubeMetadata): VideoInsertBody {
+function insertBody(post: YoutubePostDoc, metadata: YoutubeMetadata, fullVideoUrl?: string): VideoInsertBody {
   return {
     snippet: {
       title: metadata.title,
-      description: youtubeDescription(metadata),
+      description: youtubeDescription(metadata, fullVideoUrl),
       tags: metadata.tags,
       categoryId: "22",
       ...(metadata.language !== undefined && { defaultLanguage: metadata.language, defaultAudioLanguage: metadata.language }),
@@ -258,10 +322,11 @@ async function settleUploadError(post: YoutubePostDoc, account: YoutubeAccountDo
       return deferAllQueuedForQuota(until);
     }
     case "channel_limit": {
-      // The limit belongs to the channel: hold its other queued posts so none spends a refused call.
-      const until = later(6 * 60 * MINUTE);
-      await deferPost(post, "channel_limit", until, say("The channel reached YouTube's upload limit"));
-      return deferAllQueuedForChannel(post.userId, post.channelId, until);
+      // The limit belongs to the channel: hold it and its queued posts for CHANNEL_LIMIT_HOLD_MS, with no
+      // automatic retry. The user posts them again ("Post" / "Post all") once the hold ends.
+      const until = later(CHANNEL_LIMIT_HOLD_MS);
+      await holdPostForChannelLimit(post, until, say(CHANNEL_LIMIT_REACHED));
+      return holdChannelForLimit(post.userId, post.channelId, until);
     }
     case "transient":
       return retryLater(post, say("YouTube could not be reached"), code);

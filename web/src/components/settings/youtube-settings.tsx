@@ -34,6 +34,10 @@ type YoutubeAccount = {
   auto_post: boolean;
   privacy: "public" | "unlisted" | "private";
   made_for_kids: boolean;
+  add_to_playlist: boolean;
+  link_full_video: boolean;
+  /** False: the connection predates playlists, so turning them on needs a reconnect. */
+  playlist_access: boolean;
 };
 
 const ERROR_CODES = ["denied", "expired", "missing_scope", "no_channel", "exchange_failed", "not_configured"] as const;
@@ -62,10 +66,15 @@ export function YoutubeSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectedParam]);
 
-  const connect = async () => {
+  /** `playlists` also asks Google for permission to manage playlists. */
+  const connect = async (playlists = false) => {
     setConnecting(true);
     try {
-      const response = await fetch("/api/youtube/connect", { method: "POST" });
+      const response = await fetch("/api/youtube/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlists: playlists || account?.add_to_playlist === true }),
+      });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.authorize_url) throw new Error();
       window.location.href = data.authorize_url;
@@ -104,7 +113,9 @@ export function YoutubeSettings() {
     }
   };
 
-  const updatePrefs = async (body: Partial<Pick<YoutubeAccount, "auto_post" | "privacy" | "made_for_kids">>) => {
+  const updatePrefs = async (
+    body: Partial<Pick<YoutubeAccount, "auto_post" | "privacy" | "made_for_kids" | "add_to_playlist" | "link_full_video">>,
+  ) => {
     if (!account) return;
     const previous = account;
     setAccount({ ...account, ...body });
@@ -213,6 +224,31 @@ export function YoutubeSettings() {
                   <SelectItem value="yes">{t("madeForKidsYes")}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="youtube-playlist" className="text-sm">{t("playlistLabel")}</Label>
+                <p className="text-xs text-muted-foreground">{t("playlistHint")}</p>
+              </div>
+              <Switch id="youtube-playlist" checked={account.add_to_playlist} onCheckedChange={(checked) => void updatePrefs({ add_to_playlist: checked })} />
+            </div>
+            {account.add_to_playlist && !account.playlist_access && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                <span className="flex items-center gap-2"><TriangleAlert className="size-4 shrink-0" />{t("playlistNeedsAccess")}</span>
+                <Button type="button" size="sm" variant="outline" onClick={() => void connect(true)} disabled={connecting}>
+                  {connecting ? t("connecting") : t("allowPlaylists")}
+                </Button>
+              </div>
+            )}
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="youtube-full-video" className="text-sm">{t("fullVideoLabel")}</Label>
+                <p className="text-xs text-muted-foreground">{t("fullVideoHint")}</p>
+              </div>
+              <Switch id="youtube-full-video" checked={account.link_full_video} onCheckedChange={(checked) => void updatePrefs({ link_full_video: checked })} />
             </div>
           </div>
 

@@ -25,6 +25,8 @@ const RESUME_AUTOPOST_DELAY_MS = 2 * MINUTE_MS;
 const VERIFY_MIN_AGE_MS = 10 * MINUTE_MS;
 const VERIFY_MAX_AGE_MS = 48 * 60 * MINUTE_MS;
 const FINAL_UPLOAD_STATUSES = new Set(["processed", "rejected", "failed", "deleted"]);
+/** How stale a posted video's view/like/comment counts may get. One quota unit per 50 videos per refresh. */
+const STATS_REFRESH_MS = 60 * MINUTE_MS;
 
 /** Succeeded exports past `expiresAt` lose their file and become failed (the doc stays 7 more days). */
 export async function expireExports(now = new Date()) {
@@ -178,15 +180,8 @@ export async function verifyUploads(now = new Date(), fetchImpl: typeof fetch = 
     .toArray();
   if (!due.length) return 0;
 
-  const byUser = new Map<string, YoutubePostDoc[]>();
-  for (const post of due) {
-    const posts = byUser.get(post.userId);
-    if (posts) posts.push(post);
-    else byUser.set(post.userId, [post]);
-  }
-
   let verified = 0;
-  for (const [userId, posts] of byUser) {
+  for (const [userId, posts] of groupByUser(due)) {
     try {
       verified += await verifyUserUploads(userId, posts, fetchImpl);
     } catch (error) {
@@ -247,6 +242,51 @@ async function verifyUserUploads(userId: string, posts: YoutubePostDoc[], fetchI
   return verified;
 }
 
+function groupByUser(posts: YoutubePostDoc[]) {
+  const byUser = new Map<string, YoutubePostDoc[]>();
+  for (const post of posts) {
+    const list = byUser.get(post.userId);
+    if (list) list.push(post);
+    else byUser.set(post.userId, [post]);
+  }
+  return byUser;
+}
+
+/**
+ * Refresh the public view/like/comment counts of posted videos whose counts are older than
+ * STATS_REFRESH_MS, one `videos.list` call per user per 50 videos.
+ */
+// ponytail: refreshes every posted video forever; cap by uploadedAt age if channels grow to thousands of posts.
+export async function refreshVideoStats(now = new Date(), fetchImpl: typeof fetch = fetch): Promise<number> {
+  const due = await collections()
+    .youtubePosts.find({
+      state: "uploaded",
+      videoId: { $exists: true },
+      uploadStatus: { $ne: "deleted" },
+      $or: [{ stats: { $exists: false } }, { "stats.at": { $lte: new Date(now.getTime() - STATS_REFRESH_MS) } }],
+    })
+    .toArray();
+  let refreshed = 0;
+  for (const [userId, posts] of groupByUser(due)) {
+    try {
+      const account = await getAccount(userId);
+      if (!account || account.status === "reauth_required") continue;
+      const matching = posts.filter((post) => post.channelId === account.channelId);
+      if (!matching.length) continue;
+      const statuses = await listVideoStatus(await getAccessToken(account, fetchImpl), matching.map((post) => post.videoId!), fetchImpl);
+      for (const post of matching) {
+        const stats = statuses.get(post.videoId!)?.stats;
+        if (!stats) continue;
+        await collections().youtubePosts.updateOne({ _id: post._id }, { $set: { stats: { ...stats, at: now } } });
+        refreshed++;
+      }
+    } catch (error) {
+      console.error(`[cron] refreshing YouTube stats for user ${userId} failed: ${(error as Error).message}`);
+    }
+  }
+  return refreshed;
+}
+
 export async function runCron(now = new Date()) {
   for (const [name, step] of [
     ["expire exports", expireExports],
@@ -258,6 +298,7 @@ export async function runCron(now = new Date()) {
     ["dispatch due YouTube posts", dispatchDuePosts],
     ["resume pending YouTube autopost", resumePendingAutopost],
     ["verify YouTube uploads", verifyUploads],
+    ["refresh YouTube stats", refreshVideoStats],
   ] as const) {
     try {
       await step(now);

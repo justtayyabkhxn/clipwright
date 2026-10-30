@@ -77,14 +77,17 @@ forth to pass. Until it does, you have two options:
 ## 3. How it behaves
 
 - **Trigger.** When a generation (`process_task`) finishes, Clipwright creates one post per clip
-  (skipping the fallback clip shown when Claude picked nothing) and starts uploading them in clip
-  order. This also applies to a resumed run that completes. Restyles, combined clips and editor
+  (skipping the fallback clip shown when Claude picked nothing) and uploads them in clip order,
+  10 minutes apart, so they don't all go live at once. The gap holds across generations, retries
+  and resumes too; a waiting clip's chip says when it uploads. This also applies to a resumed run that completes. Restyles, combined clips and editor
   exports never post, and a clip not yet uploaded goes out in its latest restyled look.
-- **Metadata.** For each clip, Claude (`CLAUDE_METADATA_MODEL`, default `claude-sonnet-5`) writes a
+- **Metadata.** For each clip, Claude (`CLAUDE_METADATA_MODEL`, default `claude-haiku-4-5`) writes a
   title, description, 5–15 tags and 3–5 hashtags from the clip's own transcript — no invented
   facts, no links, no `#Shorts`, and the hashtags go at the end of the description rather than in
   the title. A title with a link, a hashtag or a line break goes back to Claude to be rewritten.
   If Claude is unavailable, the clip waits and retries; nothing is ever posted with fallback text.
+  Claude also sees the whole video's summary and topics and its own note on why the clip works,
+  saved from clip selection, so titles and tags fit the clip's context.
 - **Upload.** Each clip is uploaded as a public (or your chosen visibility) YouTube video,
   category "People & Blogs", with the made-for-kids answer you set in Settings. Uploads use
   YouTube's resumable protocol, so a dropped connection or worker restart resumes instead of
@@ -100,13 +103,28 @@ forth to pass. Until it does, you have two options:
   next scheduled try (a clip held for the daily quota shows it in its chip), and a posted one when
   it uploaded. The page refreshes on its own while clips are moving or auto-post is on, and keeps
   your history after you disconnect the channel. The next try is when Clipwright will try again, not
-  when YouTube's limit lifts: for the channel limit that time is not published.
+  when YouTube's limit lifts.
+- **Playlists and links (Settings, both off by default).** *Add Shorts to a playlist* puts each
+  generation's Shorts into a playlist named after the source video, created with the first one.
+  It needs one more Google permission (managing playlists); Settings shows **Allow playlists** to
+  grant it. *Link to the full video* ends each description with "Full video:" and the source link
+  (YouTube sources only). A playlist that can't be updated never fails the post; it is only logged.
+- **What performs.** The YouTube page shows total views, likes and comments (refreshed hourly), and
+  average views per clip by hook type, clip length, caption style, time posted and Claude's
+  virality score. A group shows once it has 3 posted clips.
+- **Learning from your channel.** Once 10 of your posted clips have view counts, clip selection
+  also sees a short note on what performs on your channel: median views, averages by hook type
+  and length, and your top 5 clips' opening words. Claude treats it as a soft preference, never
+  over a clip that stands on its own better.
 - **Quota.** `videos.insert` has its own 100-call/day bucket per Google Cloud project, reset at
   midnight Pacific. A generation makes at most `MAX_CLIPS` clips, so this allows about 10
-  generations a day. When the quota is used up, every waiting clip is held until the reset; when a
-  channel hits YouTube's own (separate, unpublished) daily upload limit, every clip waiting for
-  that channel is held for 6 hours. An upload YouTube refuses for either limit does not count
-  toward the clip's upload attempts.
+  generations a day. When the quota is used up, every waiting clip is held until the reset. An
+  upload YouTube refuses for either limit below does not count toward the clip's upload attempts.
+- **Channel upload limit.** When your channel hits YouTube's own (separate, unpublished) daily upload
+  limit, Clipwright does **not** retry on its own. That clip, every clip waiting for the channel, and
+  clips from generations that finish meanwhile are held for 12 hours. Each held clip then shows a
+  **Post** button, and the YouTube page a **Post all** button; both stay disabled until the 12 hours
+  are over. Posting them still goes 10 minutes apart. A reconnect does not release the hold.
 - **Failures and retries.** A network error, rate limit or Google 5xx waits 1, then 5, then 15
   minutes before trying again; after that the post fails and shows "Try again". A reconnect-only
   error (an expired or revoked grant, a missing channel) blocks the post with "Reconnect YouTube to
@@ -122,8 +140,8 @@ forth to pass. Until it does, you have two options:
   task delete refused that way still cancels the task's other clips that have not uploaded, waiting or failed
   (they then show no chip). Connecting a different channel cancels clips still waiting for the old one ("Not posted",
   with the reason "A different channel was connected."); they are not redirected to the new channel.
-- **What's not included (v1).** No review step before posting. No scheduling. One channel per
-  user. No TikTok/Instagram. No thumbnails, playlists or view/like metrics. Tasks completed before
+- **What's not included (v1).** No review step before posting. No posting schedule beyond the
+  10-minute gap. One channel per user. No TikTok/Instagram. No thumbnails. Tasks completed before
   you connected YouTube are never backfilled.
 
 ## 4. Troubleshooting
@@ -148,7 +166,7 @@ forth to pass. Until it does, you have two options:
 | "Waiting to retry the upload" + reason | A network error, a rate limit, a Google 5xx or Claude being unavailable; it tries again after 1, then 5, then 15 minutes (2 minutes when the worker stopped mid-upload). The line under it names the error. | Nothing to do; if the last try fails too, it shows "Failed" with "Try again". |
 | "Waiting for the new style to finish" | A restyle of this task is running; the clip uploads in its new look once it finishes. | Nothing to do. |
 | "Waiting for YouTube's daily limit (until …)" | The project's 100/day `videos.insert` quota is used up; every waiting clip is held until just after midnight Pacific. | Wait; it resumes automatically at the time shown. |
-| "Waiting for YouTube's channel upload limit" | The channel hit YouTube's own (unpublished) daily upload limit; every clip waiting for that channel is held for about 6 hours. No time is shown. | Wait; it resumes automatically. |
+| "Channel upload limit reached" + "You can post it at …" | The channel hit YouTube's own (unpublished) daily upload limit; the channel's clips are held for 12 hours, with no automatic retry. | After the time shown, press **Post** on a clip or **Post all** on the YouTube page. |
 | "Posted ↗" | Uploaded; the link opens the video. | — |
 | "Private on YouTube" | YouTube returned a privacy other than the one you chose (at upload or on verification). | See [the audit section](#2-forced-private-uploads-and-the-audit). |
 | "Flagged by YouTube ↗" + reason | YouTube rejected or failed the video after processing; the line under it names the reason (for example a duplicate upload), or says "YouTube made this video private" when the video was also forced private. | Open the video in YouTube Studio. Clipwright never re-posts an uploaded clip. |

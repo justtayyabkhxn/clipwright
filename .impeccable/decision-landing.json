@@ -1,0 +1,132 @@
+{
+  "title": "Choose the landing page's world",
+  "question": "The roll landed on The Edit Bay. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "The Edit Bay",
+      "kicker": "THE ROLL",
+      "lineage": "nonlinear editor timelines (Premiere, Resolve) at 2 a.m.",
+      "thesis": "The whole page is an edit timeline: scroll is the playhead, and you watch a long video get cut into Shorts and posted.",
+      "palette": ["#16171a", "#2a2c31", "#3b82f6", "#22c55e", "#e0579b", "#f4b740", "#ef4444"],
+      "materials": ["graphite panels", "track lanes", "audio waveforms", "timecode", "red playhead"],
+      "viewport": "A full-width timeline. Track V1 holds one long 16:9 source; as the playhead moves, razor cuts lift 9:16 clips onto track V2 with burned captions, and a POST track drops markers 10:00 apart. Headline and Sign up sit in the program-monitor panel above.",
+      "risk": "Needs real motion craft; a static picture of a timeline reads as a screenshot.",
+      "raised": [
+        { "from": "challenger-chromatophore", "raise": "Clip states (queued, uploading, posted, flagged) are painted onto the clips on the track, never shown as separate badges." },
+        { "from": "challenger-versailles", "raise": "Post markers wake one after another in a timed sequence, so the 10-minute gap is something you see, not something you read." },
+        { "from": "challenger-blackbook", "raise": "Every heavy section has a fast version beside it: the three-command quick start next to the full setup." },
+        { "from": "challenger-shader", "raise": "The playhead is a real scroll-driven instrument, built once and committed to, not a decorative picture." }
+      ],
+      "comp": ".impeccable/mocks/decision/assigned.webp"
+    },
+    {
+      "id": "model-pick",
+      "label": "The Cutting Room",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "film editors' cutting rooms, contact sheets and grease pencil",
+      "thesis": "A strip of celluloid gets sliced into vertical frames, marked up in grease pencil and taped to a contact sheet.",
+      "palette": ["#121110", "#e9e2d2", "#d9381e", "#f2c230", "#5b6b73"],
+      "materials": ["film strip with edge codes", "grease pencil", "splice tape", "light table"],
+      "viewport": "A 16:9 film strip runs across a light table; a grease-pencil box frames a 9:16 window on it, and the headline is hand-marked beside the cut.",
+      "risk": "Celluloid nostalgia can read as a film school site rather than a dev tool.",
+      "comp": ".impeccable/mocks/decision/model-pick.webp"
+    },
+    {
+      "id": "challenger-swiss",
+      "label": "Swiss Poster Wall",
+      "verdict": "competitive",
+      "lineage": "International Style concert-poster series",
+      "thesis": "Each pipeline step is one poster on a single strict grid; the wall reads as one calm machine.",
+      "palette": ["#f4f3ef", "#111111", "#e3251b"],
+      "materials": ["grotesk ink", "geometric bars and arcs", "one master grid"],
+      "viewport": "Five posters in a row (Download, Transcribe, Pick, Render, Post), each with one geometric motif and a giant step number.",
+      "case": "Holds product clarity well; developers identify with it less than with an editor or a terminal.",
+      "risk": "Cool and correct can read as a design agency, not a tool.",
+      "comp": ".impeccable/mocks/decision/challenger-swiss.webp",
+      "hero": "https://impeccable.style/worlds/cards/design-canon-swiss-grid-poster-wall-hero.webp"
+    },
+    {
+      "id": "challenger-terminal",
+      "label": "Phosphor Terminal",
+      "verdict": "competitive",
+      "lineage": "green-phosphor terminals, live logs",
+      "thesis": "The page is the worker's own log: the real progress messages scroll by as a video becomes posted Shorts.",
+      "palette": ["#06110a", "#33ff66", "#1d7a3a", "#ffb000"],
+      "materials": ["monospace bitmap type", "scanlines", "afterimage trails"],
+      "viewport": "A full-screen transcript: $ pnpm dev, then Downloading video..., Creating clip 3/8..., Posted clip 1 at 16:40.",
+      "case": "Developers know it by heart; showing vertical video output inside a terminal is weaker on clarity.",
+      "risk": "Terminal pages are common on dev-tool sites, so it can look familiar.",
+      "comp": ".impeccable/mocks/decision/challenger-terminal.webp",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight-hero.webp"
+    },
+    {
+      "id": "challenger-chromatophore",
+      "label": "Living Skin",
+      "verdict": "declined",
+      "lineage": "cephalopod chromatophore displays",
+      "thesis": "The surface changes pattern to signal state.",
+      "palette": ["#efe6da", "#8a3b24", "#2bb3a8"],
+      "materials": ["pigment cells", "GPU texture"],
+      "viewport": "A living textile field behind the headline.",
+      "case": "Fuses poorly: nothing about it says video, Shorts or setup.",
+      "risk": "Pure atmosphere; the offer disappears.",
+      "kept": "State drawn directly on the object.",
+      "hero": "https://impeccable.style/worlds/cards/reefs-bioluminescent-nocturnal-chromatophore-skin-language-hero.webp"
+    },
+    {
+      "id": "challenger-versailles",
+      "label": "Versailles Vistas",
+      "verdict": "declined",
+      "lineage": "Versailles axial gardens and fountains",
+      "thesis": "Choreographed reveals along one axis.",
+      "palette": ["#3f5a35", "#d8c9a8", "#b8913a"],
+      "materials": ["parterres", "gilt", "fountain spray"],
+      "viewport": "An axial vista down the page.",
+      "case": "Fuses poorly: grandeur fights a developer tool.",
+      "risk": "Reads as a luxury brand.",
+      "kept": "Fountains waking in timed sequence.",
+      "hero": "https://impeccable.style/worlds/cards/architecture-inhabitable-space-versailles-bosquet-vistas-hero.webp"
+    },
+    {
+      "id": "challenger-blackbook",
+      "label": "Wildstyle Blackbook",
+      "verdict": "declined",
+      "lineage": "graffiti writers' blackbooks",
+      "thesis": "Interlocked letterforms with a fast throw-up aside.",
+      "palette": ["#efe6d2", "#111111", "#ff3d7f", "#2fd1ff"],
+      "materials": ["marker", "keylines"],
+      "viewport": "The name as an interlocked piece.",
+      "case": "Fuses poorly: setup steps need legibility above all.",
+      "risk": "Unreadable by design.",
+      "kept": "A fast version beside the full one.",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-wildstyle-blackbook-page-hero.webp"
+    },
+    {
+      "id": "challenger-shader",
+      "label": "Shader Portal",
+      "verdict": "declined",
+      "lineage": "experiential studio WebGL sites",
+      "thesis": "A living shader field with thin type over it.",
+      "palette": ["#0b0b1e", "#7c5cff", "#f5f5f5"],
+      "materials": ["fragment shader", "film grain"],
+      "viewport": "One hero word over moving pixels.",
+      "case": "Fuses poorly: says nothing specific about clipping or posting.",
+      "risk": "Interchangeable with any studio site.",
+      "kept": "Total commitment to one real technique.",
+      "hero": "https://impeccable.style/worlds/cards/webgl-shader-portal-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code", "toggle": false },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A classic open-source dev-tool landing page, executed impeccably.",
+    "palette": ["#0b0d10", "#f5f6f7", "#e5603b"],
+    "materials": ["product screenshot", "feature grid", "code block"],
+    "viewport": "Headline, GitHub and Sign up buttons, a big app screenshot, then features and a copyable quick start.",
+    "risk": "Indistinguishable from every other open-source tool by design."
+  },
+  "steer": true
+}
