@@ -1,4 +1,4 @@
-# Completeness critique of the SupoClip → Clipwright port maps
+# Completeness critique of the original app → Clipwright port maps
 
 The maps are mostly accurate. The gaps below are what would be lost or break if the port were built from them as written. I checked every item against the code, and ran tests on this machine where noted. All test output went to the scratchpad; no project files were modified.
 
@@ -188,4 +188,4 @@ The maps are mostly accurate. The gaps below are what would be lost or break if 
 7. **yt-dlp JS runtime.** Install deno, or switch yt-dlp to Node?
 8. **Existing data.** Do existing Postgres users or tasks need migrating, or is this a fresh start?
 
-Scratchpad test files (synthetic only) are in `C:\Users\wefor\AppData\Local\Temp\claude\C--other-projects-supoclip\4ac2f41d-0bf2-456a-819d-126608c4e66c\scratchpad\`: `shim\fcntl.py`, `src.mp4`, `out_clip.mp4`, `strip.png`, `t.ass`.
+Scratchpad test files (synthetic only) are in `C:\Users\wefor\AppData\Local\Temp\claude\C--other-projects-original-app\4ac2f41d-0bf2-456a-819d-126608c4e66c\scratchpad\`: `shim\fcntl.py`, `src.mp4`, `out_clip.mp4`, `strip.png`, `t.ass`.

@@ -1,6 +1,6 @@
 # Python media pipeline map and render-engine CLI boundary
 
-All paths are relative to `C:\other-projects\supoclip\backend\src\`. Line numbers were checked against the current files.
+All paths are relative to `C:\other-projects\original-app\backend\src\`. Line numbers were checked against the current files.
 
 **Headline findings**
 - **The engine will not import on Windows as-is.** `import fcntl` sits at module top in `media/source_limits.py:15`, `youtube_source.py:11`, `media_storage.py:13` and `editor_document.py:12`. `video_utils` imports `media.source_limits`, so the whole render stack fails at import.
@@ -74,7 +74,7 @@ All paths are relative to `C:\other-projects\supoclip\backend\src\`. Line number
    - If `keep_ranges` or `source_ranges` were provided (regeneration), the snap, teaser and text rewrite are skipped. `source_ranges` get cleanup re-applied; `keep_ranges` are used verbatim.
 4. **`create_optimized_clip`** (`video_utils.py:257-460`):
    1. Fast stream-copy path (`:315-345`). It requires `extend_to_sentence=True`, but every pipeline caller passes `False` (`video_service.py:554`, `video_utils.py:561`, `clip_service.py:576`, `editor_service.py:434`), so it is **never hit** in practice.
-   2. `tempfile.TemporaryDirectory("supoclip_render_")` → `render_source_ranges_ffmpeg` (`media/ffmpeg.py:492-591`) writes `source.mp4`, an intermediate (x264 veryfast, CRF 16, AAC 192k) on the dialogue audio track (`select_audio_stream_index :91-139`):
+   2. `tempfile.TemporaryDirectory("original-app_render_")` → `render_source_ranges_ffmpeg` (`media/ffmpeg.py:492-591`) writes `source.mp4`, an intermediate (x264 veryfast, CRF 16, AAC 192k) on the dialogue audio track (`select_audio_stream_index :91-139`):
       - **1 range:** `-ss` + `-t`.
       - **2-8 ranges, each ≥0.45 s and monotonic:** `xfade`/`acrossfade` cross-fades of ≤0.15 s (`crossfade_fade_for_ranges :379-396`, `render_ranges_crossfade_ffmpeg :399-466`).
       - **Otherwise:** trim/concat. It pre-seeks to the first range (`_input_window_for_ranges :469-489`).

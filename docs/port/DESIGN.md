@@ -1,9 +1,10 @@
 # Clipwright — architecture and contracts
 
 Clipwright is a re-platform of an earlier Python clipping app. **Every
-implementation agent builds against this document.** For behaviour details it does
-not restate (prompts, algorithms, validation rules), the original code in git history (commit
-`29dc44b`) is the spec.
+implementation agent builds against this document.** If something here contradicts the
+`map-*.md` files, this document wins. For behaviour details it does not restate (prompts,
+algorithms, validation rules), the map files and the original code in git history (commit
+`29dc44b`) are the spec.
 
 ## 0. Product decisions (fixed)
 
@@ -270,7 +271,7 @@ Indexes: `{lineageId:1}` unique, `{taskId:1}`, `{userId:1, createdAt:-1}` (for `
 ## 6. Jobs and the worker
 
 ### 6.1 Queue primitives (`jobs.ts`)
-The pattern: lease 60 s, heartbeat every 15 s (and on every progress update, throttled to 1/s), reaper on every poll (requeue when attempts < maxAttempts, otherwise fail it and run the job type's failure hook), claim with `findOneAndUpdate` sorted by `runAt`, and finish guarded by `lockedBy`. `maxAttempts`: process/restyle 2, prepare 2, exports 1, combine 1, `publish_youtube` 3. An E11000 on `activeKey` means "already queued or running".
+Implement exactly the pattern in `map-data.md` §7.5: lease 60 s, heartbeat every 15 s (and on every progress update, throttled to 1/s), reaper on every poll (requeue when attempts < maxAttempts, otherwise fail it and run the job type's failure hook), claim with `findOneAndUpdate` sorted by `runAt`, and finish guarded by `lockedBy`. `maxAttempts`: process/restyle 2, prepare 2, exports 1, combine 1, `publish_youtube` 3. An E11000 on `activeKey` means "already queued or running".
 
 Enqueue routes call `workerHealthy()` and **every enqueue response carries `worker_online: boolean`**: create, resume, settings with `apply_to_existing`, editor prepare, editor export, combine and preset export. If no heartbeat, the job is still inserted, but the response includes `worker_online: false`, and the UI shows "The Clipwright worker isn't running. Start it with `pnpm dev` (or `pnpm worker`)." Queued jobs then wait until the worker starts.
 
@@ -284,7 +285,7 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 
 ### 6.2 Job handlers (`web/src/worker/handlers/*.ts`)
 
-**`process_task`** (port of `TaskService.process_task` + `VideoService.process_video_complete`). The progress messages are a UI contract and must be exact:
+**`process_task`** (port of `TaskService.process_task` + `VideoService.process_video_complete`; see `map-task-api.md` §4 and `map-pipeline.md` §A1). The progress messages are a UI contract and must be exact:
 1. CAS task `queued|processing` → `processing`, progress 0, "Starting...", `run = {jobId, startedAt}`. If the CAS misses: finish the job as cancelled.
 2. Load runtime settings. A missing Anthropic or AssemblyAI key → task error "Add your Anthropic API key in Settings → AI before generating clips." or "Add your AssemblyAI API key in Settings → AI before generating clips."
 3. Check the cache (section 5).
@@ -313,7 +314,7 @@ Enqueue routes call `workerHealthy()` and **every enqueue response carries `work
 - The task returns to `completed`, 100, "Complete!".
 - If nothing rendered: status `completed`, message "Restyle failed. Your existing clips are unchanged.", and the job fails with that message. The UI shows `progressMessage` as an error toast when it sees that string.
 
-**`prepare_editor`** / **`export_editor`** / **`combine_editor`**: ports of `editor_service.prepare_editor`, `export_editor` and `combine_editor`. Engine commands `editor-prepare`, `editor-render`, `editor-combine`.
+**`prepare_editor`** / **`export_editor`** / **`combine_editor`**: ports of `editor_service.prepare_editor`, `export_editor` and `combine_editor`, per `map-editor.md` §2.1, §5.2, §5.3 and §7.1. Engine commands `editor-prepare`, `editor-render`, `editor-combine`.
 - Prepare writes `clean.mp4` and `thumbnails.jpg` to `editor/{clipId}/{basisHash}/`, then `completePrepare` (it never overwrites an existing draft with the same basis; it seeds revision 0 + original).
 - Export writes `editor-exports/{jobId}.mp4`; job `result {fileKey}`.
 - Combine:
@@ -400,10 +401,10 @@ The engine never touches MongoDB, never makes LLM calls, and never reads env var
 
 ## 8. Claude clip selection (`web/src/server/ai`)
 
-A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropic providers.
+A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropic providers. Spec: `map-ai.md`.
 
 - **`selectClips({transcript, clipSignals, channelNotes, clipLength, apiKey, model, rerankModel, maxClips, signal}) → {segments: Segment[], summary, keyTopics}`**
-  - The algorithm: windowing, concurrency 3, per-window 600 s and total 1800 s budgets, validation/snap/repair/grounding, dedupe, rerank (multi-window only, 240 s, never throws), and the final count formula.
+  - The algorithm matches §6-§7 of `map-ai.md` exactly: windowing, concurrency 3, per-window 600 s and total 1800 s budgets, validation/snap/repair/grounding, dedupe, rerank (multi-window only, 240 s, never throws), and the final count formula.
 - **Prompts** are copied verbatim (minus the performance section).
 - **Request shape:**
   - `client.messages.create({ model, max_tokens: 16000, system, messages: [{role:"user", content: prompt}], output_config: {format: {type:"json_schema", schema}} })`, using JSON schemas equivalent to the pydantic models (`additionalProperties: false`; required only where pydantic requires; no numeric min/max in the schema).
@@ -418,7 +419,7 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 
 ## 9. API routes (all in `web/src/app/api`, `runtime = "nodejs"`, `dynamic = "force-dynamic"`)
 
-**Response shapes stay identical to the original app's**, so the client code barely changes. Errors are `{detail}`. Auth is the Better Auth session; tasks are owner-only.
+**Response shapes stay identical to the original app's** (`map-frontend.md` §2, `map-task-api.md` §3, `map-editor.md` §8), so the client code barely changes. Errors are `{detail}`. Auth is the Better Auth session; tasks are owner-only.
 
 | Route | Notes |
 |---|---|
@@ -430,10 +431,10 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `GET /api/tasks/[id]/clips` | `{task_id, clips, total_clips}`. Clip shape per the critique §3 list; `video_url` = `/api/tasks/{id}/clips/{clipId}/file` |
 | `DELETE /api/tasks/[id]/clips/[clipId]` | Same lock rule; cancels the lineage's YouTube post first (409 "This clip is uploading to YouTube. Try again in a minute." while it is `working`; a delete then refused puts the post back as it was); deletes the file and the draft |
 | `GET /api/tasks/[id]/clips/[clipId]/file` | `?download=true` → attachment. Range support |
-| `POST /api/tasks/[id]/cancel`, `POST /api/tasks/[id]/resume` | Cancel of a pipeline run → `cancelled` "Cancelled by user"; cancel of a restyle (the run's job type is `restyle_task`) → `completed` with the old clips and `previousSettings` (§6.2 rollback), then flags the job. Resume re-enqueues `process_task` (409 if the activeKey is taken by a running job) and returns `{message, job_id, worker_online}` |
+| `POST /api/tasks/[id]/cancel`, `POST /api/tasks/[id]/resume` | Semantics per `map-task-api.md` §3. Cancel of a pipeline run → `cancelled` "Cancelled by user"; cancel of a restyle (the run's job type is `restyle_task`) → `completed` with the old clips and `previousSettings` (§6.2 rollback), then flags the job. Resume re-enqueues `process_task` (409 if the activeKey is taken by a running job) and returns `{message, job_id, worker_online}` |
 | `POST /api/tasks/[id]/settings` | Normalise, save `settings`. With `apply_to_existing`, set processing and enqueue `restyle_task` with `{cleanupChanged, previousSettings}`. Returns `{task, message}`, plus `worker_online` when a restyle was enqueued |
 | `POST /api/tasks/[id]/clips/[clipId]/exports`, `GET .../exports/[exportId]`, `GET .../exports/[exportId]/file` | `export_clip` jobs. Idempotent per `liveKey = {clipId}:{sha256({preset, filename})}` |
-| `GET`/`PATCH /api/tasks/[id]/clips/[clipId]/editor`, `POST .../editor/prepare`, `GET .../editor/media/[asset]` (clean.mp4 \| thumbnails.jpg, Range), `POST .../editor/exports`, `GET`/`DELETE .../editor/exports/[jobId]`, `GET .../editor/exports/[jobId]/file`, `POST /api/tasks/[id]/editor/combine` | Editor draft, prepare, export and combine routes |
+| `GET`/`PATCH /api/tasks/[id]/clips/[clipId]/editor`, `POST .../editor/prepare`, `GET .../editor/media/[asset]` (clean.mp4 \| thumbnails.jpg, Range), `POST .../editor/exports`, `GET`/`DELETE .../editor/exports/[jobId]`, `GET .../editor/exports/[jobId]/file`, `POST /api/tasks/[id]/editor/combine` | Per `map-editor.md` §8 |
 | `GET /api/fonts`, `GET`/`DELETE /api/fonts/[fontName]`, `POST /api/fonts/upload` | Bundled fonts plus the user's (`fonts/{userId}/`). Upload: multipart field `file`, .ttf/.otf, ≤10 MB, no paid gate |
 | `GET /api/caption-templates` | `{templates:[{id,name,description,animation,font_family,font_size,font_color,highlight_color}]}` |
 | `GET /api/ai/provider` | `{provider:"anthropic", model, configured, llm_configured, transcription_configured}`. `llm_configured` = Claude key present, `transcription_configured` = AssemblyAI key present, `configured` = both. Public, never a secret |
@@ -453,6 +454,7 @@ A port of `backend/src/ai.py` minus B-roll, performance context and non-Anthropi
 | `POST /api/tasks/[id]/youtube/[postId]/retry` | Retries a `failed`/`blocked` post (404 if gone, 409 if `uploaded` or still `queued`/`working`): resets the automatic retry count, raises the post's `insertCap` to `max(insertCap, insertCalls + 1)`, enqueues `publish_youtube`, returns `worker_online` |
 
 ## 10. Frontend changes
+- Follow `map-frontend.md` §3 to cut every dropped dependency.
 - Remove the EventSource from `use-task-progress.ts`; poll every 2 s while active.
 - `/` for a signed-out user shows the public landing page (`components/landing/landing.tsx`: what it does, setup, sign up / sign in).
 - Settings:

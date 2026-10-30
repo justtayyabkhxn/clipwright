@@ -1,4 +1,4 @@
-// export_editor: port of editor_service.export_editor. The route validated
+// export_editor: port of editor_service.export_editor (map-editor.md §5.2, §7.1). The route validated
 // the document against the draft; the engine renders it over the clip's clean.mp4.
 
 import path from "node:path";

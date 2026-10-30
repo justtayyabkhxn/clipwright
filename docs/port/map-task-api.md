@@ -1,6 +1,6 @@
-# Backend map: task lifecycle API and worker orchestration (SupoClip → Clipwright)
+# Backend map: task lifecycle API and worker orchestration (The original app → Clipwright)
 
-All paths are relative to `C:\other-projects\supoclip\backend\src\` unless they start with `frontend/`. Line numbers are from the files as they are now.
+All paths are relative to `C:\other-projects\original-app\backend\src\` unless they start with `frontend/`. Line numbers are from the files as they are now.
 
 ## 0. Findings that change the port plan
 
@@ -12,7 +12,7 @@ All paths are relative to `C:\other-projects\supoclip\backend\src\` unless they 
    - `GET .../export`
    
    This cannot run on Vercel, so the port has to turn them into worker jobs.
-4. **The frontend never calls trim, split, merge, captions or regenerate.** I grepped `frontend/src` and `mcp/`: the only client of the legacy `GET .../export` is the MCP server (`mcp/src/supoclip_mcp/server.py:701`). The editor (`/editor/*` routes) is what the UI actually uses for edits. The task page calls these routes:
+4. **The frontend never calls trim, split, merge, captions or regenerate.** I grepped `frontend/src` and `mcp/`: the only client of the legacy `GET .../export` is the MCP server (`mcp/src/original-app_mcp/server.py:701`). The editor (`/editor/*` routes) is what the UI actually uses for edits. The task page calls these routes:
    - `GET /tasks/{id}`, `GET /tasks/{id}/clips`, `PATCH /tasks/{id}`, `DELETE /tasks/{id}`
    - `DELETE .../clips/{cid}`, `POST /{id}/settings`
    - `POST/GET .../exports`, `POST/DELETE /share`, `/cancel`, `/resume`
@@ -34,12 +34,12 @@ The port replaces this whole layer with a Better Auth session lookup inside each
 
 1. **API key** (DROP): `Authorization: Bearer <key>` or `x-api-key`. The SHA-256 of the key is looked up through `ApiKeyRepository.resolve_user_id`. A bad key returns 401 "Invalid or revoked API key".
 2. **Signed headers** from the Next proxy (`auth_headers.py:57-84`):
-   - `x-supoclip-user-id`, `x-supoclip-ts` (unix seconds), `x-supoclip-signature`
+   - `x-original-app-user-id`, `x-original-app-ts` (unix seconds), `x-original-app-signature`
    - The signature is hex `HMAC-SHA256(BACKEND_AUTH_SECRET, "{user_id}:{ts}")`. The frontend signer is `frontend/src/lib/backend-auth.ts:12-27`.
    - The timestamp must be within `AUTH_SIGNATURE_TTL_SECONDS` (default 300, `config.py:160`).
    - 401 errors: "Signed authentication required", "Invalid auth timestamp", "Expired auth signature", "Invalid auth signature".
    - If the secret is missing while signed headers are present: 500 "Server authentication secret is not configured".
-3. **Unsigned fallback** (`auth_headers.py:93-110`): used when `ALLOW_UNSIGNED_BACKEND_AUTH=true` (default false). It reads `x-supoclip-user-id`, or returns 401 "User authentication required". If neither mode is configured: 503 "Server authentication is not configured".
+3. **Unsigned fallback** (`auth_headers.py:93-110`): used when `ALLOW_UNSIGNED_BACKEND_AUTH=true` (default false). It reads `x-original-app-user-id`, or returns 401 "User authentication required". If neither mode is configured: 503 "Server authentication is not configured".
 
 Ownership helpers in `tasks.py`:
 
@@ -303,7 +303,7 @@ The share feature is small:
 
 ### Queue setup (`workers/job_queue.py`, `workers/tasks.py:205-252`)
 
-- **Queue:** arq on Redis, queue name `supoclip_tasks` (`job_queue.py:14`). `supoclip_fast` is defined but has no worker. `enqueue_processing_job` ignores `processing_mode` and always uses the default queue (`job_queue.py:80-89`).
+- **Queue:** arq on Redis, queue name `original-app_tasks` (`job_queue.py:14`). `original-app_fast` is defined but has no worker. `enqueue_processing_job` ignores `processing_mode` and always uses the default queue (`job_queue.py:80-89`).
 - **Duplicates:** when arq returns `None` for an existing `_job_id`, the code raises `DuplicateJobError` (`job_queue.py:69-72`).
 - **WorkerSettings:**
   - `max_jobs = 4`, `job_timeout = 10800` s (3 h), `max_tries = 3`
@@ -447,7 +447,7 @@ Redis keys to replace:
 | `progress:{id}` | channel, plus a latest-snapshot string | 3600 s |
 | `task_cancel:{id}` | cancel flag | 3600 s |
 | `task_source:{id}` | legacy copy of the source metadata | 7 days (`tasks.py:278-281`) |
-| `arq:job:*`, `arq:in-progress:*`, queue zset `supoclip_tasks`, health key | arq internals | |
+| `arq:job:*`, `arq:in-progress:*`, queue zset `original-app_tasks`, health key | arq internals | |
 | `dead_letter:{id}`, `tasks:dead_letter` | dead letters | DROP |
 
 ---

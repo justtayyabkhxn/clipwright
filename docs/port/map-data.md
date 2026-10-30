@@ -1,6 +1,6 @@
-# Data model map: SupoClip (Postgres + Redis + files) → Clipwright (MongoDB)
+# Data model map: the original app (Postgres + Redis + files) → Clipwright (MongoDB)
 
-All facts below were checked in the code. Paths are relative to `C:\other-projects\supoclip`.
+All facts below were checked in the code. Paths are relative to `C:\other-projects\original-app`.
 
 ## 0. Where the schema is defined
 
@@ -250,7 +250,7 @@ Each is listed with its columns so nothing is lost silently.
 
 | Today | Where | Clipwright |
 |---|---|---|
-| ARQ queue `supoclip_tasks`; `max_tries=3`, `job_timeout=10800`, `max_jobs=4`; `export_clip_preset` `max_tries=1` | `workers/tasks.py:206-244`, `job_queue.py:110-185` | `jobs` collection (§7.5) |
+| ARQ queue `original-app_tasks`; `max_tries=3`, `job_timeout=10800`, `max_jobs=4`; `export_clip_preset` `max_tries=1` | `workers/tasks.py:206-244`, `job_queue.py:110-185` | `jobs` collection (§7.5) |
 | Redis `progress:{task_id}`: SETEX 3600 + PUBLISH; events `{task_id, progress, message, status}` and `{event_type: clip_ready, clip_index, total_clips, clip}` | `workers/progress.py:15-77`; SSE `tasks.py:752-809` | progress fields on the task doc, plus SSE that polls Mongo or plain client polling |
 | Redis `task_cancel:{task_id}`: SETEX 3600 by cancel, DEL by resume, read by `should_cancel` | `tasks.py:1260`, `1356`; `workers/tasks.py:76-78` | `task.status === 'cancelled'` or `job.cancelRequested` |
 | Redis `task_source:{task_id}`, 7 days | `tasks.py:265-286` | drop; `task.settings` already holds it |

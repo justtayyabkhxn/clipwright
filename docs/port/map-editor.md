@@ -1,6 +1,6 @@
-# Clip editor subsystem map (SupoClip → Clipwright port)
+# Clip editor subsystem map (The original app → Clipwright port)
 
-All paths are relative to `C:\other-projects\supoclip`. Every line number below was checked against the source.
+All paths are relative to `C:\other-projects\original-app`. Every line number below was checked against the source.
 
 ---
 
@@ -10,7 +10,7 @@ All paths are relative to `C:\other-projects\supoclip`. Every line number below 
 2. **Two separate export job systems exist:**
    - **Editor exports** (`/editor/exports`) render the edit document from the editor's own uncaptioned source. The job state is a file, `job-{id}.json`, in the editor directory.
    - **Preset clip exports** (`/clips/{id}/exports`) re-encode the already-rendered clip to a platform preset. They use the Postgres table `clip_exports` (`backend/src/migrations/sql/20261025_0001_clip_exports.sql`).
-3. **The legacy edit endpoints are not called by the web frontend.** Trim, split, merge, captions and regenerate in `tasks.py` have no callers anywhere in `frontend/src` (grep confirmed). The MCP server calls only `GET .../export` (`mcp/src/supoclip_mcp/server.py:701`). The editor's segments and words replace those endpoints without touching the generated clip; a "combine" job is the only editor action that adds a clip row.
+3. **The legacy edit endpoints are not called by the web frontend.** Trim, split, merge, captions and regenerate in `tasks.py` have no callers anywhere in `frontend/src` (grep confirmed). The MCP server calls only `GET .../export` (`mcp/src/original-app_mcp/server.py:701`). The editor's segments and words replace those endpoints without touching the generated clip; a "combine" job is the only editor action that adds a clip row.
 4. **Windows blockers in the current Python code:**
    - `import fcntl` at module level in `editor_document.py:12` and `media_storage.py:13`. Both modules fail to import on Windows.
    - `run_render` only adds `-progress` when `Path(command[0]).name == "ffmpeg"` (`editor_document.py:259`). If the binary is called `ffmpeg.exe`, the flags are skipped and progress stays at 0%.
@@ -187,7 +187,7 @@ words: [{id:"word-{i}", start, end (clamped to duration), text[:120], highlight:
 10. On any exception: `asset.json = {"status":"failed","error":"Could not prepare the source video. Check that the source is available, then retry."}`.
 11. In `finally`: clean up any downloaded source and run `storage.save_editor(directory)` (S3 snapshot).
 
-ARQ settings: default worker `max_tries=3`, `job_timeout=10800`, `max_jobs=4`, queue `supoclip_tasks` (`backend/src/workers/tasks.py:198-246`).
+ARQ settings: default worker `max_tries=3`, `job_timeout=10800`, `max_jobs=4`, queue `original-app_tasks` (`backend/src/workers/tasks.py:198-246`).
 
 ### 2.2 Read
 **Route:** `GET /tasks/{task_id}/clips/{clip_id}/editor` (`editor.py:59-77`).
@@ -226,7 +226,7 @@ All in `frontend/src/components/editor/use-editor.ts`.
 - If `failed` → set the error.
 - If `ready` → set `revision` and `saved` (JSON of the server draft).
 
-**localStorage recovery** uses key `supoclip-editor:${endpoint}` with value `{basis, revision, saved, history}` (46-66):
+**localStorage recovery** uses key `original-app-editor:${endpoint}` with value `{basis, revision, saved, history}` (46-66):
 - If the cache's basis matches and `history.present.version===1`:
   - if the local revision equals the server revision, or the local present equals the server draft → use the local history (keeps undo stack across reloads);
   - else if the local present is unsaved → keep the local history, set `revision=local.revision`, and set a conflict error ("A newer draft exists on the server...").
@@ -250,7 +250,7 @@ All in `frontend/src/components/editor/use-editor.ts`.
 **Workspace actions** (`components/editor/editor-workspace.tsx`):
 - Switching clips calls `save()` first and aborts on failure (103-112).
 - "Restore original" = `editor.update(() => structuredClone(asset.original))`, which is undoable (670-677).
-- On error the user can: retry save, download a backup (`supoclip-draft-{clipId}.json`), or "Reload saved" (356-411).
+- On error the user can: retry save, download a backup (`original-app-draft-{clipId}.json`), or "Reload saved" (356-411).
 - If no document has loaded, "Retry preparation" POSTs `/prepare` and reloads the page.
 
 ---
@@ -327,7 +327,7 @@ All in `frontend/src/components/editor/use-editor.ts`.
     - three quick looks: `clean` = background off + `#FFFFFF`, `highlight` = on + `#FACC15`, `pop` = on + `#A3E635` (168-206);
     - font select with the 4 fonts; size 20–132; position 10–90%; text and highlight colour pickers;
     - background, karaoke and uppercase switches; words per caption 1–8;
-    - Save/Load style in localStorage key `supoclip-caption-style` (296-332); "Apply to all clips";
+    - Save/Load style in localStorage key `original-app-caption-style` (296-332); "Apply to all clips";
     - **hook title** input, max 200 (352-366);
     - **transcript**: "Edit script" textarea using `replaceWords`; per word: text edit, highlight toggle, delete, start/end number inputs, seek; "Add word" at the playhead lasting 0.5 s (368-617).
   - **Framing:** aspect 9:16 / 1:1 / source; fit fill(cover) / contain; zoom 1–3; horizontal and vertical 0–100%; a "Center" button resets x=y=0.5 and zoom=1 (619-747).
@@ -378,7 +378,7 @@ All in `frontend/src/components/editor/use-editor.ts`.
 - Checks `canEncodeVideo("avc", {w, h, bitrate})` where bitrate is 12 Mbit/s for reels and 10 Mbit/s otherwise.
 - Audio uses AAC, falling back to Opus, at 192 kbit/s.
 - For each segment it decodes the video samples, draws them with `drawEditorFrame` onto a `CanvasSource` at the output time, and copies audio samples with the gain applied (`muted ? 0 : volume`).
-- Writes MP4 to a `BufferTarget` and downloads it as `supoclip-{preset}.mp4`.
+- Writes MP4 to a `BufferTarget` and downloads it as `original-app-{preset}.mp4`.
 - Cancelled through an `AbortSignal`.
 
 ### 5.2 Server export (Python render engine) — `render_document(directory, job_id, document, preset)` (editor_document.py:303-410)
@@ -535,7 +535,7 @@ The browser always calls `/api/tasks/...`. The catch-all `frontend/src/app/api/t
 | `POST .../editor/exports` | `{basis, preset: tiktok\|reels\|shorts (default tiktok), document}` | 202 `{id, status:"queued", progress:0}`; 409 not ready / basis; 400; 429 (3 active); 503 |
 | `GET .../editor/exports/{job}` | – | `{id, status, progress, error?, clip_id?}`; 404 |
 | `DELETE .../editor/exports/{job}` | – | `{status: "cancelled" \| "cancelling" \| <current>}` |
-| `GET .../editor/exports/{job}/file` | – | mp4 attachment `supoclip-{clip[:8]}-{job[:6]}.mp4` or 307; 409 "Export is not ready" |
+| `GET .../editor/exports/{job}/file` | – | mp4 attachment `original-app-{clip[:8]}-{job[:6]}.mp4` or 307; 409 "Export is not ready" |
 | `POST /tasks/{t}/editor/combine` | `{clip_ids: string[2..20], distinct}` | 202 `{id, anchor_clip_id}`; 400; 404; 409 a clip is not prepared; 429; 503 |
 
 ### Preset exports (`backend/src/api/routes/clip_exports.py`; owner or admin reader)
@@ -601,7 +601,7 @@ When wrapping these:
 - **Combine DB step:** create the clip (relevance 0, reasoning text, order max+1, joined text, sliced source ranges) and seed the new clip's draft.
 - **Legacy edit DB side:** range maths (`clip_source_map.py`, pure functions), mm:ss formatting (`_seconds_to_mmss`, `clip_service.py:625-630`), clip row updates and reordering. Source ranges and caption settings move onto the clip document instead of the sidecar file.
 - **Media serving routes** for `clean.mp4`, `thumbnails.jpg` and export files, through the storage interface. **Range support is required** for `<video>` seeking.
-- **All frontend files** (`components/editor/*`, `lib/editor/*`, `lib/clip-export.ts`, the edit page) carry over almost unchanged. Only the URLs and branding change (`supoclip-editor:` and `supoclip-caption-style` localStorage keys, download filenames `supoclip-*.mp4`, `supoclip-draft-*.json`).
+- **All frontend files** (`components/editor/*`, `lib/editor/*`, `lib/clip-export.ts`, the edit page) carry over almost unchanged. Only the URLs and branding change (`original-app-editor:` and `original-app-caption-style` localStorage keys, download filenames `original-app-*.mp4`, `original-app-draft-*.json`).
 
 ### Drop
 - `cap_export_for_plan` / `cap_video_short_side` (billing-driven 720p cap; `editor_service.py:25-48`).

@@ -1,6 +1,6 @@
 # Frontend map for the Clipwright port (KEEP scope)
 
-All paths are under `C:\other-projects\supoclip\frontend\`. Every fact below was checked in the code. Line numbers refer to the files as they are now.
+All paths are under `C:\other-projects\original-app\frontend\`. Every fact below was checked in the code. Line numbers refer to the files as they are now.
 
 ---
 
@@ -42,7 +42,7 @@ All paths are under `C:\other-projects\supoclip\frontend\`. Every fact below was
 **Shared chrome: `components/app/app-shell.tsx`**
 - What it provides:
   - Desktop sidebar that collapses to an icon rail. It is forced collapsed on `/tasks/*/edit` (L54).
-  - Collapse state in localStorage `supoclip.sidebar.collapsed` (L56-62, L190).
+  - Collapse state in localStorage `original-app.sidebar.collapsed` (L56-62, L190).
   - Mobile header and tab bar.
   - ⌘K command palette and the `N` shortcut for a new generation (L65-81).
   - `RecentProjects`: the last 5 tasks via `fetchGenerations()`, refetched on every pathname change (L201-232).
@@ -52,7 +52,7 @@ All paths are under `C:\other-projects\supoclip\frontend\`. Every fact below was
 - Uses:
   - `hooks/use-ai-provider`, `lib/auth-client` (`signOut`, `useSession`), `lib/generations` (`fetchGenerations`, `timeAgo`), `components/app/status-badge`, `lib/utils`.
   - UI: `dialog`, `tooltip`, `kbd`; `next/image` with `/logo.png`.
-- Branding strings to change: `"SupoClip + Claude"` aria-labels at L102 and L160; `BrandWordmark` at L192-198.
+- Branding strings to change: `"the original app + Claude"` aria-labels at L102 and L160; `BrandWordmark` at L192-198.
 
 **`/` (`components/home-app.tsx`, 892 lines)**
 - Components: `AppShell`, `GenerationCard`, `CaptionSizeControl`, `VideoSourceIcon`, `FontSelectOption` (which pulls in `FontLanguageInfo`).
@@ -116,11 +116,11 @@ All paths are under `C:\other-projects\supoclip\frontend\`. Every fact below was
 - Loads the task and its clips with `editorRequest` (requires `status === "completed"`). Picks the clip from `?clip=`, falling back to the first. Renders `EditorWorkspace`.
 - The editor stack, all kept:
   - `components/editor/editor-workspace.tsx`: clip list, multi-select combine, apply caption style to all clips, keyboard shortcuts (space, ←/→, shift, I, O, S, mod+Z, mod+shift+Z, mod+Y, mod+S, ?), restore original, reload saved draft, JSON draft backup download.
-  - `components/editor/use-editor.ts`: history capped at 50 with 700ms edit coalescing by group; autosave 700ms after a change; serialized save queue; localStorage draft cache `supoclip-editor:${endpoint}`; revision conflict handling; `beforeunload` guard.
+  - `components/editor/use-editor.ts`: history capped at 50 with 700ms edit coalescing by group; autosave 700ms after a change; serialized save queue; localStorage draft cache `original-app-editor:${endpoint}`; revision conflict handling; `beforeunload` guard.
   - `components/editor/preview.tsx`: hidden `<video crossOrigin="anonymous" src=${endpoint}/media/clean.mp4>` drawn to a canvas each animation frame through `drawEditorFrame`; WebAudio gain for volume; drag to move captions or framing; loop; playback rate; safe-area guides.
   - `components/editor/timeline.tsx`: thumbnail strip `${endpoint}/media/thumbnails.jpg`, waveform from `asset.waveform`, trim slider, in/out inputs, split, segment reorder, duplicate, remove, zoom 1×/2×/4×.
   - `components/editor/inspector.tsx`: four tabs.
-    - Captions: presets, a hard-coded font list (`TikTokSans-Regular | TikTokSans-Bold | Poppins-ExtraBold | THEBOLDFONT`, L218-223), size 20-132, position, colors, background/karaoke/uppercase, words per caption 1-8, save/load style to localStorage `supoclip-caption-style`, apply to all, hook title (max 200), transcript word editor (text, timing, highlight, delete, add, script rewrite via `replaceWords`).
+    - Captions: presets, a hard-coded font list (`TikTokSans-Regular | TikTokSans-Bold | Poppins-ExtraBold | THEBOLDFONT`, L218-223), size 20-132, position, colors, background/karaoke/uppercase, words per caption 1-8, save/load style to localStorage `original-app-caption-style`, apply to all, hook title (max 200), transcript word editor (text, timing, highlight, delete, add, script rewrite via `replaceWords`).
     - Framing: aspect vertical/square/original, fit, zoom, x, y.
     - Audio: volume 0-200%, mute.
     - Effects: brightness, contrast, saturation, blur, hue.
@@ -143,14 +143,14 @@ All paths are under `C:\other-projects\supoclip\frontend\`. Every fact below was
 - `ai-provider-settings` imports the `RuntimeSetting` type from the dropped `components/admin/runtime-settings-form.tsx` (L12). Move that type.
 
 **Auth pages**
-- `components/auth/auth-frame.tsx`: an async server component. Uses the `/logo.png` "SupoClip" wordmark and `clip-cut-animation.tsx` (built on `motion/react`; decorative, optional).
+- `components/auth/auth-frame.tsx`: an async server component. Uses the `/logo.png` "the original app" wordmark and `clip-cut-animation.tsx` (built on `motion/react`; decorative, optional).
 - `sign-in.tsx`: `signIn.email({email,password})`, then `router.push(postAuthPath(location.search))`.
 - `sign-up.tsx`: `signUp.email({email,password,name})`, then `location.href = postAuthPath(...)`.
 - `forgot-password.tsx`: `requestPasswordReset({email, redirectTo:"/reset-password"})`.
 - `reset-password.tsx`: `resetPassword({newPassword, token})`.
 - `lib/auth-redirect.ts` (`postAuthPath`) only accepts a same-site `?next=`.
 
-**Branding strings found in kept code:** `"SupoClip"` in `auth-frame.tsx:13`, `global-error.tsx`, `not-found.tsx`, `layout.tsx` metadata and `lib/site.ts`. Filenames `supoclip-draft-${id}.json` (`editor-workspace.tsx:379`) and `supoclip-${preset}.mp4` (`export-draft.ts:172`). localStorage keys `supoclip-editor:*`, `supoclip-caption-style`, `supoclip.sidebar.collapsed`. Manual-copy element id `supoclip-manual-copy` (`copy-text.ts`).
+**Branding strings found in kept code:** `"the original app"` in `auth-frame.tsx:13`, `global-error.tsx`, `not-found.tsx`, `layout.tsx` metadata and `lib/site.ts`. Filenames `original-app-draft-${id}.json` (`editor-workspace.tsx:379`) and `original-app-${preset}.mp4` (`export-draft.ts:172`). localStorage keys `original-app-editor:*`, `original-app-caption-style`, `original-app.sidebar.collapsed`. Manual-copy element id `original-app-manual-copy` (`copy-text.ts`).
 
 **i18n namespaces used by kept code:** `common`, `metadata`, `shell`, `auth`, `settings` (including `settings.ai`), `home`, `library`, `task`, `editor`; also `share` if share is kept, and `language` (drop it with the switcher). The catalogs are in `messages/en/*.json`, loaded by `src/i18n/load-messages.ts`. Dropping i18n means either keeping next-intl with only `en`, or inlining these strings.
 
@@ -268,8 +268,8 @@ The dropped modules themselves: `components/billing/*`, `payment-failed-banner`,
 
 - Browser to Next: the Better Auth session cookie. `lib/auth-client.ts` uses `createAuthClient()` with the default same-origin base URL. Its `useSession` wrapper reports `isPending` until hydration (L102-109).
 - Next to backend: `lib/backend-auth.ts buildBackendAuthHeaders(userId)` (L114-129).
-  - Without `BACKEND_AUTH_SECRET`: only `x-supoclip-user-id: <userId>`.
-  - With the secret: also `x-supoclip-ts: <unix seconds>` and `x-supoclip-signature: hex(HMAC-SHA256(secret, "<userId>:<ts>"))`.
+  - Without `BACKEND_AUTH_SECRET`: only `x-original-app-user-id: <userId>`.
+  - With the secret: also `x-original-app-ts: <unix seconds>` and `x-original-app-signature: hex(HMAC-SHA256(secret, "<userId>:<ts>"))`.
 - `fetchBackend` (`server/backend-api.ts:49-68`) merges `x-trace-id` (forwarded from the incoming request if it matches `^[A-Za-z0-9._-]{8,128}$`, otherwise a random UUID), the auth headers when `userId` is passed, then `headers`, then `extraHeaders`.
 - The backend checks (`backend/src/auth_headers.py:55-111`): signed headers are required when a secret is configured and unsigned auth is not allowed; timestamp skew must be within `auth_signature_ttl_seconds`; `hmac.compare_digest`. An API key (`Authorization: Bearer` / `x-api-key`) takes precedence (L113-140; dropped).
 - `userId` is always the Better Auth `session.user.id`, which is the same id as `users.id` (the backend reads `users.is_admin` by it).

@@ -1,4 +1,4 @@
-# AI and Transcription Layer Map (SupoClip to Clipwright)
+# AI and Transcription Layer Map (The original app to Clipwright)
 
 I read all of `backend/src/ai.py` (1733 lines), `src/media/transcription.py`, the related parts of `media/timeline.py`, `media/captions.py`, `media/common.py`, `clip_duration.py`, `llm_connection.py`, `config.py` and `runtime_settings.py`, the call sites in `services/video_service.py`, `services/task_service.py` and `api/routes/admin.py`, and the unit tests that act as an executable spec for this layer. I modified no files.
 

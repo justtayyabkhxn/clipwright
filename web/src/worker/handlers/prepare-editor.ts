@@ -1,4 +1,4 @@
-// prepare_editor: port of editor_service.prepare_editor. The engine renders the
+// prepare_editor: port of editor_service.prepare_editor (map-editor.md §2.1). The engine renders the
 // uncaptioned clean.mp4, its thumbnail strip and the first draft; the draft lives in clip_drafts.
 
 import path from "node:path";

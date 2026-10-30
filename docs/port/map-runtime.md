@@ -1,6 +1,6 @@
 # Clipwright port map: configuration, runtime and local-run concerns
 
-Read-only survey. I modified no files. To check claims on this Windows machine I ran `python -B` imports (writes no bytecode) and binary lookups only. Every path below is relative to `C:\other-projects\supoclip`.
+Read-only survey. I modified no files. To check claims on this Windows machine I ran `python -B` imports (writes no bytecode) and binary lookups only. Every path below is relative to `C:\other-projects\original-app`.
 
 ---
 
@@ -20,7 +20,7 @@ Read-only survey. I modified no files. To check claims on this Windows machine I
    - Face detection uses OpenCV YuNet (`FaceDetectorYN`) with a bundled ONNX model, falling back to the Haar cascade (`src/media/face_detection.py:1-17,112-127`).
    - OpenCV DNN is optional: it looks for `opencv_face_detector.pbtxt`/`_uint8.pb` under `cv2.data` and is normally absent (`src/media/reframing.py:192-208`).
 3. **Inter-clip transitions are effectively turned off.**
-   - `create_clips_with_transitions` logs "Inter-clip transitions are disabled for standalone SupoClip exports" (`video_utils.py:713-734`).
+   - `create_clips_with_transitions` logs "Inter-clip transitions are disabled for standalone the original app exports" (`video_utils.py:713-734`).
    - `VideoService.apply_single_transition` is a no-op (`services/video_service.py:603-616`).
    - `GET /transitions` only lists files, and no frontend code calls it (grep for `transitions` found nothing).
 4. **The frontend `middleware.ts` is at `frontend/middleware.ts`, not `frontend/src/`.** The app uses `src/app`, and Next.js expects middleware inside `src/` in that layout, so this file is probably not active. It only implements the dropped landing-only mode; delete it.
@@ -100,10 +100,10 @@ Backend values are read in `backend/src/config.py` unless noted.
 
 | Var | Default | Where |
 |---|---|---|
-| `BETTER_AUTH_SECRET` | compose default `supoclip_dev_secret_change_in_production` | compose:51, .env.example:176 (read by better-auth itself) |
+| `BETTER_AUTH_SECRET` | compose default `original-app_dev_secret_change_in_production` | compose:51, .env.example:176 (read by better-auth itself) |
 | `BETTER_AUTH_URL` | `http://localhost:3107` | lib/auth.ts:32 |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3107`; site.ts falls back to `https://www.supoclip.com` | lib/auth.ts:31, lib/site.ts:18-24 |
-| `BETTER_AUTH_TRUSTED_ORIGINS` | "" (comma-separated) | lib/auth.ts:33, lib/auth-origins.ts:19-35 (also hardcodes localhost:3107, sp./supoclip.localhost:3107, 3001 variants) |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3107`; site.ts falls back to `https://www.original-app.com` | lib/auth.ts:31, lib/site.ts:18-24 |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | "" (comma-separated) | lib/auth.ts:33, lib/auth-origins.ts:19-35 (also hardcodes localhost:3107, sp./original-app.localhost:3107, 3001 variants) |
 | `DISABLE_SIGN_UP` | false | lib/auth.ts:9-11 |
 | `APP_SETTINGS_ENCRYPTION_KEY` | falls back to `BACKEND_AUTH_SECRET`, then `BETTER_AUTH_SECRET`; at least 16 chars | runtime_settings.py:55-66 |
 | `NEXT_BUILD_DIR` | `.next` | next.config.ts:22 |
@@ -111,9 +111,9 @@ Backend values are read in `backend/src/config.py` unless noted.
 
 ### Obsolete after the port (infrastructure is replaced)
 
-- Postgres and Redis: `DATABASE_URL` (database.py:17-19, default `postgresql+asyncpg://localhost:5432/supoclip`; Prisma `schema.prisma:13-16`), `POSTGRES_DB/USER/PASSWORD`, `REDIS_HOST/PORT/PASSWORD` (config.py:139-141).
+- Postgres and Redis: `DATABASE_URL` (database.py:17-19, default `postgresql+asyncpg://localhost:5432/original-app`; Prisma `schema.prisma:13-16`), `POSTGRES_DB/USER/PASSWORD`, `REDIS_HOST/PORT/PASSWORD` (config.py:139-141).
 - Python API auth and routing: `BACKEND_AUTH_SECRET`, `ALLOW_UNSIGNED_BACKEND_AUTH`, `AUTH_SIGNATURE_TTL_SECONDS` (config.py:156-162; HMAC headers in lib/backend-auth.ts), `CORS_ORIGINS` (config.py:166-172), `BACKEND_INTERNAL_URL` and `NEXT_PUBLIC_API_URL` (12 proxy sites, e.g. server/backend-api.ts:18-25).
-- Docker and process plumbing: `SUPOCLIP_SERVICE` (observability.py:17), `BACKEND_CPU_ONLY`, `BACKEND_PLATFORM`, `FRONTEND_PORT`, `FRONTEND_BUILD_TARGET`, `COMPOSE_*`, `DOCKER_BUILDKIT`, `PYTHONPATH`, `PYTHONUNBUFFERED`.
+- Docker and process plumbing: `ORIGINAL_APP_SERVICE` (observability.py:17), `BACKEND_CPU_ONLY`, `BACKEND_PLATFORM`, `FRONTEND_PORT`, `FRONTEND_BUILD_TARGET`, `COMPOSE_*`, `DOCKER_BUILDKIT`, `PYTHONPATH`, `PYTHONUNBUFFERED`.
 - Removed modes: `SELF_HOST` / `NEXT_PUBLIC_SELF_HOST` (monetization switch, config.py:154-155, lib/monetization.ts:7), `NEXT_PUBLIC_LANDING_ONLY_MODE`, and `OUTPUT_DIR` (config.py:114, never read).
 
 ## 2. Environment variables used only by dropped features
@@ -127,7 +127,7 @@ Backend values are read in `backend/src/config.py` unless noted.
 - **Feedback**: `DISCORD_FEEDBACK_WEBHOOK_URL`, `DISCORD_SALES_WEBHOOK_URL`.
 - **Observability**: `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY/HOST`, `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_RELEASE_VERSION`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `NEXT_PUBLIC_DATAFAST_WEBSITE_ID/DOMAIN/ALLOW_LOCALHOST`.
 - **B-roll**: `PEXELS_API_KEY`.
-- **MCP**: `SUPOCLIP_API_URL`, `SUPOCLIP_DOWNLOAD_DIR`, `SUPOCLIP_TIMEOUT`, `SUPOCLIP_MCP_TRANSPORT/HOST/PORT/PUBLIC_URL/REQUIRE_BEARER_AUTH` (compose:257-265).
+- **MCP**: `ORIGINAL_APP_API_URL`, `ORIGINAL_APP_DOWNLOAD_DIR`, `ORIGINAL_APP_TIMEOUT`, `ORIGINAL_APP_MCP_TRANSPORT/HOST/PORT/PUBLIC_URL/REQUIRE_BEARER_AUTH` (compose:257-265).
 
 ## 3. Fonts, transitions and storage directories
 
@@ -173,7 +173,7 @@ Backend values are read in `backend/src/config.py` unless noted.
 | `media-cache/` | Local cache of S3 objects (S3 mode only) | media_storage.py:228-307, 667 |
 | `broll_cache/`, `<id>.en.vtt` | Dropped features | broll.py:66, transcription.py:271 |
 
-- System temp directories (OS temp) use the prefixes `supoclip_render_` (video_utils.py:347), `supoclip_motion_` (reframing.py:617), `supoclip_emojiprobe_` (captions.py:86) and `supoclip_concat_` (clip_editor.py:206).
+- System temp directories (OS temp) use the prefixes `original-app_render_` (video_utils.py:347), `original-app_motion_` (reframing.py:617), `original-app_emojiprobe_` (captions.py:86) and `original-app_concat_` (clip_editor.py:206).
 - Logs go to `./logs/backend.log` and `./logs/backend-error.log`, relative to the working directory (observability.py:160-191).
 - In Docker, the `clips:/app/clips` volume is mounted but nothing references it; clips live in `TEMP_DIR/clips`.
 - Cleanup crons: `cleanup_media` runs every 5 minutes and at startup, and `sweep_orphaned_media` runs at 00/06/12/18:15 (workers/tasks.py:245-247, media_cleanup.py).
@@ -194,7 +194,7 @@ Backend values are read in `backend/src/config.py` unless noted.
 
 From ARQ `WorkerSettings` (workers/tasks.py:206-252) and job_queue.py:
 
-- **Queue names**: `supoclip_tasks` (job_queue.py:14, tasks.py:231). `supoclip_fast` exists but has no worker (job_queue.py:15; clip_export_service.py:329-331 says so).
+- **Queue names**: `original-app_tasks` (job_queue.py:14, tasks.py:231). `original-app_fast` exists but has no worker (job_queue.py:15; clip_export_service.py:329-331 says so).
 - **Limits**: `job_timeout=10800` s, `max_tries=3`, `max_jobs=4` concurrent, `health_check_interval=30` (heartbeat key checked by `/health/worker`, main.py:249-265).
 - **Job functions**: `process_video_task`, `prepare_editor`, `export_editor`, `combine_editor`, and `export_clip_preset` (timeout 30×60 s, `max_tries=1`; clip_export_service.py:47). `publish_social_post` is dropped.
 - **Crons**: `cleanup_media` every 5 minutes (`run_at_startup`), `sweep_orphaned_media` four times a day at :15. The social crons are dropped.
@@ -261,7 +261,7 @@ What the engine modules import (video_utils, media/*, clip_editor, editor_docume
 
 ## 9. Frontend runtime pieces to remove or simplify
 
-- **`next.config.ts`**: keep `output:'standalone'` (23). Remove the DataFast rewrites (`/js/script.js`, `/api/events`), the PostHog `/ingest` rewrites, `skipTrailingSlashRedirect` (12-19, 25, 29-41) and `withPostHogConfig` with `releaseName "supoclip-web"` (46-62).
+- **`next.config.ts`**: keep `output:'standalone'` (23). Remove the DataFast rewrites (`/js/script.js`, `/api/events`), the PostHog `/ingest` rewrites, `skipTrailingSlashRedirect` (12-19, 25, 29-41) and `withPostHogConfig` with `releaseName "original-app-web"` (46-62).
 - **Observability**: `src/instrumentation-client.ts` (posthog-js plus `installTraceFetch`), `src/instrumentation.ts` (posthog-node `onRequestError`), `src/server/posthog.ts`, `lib/posthog-config.ts`, `lib/datafast.ts`; and in `layout.tsx`, DataFast scripts (39-42, 101-119), `DataFastIdentity`, `PostHogIdentity`, `AttributionTracker` and `FeedbackButton` (7-12, 125-128).
 - **`src/server/*.ts`**:
   - `backend-api.ts` is the Python proxy plus trace headers; it goes away.
@@ -273,55 +273,55 @@ What the engine modules import (video_utils, media/*, clip_editor, editor_docume
 - **`package.json` dependencies to drop**: `@posthog/nextjs-config`, `posthog-js`, `posthog-node`, `stripe`, `@prisma/client`, `prisma`; dev `@electric-sql/pglite`. Also drop the `postinstall`/`build`/`typecheck` `prisma generate` steps (8, 16-17).
 - **`package.json` dependencies to keep**: `mediabunny` (editor `export-panel.tsx`, `lib/editor/export-draft.ts`), `motion` (auth `clip-cut-animation`), `tw-shimmer` (globals.css), `next-themes`/`sonner`, Radix.
 
-## 10. SupoClip brand references a Clipwright rebrand must change
+## 10. The original app brand references a Clipwright rebrand must change
 
 There are 268 files in total. Lists below are file:line.
 
 ### KEEP-scope code (must edit)
 
-- **`frontend/src/lib/site.ts:1-24`**: `SITE_NAME="SupoClip"`, `DEFAULT_SITE_URL="https://www.supoclip.com"`, `GITHUB_URL` (FujiwaraChoki/supoclip), `APP_STORE_ID="6784760040"`, `APP_STORE_URL`, `PRODUCT_HUNT_URL`/`BADGE_URL`, `appStoreRedeemUrl`. Drop everything except the name and URL.
+- **`frontend/src/lib/site.ts:1-24`**: `SITE_NAME="the original app"`, `DEFAULT_SITE_URL="https://www.original-app.com"`, `GITHUB_URL` (FujiwaraChoki/original-app), `APP_STORE_ID="6784760040"`, `APP_STORE_URL`, `PRODUCT_HUNT_URL`/`BADGE_URL`, `appStoreRedeemUrl`. Drop everything except the name and URL.
 - **`frontend/src/app/layout.tsx`**: 32 (comment), 54-57 (`applicationName`/`authors`/`creator`/`publisher`), 68 (`siteName`), 14 and 62-64 (`itunes.appId`).
-- **`frontend/src/components/app/app-shell.tsx`**: 102 and 160 (aria "SupoClip + Claude"), 103 and 161 (`/logo.png`), 190 (`"supoclip.sidebar.collapsed"`), 192-197 (`BrandWordmark` "SupoClip + Claude").
-- `frontend/src/components/auth/auth-frame.tsx:13` (logo plus "SupoClip"); `components/auth/clip-cut-animation.tsx:8` (comment).
-- **Editor storage keys and filenames**: `components/editor/editor-workspace.tsx:379` (`supoclip-draft-${id}.json`), `components/editor/inspector.tsx:303,321` (`supoclip-caption-style`), `components/editor/use-editor.ts:46` (`supoclip-editor:`), `lib/editor/export-draft.ts:172` (`supoclip-${preset}.mp4`), `lib/copy-text.ts:16` (`supoclip-manual-copy`).
-- **Auth plumbing**: `lib/backend-auth.ts:15,23-25` (`x-supoclip-*` headers, removed with the API) and `lib/auth-origins.ts:25-26` (`sp.localhost`, `supoclip.localhost`).
-- **Error and icon files**: `app/global-error.tsx:20`, `app/not-found.tsx:8`, `app/globals.css:54` (comment, "SupoClip + Claude"), `app/icon.svg:1` (aria-label), `app/icon.png` (1024², 1.4 MB, an image), `app/opengraph-image.tsx:5`, `app/twitter-image.tsx:5`, `lib/social-image.tsx:170-176` ("Supo"/"Clip" wordmark).
+- **`frontend/src/components/app/app-shell.tsx`**: 102 and 160 (aria "the original app + Claude"), 103 and 161 (`/logo.png`), 190 (`"original-app.sidebar.collapsed"`), 192-197 (`BrandWordmark` "the original app + Claude").
+- `frontend/src/components/auth/auth-frame.tsx:13` (logo plus "the original app"); `components/auth/clip-cut-animation.tsx:8` (comment).
+- **Editor storage keys and filenames**: `components/editor/editor-workspace.tsx:379` (`original-app-draft-${id}.json`), `components/editor/inspector.tsx:303,321` (`original-app-caption-style`), `components/editor/use-editor.ts:46` (`original-app-editor:`), `lib/editor/export-draft.ts:172` (`original-app-${preset}.mp4`), `lib/copy-text.ts:16` (`original-app-manual-copy`).
+- **Auth plumbing**: `lib/backend-auth.ts:15,23-25` (`x-original-app-*` headers, removed with the API) and `lib/auth-origins.ts:25-26` (`sp.localhost`, `original-app.localhost`).
+- **Error and icon files**: `app/global-error.tsx:20`, `app/not-found.tsx:8`, `app/globals.css:54` (comment, "the original app + Claude"), `app/icon.svg:1` (aria-label), `app/icon.png` (1024², 1.4 MB, an image), `app/opengraph-image.tsx:5`, `app/twitter-image.tsx:5`, `lib/social-image.tsx:170-176` ("Supo"/"Clip" wordmark).
 - **`frontend/public/logo.png`** (1000², an image). It is also used by `app/share/[token]`, `app/status` and the marketing pages, which are dropped.
-- **`frontend/messages/en`**: `metadata.json:2-3` (title and `%s | SupoClip`). These strings belong to dropped sections: `shell.json:49`, `settings.json:4,73,88,124,171,174,177`, `home.json:113`, `share.json:2,11,12`.
+- **`frontend/messages/en`**: `metadata.json:2-3` (title and `%s | The original app`). These strings belong to dropped sections: `shell.json:49`, `settings.json:4,73,88,124,171,174,177`, `home.json:113`, `share.json:2,11,12`.
 - `frontend/package.json:2` (`"name": "frontend"`, rename to clipwright).
 - **Backend engine and worker**:
   - Temp prefixes: `clip_editor.py:206`, `media/captions.py:86`, `media/reframing.py:617`, `video_utils.py:347`.
   - Log text: `video_utils.py:734`.
-  - Download filename: `api/routes/editor.py:289,299` (`supoclip-{clip}-{job}.mp4`).
+  - Download filename: `api/routes/editor.py:289,299` (`original-app-{clip}-{job}.mp4`).
   - User-facing text: `services/video_service.py:169`.
-  - Queue names: `workers/job_queue.py:14-15`, `workers/tasks.py:231` (`supoclip_tasks`/`supoclip_fast`); comments in `services/clip_export_service.py:40,329-331`.
-  - `repositories/edit_transaction.py:10` (`supoclip_edit_task`).
-  - `auth_headers.py:17-19`, `observability.py:17` (`SUPOCLIP_SERVICE`), `main.py:2,63,76,82-83,208`, `worker_main.py:20`.
+  - Queue names: `workers/job_queue.py:14-15`, `workers/tasks.py:231` (`original-app_tasks`/`original-app_fast`); comments in `services/clip_export_service.py:40,329-331`.
+  - `repositories/edit_transaction.py:10` (`original-app_edit_task`).
+  - `auth_headers.py:17-19`, `observability.py:17` (`ORIGINAL_APP_SERVICE`), `main.py:2,63,76,82-83,208`, `worker_main.py:20`.
   - `database.py:18` (DB name), `config.py:177` (`SES_FROM_EMAIL` default).
-  - `source_submission.py:21,35,41` (`supoclip-ios` UA).
-  - `backend/pyproject.toml:2,4` (`supoclip-backend`) and the generated `src/supoclip_backend.egg-info/`.
+  - `source_submission.py:21,35,41` (`original-app-ios` UA).
+  - `backend/pyproject.toml:2,4` (`original-app-backend`) and the generated `src/original-app_backend.egg-info/`.
 
 ### Domains, IDs and emails
 
-- `www.supoclip.com`: site.ts:2, public/llms.txt (19×), DEPLOY_NOTES.md:55, 90.
-- `api.supoclip.com` / `mcp.supoclip.com`: mcp/src/supoclip_mcp/config.py:16, server.py:7, mcp/README.md, compose:264.
-- `support@supoclip.com`: app/terms/page.tsx:11, app/email/product-updates/unsubscribe/route.ts:16, backend/src/api/routes/email_preferences.py:38, 42, llms.txt:54.
-- `privacy@supoclip.com`: app/privacy/page.tsx:11.
-- GitHub `FujiwaraChoki/supoclip`: site.ts:4, app/page.tsx:53, app/blog/[slug]/page.tsx:331, components/articles/self-hosting-guide-article.tsx:80, components/landing-page.tsx:589, components/supo-live-article.tsx:12, llms.txt.
+- `www.original-app.com`: site.ts:2, public/llms.txt (19×), DEPLOY_NOTES.md:55, 90.
+- `api.original-app.com` / `mcp.original-app.com`: mcp/src/original-app_mcp/config.py:16, server.py:7, mcp/README.md, compose:264.
+- `support@original-app.com`: app/terms/page.tsx:11, app/email/product-updates/unsubscribe/route.ts:16, backend/src/api/routes/email_preferences.py:38, 42, llms.txt:54.
+- `privacy@original-app.com`: app/privacy/page.tsx:11.
+- GitHub `FujiwaraChoki/original-app`: site.ts:4, app/page.tsx:53, app/blog/[slug]/page.tsx:331, components/articles/self-hosting-guide-article.tsx:80, components/landing-page.tsx:589, components/supo-live-article.tsx:12, llms.txt.
 - App Store `6784760040`: site.ts:5-6, layout.tsx:63.
-- RevenueCat `com.samihindi.supoclip.{pro,scale}.{monthly,annual}`: app/api/billing/revenuecat-webhook/route.ts:31-32, .env.example:292.
-- Deep link `supoclip://social-callback`: app/api/social/callback/[provider]/route.ts:10.
-- Vercel project `fujiwarachokis-projects/supoclip`: DEPLOY_NOTES.md:54.
-- Axiom dataset `supoclip-prod`: compose:451, .env.example:218.
-- Test domains `@supoclip.test`: e2e/global-setup.ts:11-12, e2e/local-workflow.spec.ts:176.
+- RevenueCat `com.samihindi.original-app.{pro,scale}.{monthly,annual}`: app/api/billing/revenuecat-webhook/route.ts:31-32, .env.example:292.
+- Deep link `original-app://social-callback`: app/api/social/callback/[provider]/route.ts:10.
+- Vercel project `fujiwarachokis-projects/original-app`: DEPLOY_NOTES.md:54.
+- Axiom dataset `original-app-prod`: compose:451, .env.example:218.
+- Test domains `@original-app.test`: e2e/global-setup.ts:11-12, e2e/local-workflow.spec.ts:176.
 
 ### Infra, config, tests and docs
 
-- **`docker-compose.yml`**: container names `supoclip-*`, network `supoclip-network` (515), DB `supoclip/supoclip_password` (50, 125, 300, 486-488, 494), CORS default (208, 383), SES default (84, 214, 389).
+- **`docker-compose.yml`**: container names `original-app-*`, network `original-app-network` (515), DB `original-app/original-app_password` (50, 125, 300, 486-488, 494), CORS default (208, 383), SES default (84, 214, 389).
 - `.env.example:1,54,176,191,224,245,292`; `backend/.env.example:41-43,57`.
 - `start.sh:3,15,63,100,111`; `Makefile:1-2`; `install_cron.sh`; `observability/vector.yaml:1,9-16`; `init.sql:1,259`.
 - `frontend/playwright.config.ts:4,10,64`; `playwright.polish.config.ts:20`; e2e specs.
-- Docs: `README.md`, `QUICKSTART.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md` (56×; copied into the frontend image for `/changelog`), `IMPLEMENTATION_PLAN.md` ("SupoClip + Claude"), `DEPLOY_NOTES.md`, `docs/*.md` (21 files), `backend/README.md`, `backend/REFACTORING_GUIDE.md`, `backend/fonts/README.md`.
+- Docs: `README.md`, `QUICKSTART.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md` (56×; copied into the frontend image for `/changelog`), `IMPLEMENTATION_PLAN.md` ("the original app + Claude"), `DEPLOY_NOTES.md`, `docs/*.md` (21 files), `backend/README.md`, `backend/REFACTORING_GUIDE.md`, `backend/fonts/README.md`.
 - Assets: `assets/banner.jpg`.
 
 ### Deleted along with dropped features (no edits needed)
@@ -330,7 +330,7 @@ There are 268 files in total. Lists below are file:line.
 - `components/{landing-page,landing/*,marketing/*,articles/*,supo-live-article,announcements,billing/upgrade-prompt}`
 - `lib/{blog-posts,seo-pages,marketing-links,attribution,announcements,creator-code,demo}`
 - `server/{affiliates,announcements}`
-- `public/{llms.txt,app-store-badge.svg,blog/supoclip-*.webp,clips/*,videos/*}`
+- `public/{llms.txt,app-store-badge.svg,blog/original-app-*.webp,clips/*,videos/*}`
 - Unused create-next-app SVGs: `public/{file,globe,next,vercel,window}.svg`
 - Backend email services (`affiliate_`, `api_key_`, `password_reset_`, `subscription_`, `task_completion_`, `verification_email_service.py`) and `email_preferences.py`
 - The whole `mcp/` directory
